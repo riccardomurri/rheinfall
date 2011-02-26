@@ -63,8 +63,8 @@ namespace rheinfall {
 
     /** Constructor. */
     Row(const kind_t kind_, 
-        const coord_t starting_column, 
-        const coord_t ending_column);
+        const coord_t starting_column, const coord_t ending_column, 
+        const val_t leading_term);
 
     /** Virtual destructor (for actual use in subclasses). */
     virtual ~Row();
@@ -73,10 +73,7 @@ namespace rheinfall {
     virtual val_t get(const coord_t col) const = 0;
 
     /** Return index of first column that has a nonzero entry. */
-    coord_t first_nonzero_column() const;
-
-    /** Return value of first nonzero entry. */
-    val_t first_nonzero_value() const;
+    virtual coord_t first_nonzero_column() const;
 
     /** Set the element stored at column @c col */
     virtual void set(const coord_t col, const val_t value) = 0;
@@ -102,7 +99,8 @@ namespace rheinfall {
     //protected:
   public:
     coord_t starting_column_; // would-be `const`: can only be modified by ctor and serialization
-    coord_t ending_column_;   // would-be `const`: can only be modified by ctor and serialization
+    coord_t ending_column_; // would-be `const`: can only be modified by ctor and serialization
+    val_t leading_term_; // would-be `const`: can only be modified by ctor and serialization
 
     /** Print a textual representation of the row to stream @c out.
         Provided to actually implement @c operator<< in derived classes; see
@@ -131,10 +129,12 @@ namespace rheinfall {
   inline
   Row<val_t,coord_t>::Row(const kind_t kind_, 
                           const coord_t starting_column, 
-                          const coord_t ending_column)
+                          const coord_t ending_column, 
+                          const val_t leading_term)
     : kind(kind_), 
       starting_column_(starting_column), 
-      ending_column_(ending_column)
+      ending_column_(ending_column),
+      leading_term_(leading_term)
     { 
       // init-only ctor
     };
@@ -152,15 +152,8 @@ namespace rheinfall {
   inline coord_t 
   Row<val_t,coord_t>::first_nonzero_column() const 
   {
+    assert(0 != leading_term_);
     return starting_column_;
-  };
-
-
-  template <typename val_t, typename coord_t>
-  inline val_t 
-  Row<val_t,coord_t>::first_nonzero_value() const 
-  {
-    return this->get(first_nonzero_column());
   };
 
 
@@ -215,10 +208,12 @@ namespace rheinfall {
     // is a type of input archive the & operator is defined similar to >>.
     ar 
       & starting_column_
-      & ending_column_;
+      & ending_column_ 
+      & leading_term_;
     assert(starting_column_ >= 0);
     assert(ending_column_ >= 0);
     assert (starting_column_ <= ending_column_);
+    assert(0 != leading_term_);
   }; // Row::serialize(...)
 #endif
 

@@ -546,7 +546,11 @@ protected:
   inline bool 
   Rheinfall<val_t,coord_t>::is_local(const coord_t c) const 
   { 
+#ifdef WITH_MPI
     return (owner(c) == me_); 
+#else
+    return true;
+#endif
   };
   
 
@@ -725,8 +729,8 @@ Rheinfall<val_t,coord_t>::Processor::step()
         if (Row<val_t,coord_t>::dense == u->kind) {
           // swap `u` and `row` iff `row`'s leading term is less
           if (first_is_better_pivot<val_t>
-              (static_cast<DenseRow<val_t,coord_t>*>(*it)->first_nonzero_value(),
-               static_cast<DenseRow<val_t,coord_t>*>(u)->first_nonzero_value()))
+              (static_cast<DenseRow<val_t,coord_t>*>(*it)->leading_term_,
+               static_cast<DenseRow<val_t,coord_t>*>(u)->leading_term_))
             // swap `u` and `row`
             std::swap(u, *it);
         };
