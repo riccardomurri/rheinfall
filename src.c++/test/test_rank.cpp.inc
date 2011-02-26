@@ -1,12 +1,23 @@
 // Hey Emacs, this is -*- c++ -*-
 
+#include <cstdlib>
+#include <sstream>
+
 rheinfall::Rheinfall<val_t, coord_t>*
 matrix_from_file(const std::string& filename)
 {
-  std::ifstream input(filename.c_str());
+  // automake stores the path to the source directory
+  // into environment variable $srcdir
+  std::ostringstream path;
+  const char * const srcdir = getenv("srcdir");
+  if (NULL != srcdir)
+    path << getenv("srcdir") << "/";
+  path << filename;
+
+  std::ifstream input(path.str().c_str());
   if (input.fail()) {
     std::ostringstream msg;
-    msg << "Cannot open file '" <<filename<< "' for reading - skipping." 
+    msg << "Cannot open file '" <<path.str()<< "' for reading - skipping." 
         << std::endl;
     throw std::runtime_error(msg.str());
   };
@@ -42,7 +53,7 @@ matrix_from_file(const std::string& filename)
 
 BOOST_AUTO_TEST_CASE( check_M05_D4 )
 {
-  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("test/inputs/M05-D4.txt");
+  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("M0,5-D4.sms");
   BOOST_CHECK_EQUAL( m->rank(), 210 );
   delete m;
 }
@@ -50,7 +61,7 @@ BOOST_AUTO_TEST_CASE( check_M05_D4 )
 
 BOOST_AUTO_TEST_CASE( check_M05_D5 )
 {
-  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("test/inputs/M05-D5.txt");
+  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("M0,5-D5.sms");
   BOOST_CHECK_EQUAL( m->rank(), 1902 );
   delete m;
 }
@@ -58,7 +69,7 @@ BOOST_AUTO_TEST_CASE( check_M05_D5 )
 
 BOOST_AUTO_TEST_CASE( check_M05_D6 )
 {
-  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("test/inputs/M05-D6.txt");
+  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("M0,5-D6.sms");
   BOOST_CHECK_EQUAL( m->rank(), 5358 );
   delete m;
 }
@@ -66,7 +77,7 @@ BOOST_AUTO_TEST_CASE( check_M05_D6 )
 
 BOOST_AUTO_TEST_CASE( check_M05_D7 )
 {
-  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("test/inputs/M05-D7.txt");
+  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("M0,5-D7.sms");
   BOOST_CHECK_EQUAL( m->rank(), 5916 );
   delete m;
 }
@@ -74,7 +85,7 @@ BOOST_AUTO_TEST_CASE( check_M05_D7 )
 
 BOOST_AUTO_TEST_CASE( check_M05_D8 )
 {
-  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("test/inputs/M05-D8.txt");
+  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("M0,5-D8.sms");
   BOOST_CHECK_EQUAL( m->rank(), 2239 );
   delete m;
 }
@@ -82,7 +93,7 @@ BOOST_AUTO_TEST_CASE( check_M05_D8 )
 
 BOOST_AUTO_TEST_CASE( check_M06_D5 )
 {
-  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("test/inputs/M06-D5.txt");
+  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("M0,6-D5.sms");
   BOOST_CHECK_EQUAL( m->rank(), 3024 );
   delete m;
 }
@@ -90,7 +101,7 @@ BOOST_AUTO_TEST_CASE( check_M06_D5 )
 
 BOOST_AUTO_TEST_CASE( check_M06_D6 )
 {
-  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("test/inputs/M06-D6.txt");
+  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("M0,6-D6.sms");
   BOOST_CHECK_EQUAL( m->rank(), 46776 );
   delete m;
 }
@@ -98,7 +109,7 @@ BOOST_AUTO_TEST_CASE( check_M06_D6 )
 
 BOOST_AUTO_TEST_CASE( check_M06_D7 )
 {
-  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("test/inputs/M06-D7.txt");
+  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("M0,6-D7.sms");
   BOOST_CHECK_EQUAL( m->rank(), 247704 );
   delete m;
 }
@@ -106,7 +117,7 @@ BOOST_AUTO_TEST_CASE( check_M06_D7 )
 
 BOOST_AUTO_TEST_CASE( check_M06_D8 )
 {
-  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("test/inputs/M06-D8.txt");
+  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("M0,6-D8.sms");
   BOOST_CHECK_EQUAL( m->rank(), 614586 );
   delete m;
 }
@@ -114,7 +125,7 @@ BOOST_AUTO_TEST_CASE( check_M06_D8 )
 
 BOOST_AUTO_TEST_CASE( check_M06_D11 )
 {
-  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("test/inputs/M06-D11.txt");
+  rheinfall::Rheinfall<val_t,coord_t>* m = matrix_from_file("M0,6-D11.sms");
   BOOST_CHECK_EQUAL( m->rank(), 122879 );
   delete m;
 }

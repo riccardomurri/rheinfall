@@ -256,3 +256,14 @@ test_rank_mod_LDFLAGS= $(BOOST_UNIT_TEST_FRAMEWORK_LDFLAGS)
 test_rank_mod_LDADD = $(BOOST_UNIT_TEST_FRAMEWORK_LIBS)
 
 TESTS = $(check_PROGRAMS)
+
+# test matrices are downloaded from the web
+data_DATA = M0,5-D4.sms M0,5-D5.sms M0,5-D6.sms M0,5-D7.sms M0,5-D8.sms \
+		M0,6-D5.sms M0,6-D6.sms M0,6-D7.sms M0,6-D8.sms M0,6-D11.sms
+$(data_DATA):
+	@WGET@ -nv -nc -N \
+		http://ljk.imag.fr/membres/Jean-Guillaume.Dumas/Matrices/Mgn/$@.gz
+	@GZIP@ -d $(srcdir)/$@.gz
+
+distclean-local:
+	rm -f $(data_DATA)

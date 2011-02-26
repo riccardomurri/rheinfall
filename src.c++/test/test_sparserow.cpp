@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -32,8 +32,10 @@
 # undef HAVE_GMPXX
 #endif
 
+
 #define BOOST_TEST_MODULE rheinfall::SparseRow
-#include <boost/test/unit_test.hpp>
+#include <boost/test/included/unit_test.hpp>
+
 
 #include <sparserow.hpp>
 using namespace rheinfall;
