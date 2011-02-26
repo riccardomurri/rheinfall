@@ -5,6 +5,8 @@
 #include <sparserow.hpp>
 using namespace rheinfall;
 
+#include <map>
+
 
 BOOST_AUTO_TEST_CASE( check_sparserow_size_null1 )
 {
@@ -47,6 +49,26 @@ BOOST_AUTO_TEST_CASE( check_sparserow_get_set )
 }
 
 
+BOOST_AUTO_TEST_CASE( check_sparserow_ctor_from_iter )
+{
+  std::map< int,int > entries;
+  for(int i = 0; i < 10; ++i)
+    entries[i*i] = i+1;
+
+  SparseRow< int,int > s(entries.begin(), entries.end(), 100);
+  BOOST_CHECK_EQUAL( s.first_nonzero_column(), 0 );
+
+  int j = 0;
+  for(int i = 0; i < s.size(); ++i)
+    if (j*j == i) {
+      BOOST_CHECK_EQUAL(s.get(i), j+1);
+      j++;
+    }
+    else 
+      BOOST_CHECK_EQUAL(s.get(i), 0);
+}
+
+
 BOOST_AUTO_TEST_CASE( check_sparserow_fill_in )
 {
   SparseRow<int,int> s(0, 99, 1);
@@ -62,7 +84,7 @@ BOOST_AUTO_TEST_CASE( check_sparserow_adjust )
 {
   class S: public SparseRow<int,int> {
   public:
-    S(int size) : SparseRow<int,int>::SparseRow(size-1) { };
+    S(int size) : SparseRow<int,int>::SparseRow(0, size-1, 0) { };
     S* adjust() { return static_cast<S*>(this->SparseRow<int,int>::adjust()); }
   };
 
