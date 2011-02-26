@@ -22,7 +22,7 @@ if HAVE_OPENMP_CXX
 omp: irank-omp drank-omp qrank-omp zrank-omp
 endif
 if HAVE_MPICXX
-mpi: irank-mpi drank-mpi qrank-mpi zrank-mpi
+mpi: irank-mpi drank-mpi #qrank-mpi zrank-mpi
 if HAVE_OPENMP_CXX
 mpi-omp: irank-mpi-omp drank-mpi-omp #qrank-mpi-omp zrank-mpi-omp
 endif

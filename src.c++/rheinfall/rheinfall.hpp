@@ -158,7 +158,7 @@ public:
 #ifdef WITH_MPI
     /** List of rows sent to other processors and the associated MPI request. 
         We need to keep track of these in order to free the resources when we're done. */
-    typedef std::list< mpi::request > outbox_t;
+    typedef std::list< std::pair< mpi::request,Row<val_t,coord_t>* > > outbox_t;
     outbox_t outbox;
 #endif
 
@@ -679,8 +679,7 @@ protected:
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(& mpi_send_lock_);
 # endif
-    source.outbox.push_back(req);
-    delete row; // no longer needed
+    source.outbox.push_back(std::make_pair(req,row));
   };
 #endif // WITH_MPI
 };
@@ -838,29 +837,62 @@ Rheinfall<val_t,coord_t>::Processor::step()
   if (running == phase) {
 #ifdef WITH_MPI
     if (outbox.size() > 0) {
+      // check if some test messages have arrived and free
+      // corresponding resources 
+      // XXX: this is basically a rewrite of the Boost.MPI code for
+      // mpi::test_some(), but I could find no way of associating a
+      // request with the corresponding payload data...
+      //outbox.erase(mpi::test_some(outbox.begin(), outbox.end()), outbox.end());
+      typename outbox_t::iterator current(outbox.begin());
+      typename outbox_t::iterator completed(outbox.end());
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
       omp_set_lock(&(parent_.mpi_send_lock_));
 # endif
-      // check if some test messages have arrived
-      // and free corresponding resources
-      outbox.erase(mpi::test_some(outbox.begin(), outbox.end()), outbox.end());
+      while (current != completed) {
+        if (!! current->first.test()) {
+          --completed;
+          std::iter_swap(current, completed);
+          continue;
+        }
+        else
+          ++current;
+      }; // while current != completed
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
       omp_unset_lock(&(parent_.mpi_send_lock_));
 # endif
+      // now the range [completed, end) contains the completed requests
+      for (current = completed; current != outbox.end(); ++current) {
+        // free message payloads
+        delete current->second;
+      };
+      // finally, erase all completed requests
+      outbox.erase(completed, outbox.end());
     };
 #endif
   }
   else { // `phase == ending`: end message already received
 #ifdef WITH_MPI        
     if (outbox.size() > 0) {
+      // wait untill all sent messages have arrived
+      std::vector< mpi::request > reqs;
+      reqs.reserve(outbox.size());
+      for (typename outbox_t::iterator it = outbox.begin();
+           it != outbox.end();
+           ++it)
+        reqs.push_back(it->first);
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
       omp_set_lock(&(parent_.mpi_send_lock_));
 # endif
-      // wait untill all sent messages have arrived
-      mpi::wait_all(outbox.begin(), outbox.end());
+      mpi::wait_all(reqs.begin(), reqs.end());
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
       omp_unset_lock(&(parent_.mpi_send_lock_));
 # endif
+      // finally, free message payloads and erase all requests
+      for (typename outbox_t::iterator it = outbox.begin();
+           it != outbox.end();
+           ++it)
+        delete it->second;
+      outbox.clear();
     };
 #endif
 
