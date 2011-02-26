@@ -296,20 +296,10 @@ if [ -n "$TCMALLOC" ]; then
     #wget -N http://google-perftools.googlecode.com/files/google-perftools-${TCMALLOC}.tar.gz
     mkdir -p google-perftools-${TCMALLOC}
     cd google-perftools-${TCMALLOC}
-    ( 
-      # Google perftools error out when compiling with ICC, so revert to GCC 4.1 in this case
-      if test "x${CC}" = "xicc"; then
-          module load gcc/4.1.2
-          export CC=gcc
-          export CXX=g++
-          cflags='-O3 -march=nocona'
-          cxxflags='-O3 -march=nocona'
-      fi
-      ${src_home}/google-perftools-${TCMALLOC}/configure --prefix=${sw} \
-          --enable-frame-pointers \
-          CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
-          CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}"
-    )
+    ${src_home}/google-perftools-${TCMALLOC}/configure --prefix=${sw} \
+        --enable-frame-pointers --disable-debugalloc \
+        CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
+        CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}"
     $concurrent_make clean all
     $concurrent_make install
     set +x
