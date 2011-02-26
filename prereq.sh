@@ -253,7 +253,7 @@ EOF
     # then, build Boost with the new `bjam`
     PATH=$(pwd)/tools/jam/src/bin.$(uname -s | tr A-Z a-z)$(uname -m):$PATH
     export PATH
-    bjam --prefix=${sw} link=static threading=multi install
+    ./bjam --prefix=${sw} link=static threading=multi install
     set +x
 fi # BOOST
 
