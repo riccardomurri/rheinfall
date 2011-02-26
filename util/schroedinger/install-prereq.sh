@@ -12,12 +12,12 @@
 # the required version (or a newer one) installed in the
 # standard PATH/LD_LIBRARY_PATH
 #
-GMP=5.0.1
-GIVARO=3.3.2
-ATLAS=3.8.3
-LINBOX=1.1.7rc0
+#GMP=5.0.1
+#GIVARO=3.3.2
+#ATLAS=3.8.3
+#LINBOX=1.1.7rc0
 BOOST=1.43.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.43.0/boost_1_43_0.tar.gz
-TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
+#TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
 
 
 ## No customization should be necessary further down here
@@ -269,8 +269,8 @@ if [ -n "$BOOST" ]; then
     tar -xzf  "${src_home}/${boost_file}.tar.gz"
     cd ${boost_file}
     # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
-    sed -e 's|^//#define BOOST_MPI_HOMOGENEOUS|#define BOOST_MPI_HOMOGENEOUS|' \
-        -i boost/mpi/config.hpp
+    #sed -e 's|^//#define BOOST_MPI_HOMOGENEOUS|#define BOOST_MPI_HOMOGENEOUS|' \
+    #    -i boost/mpi/config.hpp
     ./bootstrap.sh --prefix=${sw} --with-libraries=mpi,serialization,test \
         toolset=${toolset} variant=release threading=multi
     cat >> project-config.jam <<EOF

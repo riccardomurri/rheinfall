@@ -24,10 +24,10 @@ fi
 flavor="${rev}-${compiler}-${mpi}"
 
 for prog in \
-    irank \
-    drank \
-    irank-omp \
-    drank-omp \
+    rank-int \
+    rank-double \
+    crank-int \
+    crank-double \
     ; 
 do
     if test ! -x "${bindir}/${prog}"; then
@@ -41,7 +41,6 @@ do
         -l s_cpu=$(( 24 * 3600 )) \
         -pe openmpi2 8 \
         -j y \
-        -o "${prog}.single.${flavor}.log" \
         run.sh "${bindir}/${prog}" \
         inputs/M05-D{4,5,6,7,8}.txt \
         inputs/M06-D{5,6,7,8,11,10}.txt \

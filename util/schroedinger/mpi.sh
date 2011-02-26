@@ -23,11 +23,14 @@ fi
 
 flavor="${rev}-${compiler}-${mpi}"
 
-for np in 16 32 64 128 256 512; do
-for w in 1 4 16 64 256 1024 4096; do 
+nps='16 32 64' # 128 256 512'
+ws='4096 1024 256 64 16' # 4 1'
+
+for np in $nps; do
+for w in $ws; do
 for prog in \
-    irank-mpi \
-    drank-mpi \
+    rank-int-mpi \
+    crank-int-mpi \
     ; 
 do
     if test ! -x "${bindir}/${prog}"; then
@@ -37,11 +40,10 @@ do
     qsub \
         -cwd \
         -S /bin/bash \
-        -N "mpi-n${np}-w${w}.${flavor}.${prog}" \
+        -N "mpi-n${np}-w${w}.${prog}.${flavor}" \
         -l s_cpu=$(( 24 * 3600 )) \
         -pe openmpi2 $np \
         -j y \
-        -o "${prog}.mpi-n${np}-w${w}.${flavor}.${RANDOM}.log" \
         run.sh "${bindir}/${prog}" \
         -w $w \
         inputs/M05-D{4,5,6,7,8}.txt \

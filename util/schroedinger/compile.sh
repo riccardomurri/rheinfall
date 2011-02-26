@@ -1,5 +1,5 @@
 #! /bin/bash
-#$ -l s_cpu=1500
+#$ -l s_cpu=1800
 #$ -cwd
 #$ -S /bin/bash
 #$ -v PATH,LD_LIBRARY_PATH
@@ -55,7 +55,6 @@ show_build_information
 echo === Compiling Rheinfall ... ===
 
 top_src_dir="$HOME/rheinfall"
-sw="$HOME/sw/${compiler}-${mpi}"
 #build_dir="/lustre/ESPFS/scratch/oci/murri/rheinfall.${flavor}"
 build_dir="$HOME/data/tmp/rheinfall.${flavor}"
 
@@ -75,14 +74,17 @@ mkdir -pv "${top_src_dir}/run/${compiler}-${mpi}-${rev}/"
 cp -av \
     $(find src.c++ src.c -type f -perm /u+x) \
     "${top_src_dir}/run/${compiler}-${mpi}-${rev}/"
-#cd "${top_src_dir}" \
-#    && rm -rf "$build_dir"
 
 
 echo === Run unit tests ===
 
+ln -s ${top_src_dir}/src.c++/test src.c++/test
 make check
 
 
 echo === Done: exit code $rc ===
+
+cd "${top_src_dir}" \
+    && rm -rf "$build_dir"
+
 exit $rc
