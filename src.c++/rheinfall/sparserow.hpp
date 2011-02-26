@@ -185,7 +185,7 @@ namespace rheinfall {
   { 
     coord_t starting_column = ending_column;
     val_t leading_term = 0;
-    for (p0; p0 != p1; ++p0) {
+    for (; p0 != p1; ++p0) {
       const coord_t coord = p0->first;
       const val_t value = p0->second;
       assert(0 != value);
