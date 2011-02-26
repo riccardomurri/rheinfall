@@ -61,6 +61,7 @@ defaults = {
     'mpilib':None,
     'omp':None,
     'revno':None,
+    'w':1,
     }
 if options.defaults is not None:
     for kv in str.join(',', options.defaults).split(','):
@@ -186,6 +187,7 @@ if options.csv_file:
             ('wctime',     nullable(float)) # wall-clock time on MPI rank 0
             ('omp',        nullable(int)),  # no. of OpenMP threads (0 = no OpenMP)
             ('mpi',        nullable(int)),  # no. of MPI ranks (0 = no MPI)
+            ('w',          int),            # width of a band of columns
             ('compiler',   nullable(str)),  # compiler used for compiling the C++ source
             ('mpilib',     nullable(str)),  # MPI library used 
             ('revno',      nullable(int)),  # BZR revision no. of the C++ source
@@ -205,6 +207,7 @@ elif options.sql_file:
             ('wctime',       'FLOAT'), # wall-clock time on MPI rank 0
             ('omp',        'INTEGER'), # no. of OpenMP threads (0 = no OpenMP)
             ('mpi',        'INTEGER'), # no. of MPI ranks (0 = no MPI)
+            ('w',          'INTEGER'), # width of a band of columns
             ('compiler',   'INTEGER'), # compiler used for compiling the C++ source
             ('mpilib',     'INTEGER'), # MPI library used 
             ('revno',      'INTEGER'), # BZR revision no. of the C++ source

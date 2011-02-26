@@ -368,6 +368,7 @@ main(int argc, char** argv)
         std::cout << argv[0] << " file:"<<argv[i];
 #ifdef WITH_MPI
         std::cout << " mpi:"<< world.size();
+        std::cout << " w:" << width;
 #endif
 #ifdef _OPENMP
         std::cout << " omp:"<< omp_get_max_threads();
