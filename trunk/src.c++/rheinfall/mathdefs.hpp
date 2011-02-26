@@ -133,7 +133,9 @@ namespace rheinfall {
 
   RF_TYPE_IS_GCD_RING(int,       pod_gcd<int>)
   RF_TYPE_IS_GCD_RING(long,      pod_gcd<long>)
+#ifdef HAVE_LONG_LONG_INT
   RF_TYPE_IS_GCD_RING(long long, pod_gcd<long long>)
+#endif
 
 #ifdef HAVE_GMPXX
   /** Adapt GMPXX's @c mpz_gcd function to our calling convention. */

@@ -5,15 +5,14 @@ SUBDIRS = gnulib
 # binaries built here
 EXTRA_PROGRAMS = crank-int-omp crank-int-mpi crank-int-mpi-omp
 EXTRA_PROGRAMS += crank-double-omp crank-double-mpi crank-double-mpi-omp
-EXTRA_PROGRAMS += crank-longdouble-omp crank-longdouble-mpi crank-longdouble-mpi-omp
-bin_PROGRAMS = crank-int crank-double crank-longdouble
+bin_PROGRAMS = crank-int crank-double
 if HAVE_OPENMP_CC
-  bin_PROGRAMS +=  crank-int-omp crank-double-omp crank-longdouble-omp
+  bin_PROGRAMS +=  crank-int-omp crank-double-omp 
 endif
 if HAVE_MPICC
-  bin_PROGRAMS += crank-int-mpi crank-double-mpi crank-longdouble-mpi
+  bin_PROGRAMS += crank-int-mpi crank-double-mpi 
 if HAVE_OPENMP_CC
-    bin_PROGRAMS += crank-int-mpi-omp crank-double-mpi-omp crank-longdouble-mpi-omp
+    bin_PROGRAMS += crank-int-mpi-omp crank-double-mpi-omp 
 endif
 endif
 
@@ -23,7 +22,7 @@ AM_LDFLAGS =
 LDADD =
 
 crank_int_SOURCES = main.c rheinfall.c vpu.c switchboard.c comm.c row.c ge.c 
-crank_int_CPPFLAGS = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/src.c/gnulib -DWITH_INTMAX_VALUES
+crank_int_CPPFLAGS = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/src.c/gnulib -DWITH_INT_VALUES
 crank_int_CFLAGS = $(AM_CFLAGS)
 crank_int_LDFLAGS = $(AM_LDFLAGS)
 crank_int_LDADD = $(LDADD)
@@ -70,31 +69,6 @@ crank_double_mpi_omp_CPPFLAGS = $(crank_double_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZ
 crank_double_mpi_omp_CFLAGS = $(crank_double_mpi_CFLAGS) $(OPENMP_CFLAGS)
 crank_double_mpi_omp_LDFLAGS = $(crank_double_mpi_LDFLAGS) $(OPENMP_LDFLAGS)
 crank_double_mpi_omp_LDADD = $(crank_double_mpi_LDADD) $(OPENMP_LIBS)
-
-
-crank_longdouble_SOURCES = main.c rheinfall.c vpu.c switchboard.c comm.c row.c ge.c 
-crank_longdouble_CPPFLAGS = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/src.c/gnulib -DWITH_LONG_DOUBLE_VALUES
-crank_longdouble_CFLAGS = $(AM_CFLAGS)
-crank_longdouble_LDFLAGS = $(AM_LDFLAGS)
-crank_longdouble_LDADD = $(LDADD)
-
-crank_longdouble_omp_SOURCES = $(crank_longdouble_SOURCES)
-crank_longdouble_omp_CPPFLAGS = $(crank_longdouble_CPPFLAGS) $(OPENMP_CPPFLAGS)
-crank_longdouble_omp_CFLAGS = $(crank_longdouble_CFLAGS) $(OPENMP_CFLAGS)
-crank_longdouble_omp_LDFLAGS = $(OPENMP_LDFLAGS) $(OPENMP_LDFLAGS)
-crank_longdouble_omp_LDADD = $(crank_longdouble_LDADD) $(OPENMP_LIBS)
-
-crank_longdouble_mpi_SOURCES = $(crank_longdouble_SOURCES)
-crank_longdouble_mpi_CPPFLAGS = $(crank_longdouble_CPPFLAGS) -DWITH_MPI $(MPI_CFLAGS)
-crank_longdouble_mpi_CFLAGS = $(crank_longdouble_CFLAGS) 
-crank_longdouble_mpi_LDFLAGS = $(crank_longdouble_CFLAGS) $(MPI_CLDFLAGS)
-crank_longdouble_mpi_LDADD = $(crank_longdouble_LDADD) 
-
-crank_longdouble_mpi_omp_SOURCES = $(crank_longdouble_SOURCES)
-crank_longdouble_mpi_omp_CPPFLAGS = $(crank_longdouble_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
-crank_longdouble_mpi_omp_CFLAGS = $(crank_longdouble_mpi_CFLAGS) $(OPENMP_CFLAGS)
-crank_longdouble_mpi_omp_LDFLAGS = $(crank_longdouble_mpi_LDFLAGS) $(OPENMP_LDFLAGS)
-crank_longdouble_mpi_omp_LDADD = $(crank_longdouble_mpi_LDADD) $(OPENMP_LIBS)
 
 
 # GNUlib support.  Output from `gnulib-tool --import xalloc xalloc-die`:
