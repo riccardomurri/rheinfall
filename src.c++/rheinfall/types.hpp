@@ -252,6 +252,33 @@ namespace rheinfall {
 #endif 
 
 
+  /** Compare a value to zero; by default this is an exact comparison. */
+  template <typename T> 
+  bool is_zero (const T& value) { return (0 == value); };
+
+  template <typename T>
+  struct is_zero_traits 
+  {
+    static T tolerance;
+  };
+  template<typename T> T is_zero_traits<T>::tolerance;
+
+  /** Specialize the @c is_zero template for inexact arithmetic
+      types. Consider an inexact value to be zero iff its absolute
+      value is within a certain distance from the exact zero. */
+#define INEXACT_IS_ZERO(T)                                     \
+  template<>                                                   \
+  bool is_zero<T>(const T& value) {                            \
+    return (value > -(is_zero_traits<T>::tolerance))           \
+            and (value < is_zero_traits<T>::tolerance);        \
+  };                                                           \
+
+  INEXACT_IS_ZERO(float)
+  INEXACT_IS_ZERO(double)
+#ifdef HAVE_LONG_DOUBLE
+  INEXACT_IS_ZERO(long double)
+#endif
+
 }; // namespace rheinfall
 
 

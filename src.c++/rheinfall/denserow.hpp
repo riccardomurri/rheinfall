@@ -218,7 +218,7 @@ namespace rheinfall {
   {
     assert(0 <= Row_::starting_column_);
     assert(Row_::starting_column_ <= Row_::ending_column_);
-    assert(0 != Row_::leading_term_);
+    assert(not is_zero(Row_::leading_term_));
     assert(storage.size() == Row_::ending_column_ - Row_::starting_column_);
     return true;
   };
@@ -229,10 +229,10 @@ namespace rheinfall {
   inline DenseRow<val_t,coord_t>*
   DenseRow<val_t,coord_t>::adjust()
   {
-    if (0 == Row_::leading_term_) {
+    if (is_zero(Row_::leading_term_)) {
       // compute new starting column
       for (int j = storage.size()-1; j >= 0; --j)
-        if (0 != storage[j]) {
+        if (not is_zero(storage[j])) {
           Row_::leading_term_ = storage[j];
           Row_::starting_column_ += (storage.size() - j);
           storage.erase(storage.begin()+j, storage.end());
@@ -258,8 +258,8 @@ namespace rheinfall {
   {
     assert(this->starting_column_ == other->starting_column_);
     assert(this->ending_column_ == other->ending_column_);
-    assert(0 != this->leading_term_);
-    assert(0 != other->leading_term_);
+    assert(not is_zero(this->leading_term_));
+    assert(not is_zero(other->leading_term_));
 
     // convert `other` to dense storage upfront: adding the
     // non-zero entries from `this` would made it pretty dense
@@ -277,8 +277,8 @@ namespace rheinfall {
   {
     assert(this->Row_::starting_column_ == other->Row_::starting_column_);
     assert(this->Row_::ending_column_ == other->Row_::ending_column_);
-    assert(0 != this->Row_::leading_term_);
-    assert(0 != other->Row_::leading_term_);
+    assert(not is_zero(this->Row_::leading_term_));
+    assert(not is_zero(other->Row_::leading_term_));
     assert(this->size() == other->size());
 
     return this->gaussian_elimination_impl(use_inplace_update<val_t>(), other);
