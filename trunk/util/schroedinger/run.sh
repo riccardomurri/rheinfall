@@ -1,19 +1,20 @@
 #! /bin/bash
 #$ -cwd
 #$ -S /bin/bash
-#$ -pe openmpi2 8
-#$ -j y
 #$ -R y
+#$ -notify 
+#$ -j y
+#$ -pe openmpi2 8
 
 PROG="$(basename $0)"
 
 usage () {
 cat <<EOF
-Usage: $PROG [COMPILER]-[MPILIB]-[REVNO]/PROG [ARGS ...]
+Usage: $PROG [REVNO]/COMPILER-MPILIB/PROG [ARGS ...]
 
 Setup the correct modules and paths for supporting binaries compiled
 by COMPILER with MPILIB, and finally run
-'run/COMPILER-MPILIB-REVNO/PROG' with the given ARGS.
+'run/REVNO/COMPILER-MPILIB/PROG' with the given ARGS.
 
 The COMPILER tag selects the compiler type (gcc412, gcc441, gcc443,
 gcc450, intel); second tag MPILIB selects which MPI library will be
@@ -27,7 +28,11 @@ exec="$1"; shift
 source $HOME/rheinfall/util/schroedinger/functions.sh \
     || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
 
-set_mpi_and_compiler_flavor "$(basename "$(dirname "$exec")" )"
+spec="$(dirname "$exec")"
+if expr "$spec" : 'run/' >/dev/null 2>&1; then
+    spec="$(echo $spec | cut -c5-)"
+fi
+set_mpi_and_compiler_flavor "$spec"
 
 
 ## environment information
@@ -49,6 +54,8 @@ test -n "$PE_HOSTFILE" && cat $PE_HOSTFILE
 #env | sort 
 echo === ulimit -a ===
 ulimit -a
+echo === start date ===
+date
 echo =========================
 echo
 
@@ -129,5 +136,7 @@ case "$exec" in
 esac
 rc=$?
 
+echo === end date ===
+date
 echo === Done: exit code $rc ===
 exit $rc

@@ -4,16 +4,38 @@
 # in Schroedinger helper scripts.  It won't run as a stand-alone script.
 #
 
+if test -e $HOME/.bashrc; then
+  source $HOME/.bashrc
+fi
+
 set_mpi_and_compiler_flavor () {
     flavor="$1"; shift
-    compiler="$(echo $flavor | (IFS=- read one two three; echo $one) )"
+
+    rev="$(echo $flavor | cut -d/ -f1)"
+    compiler_and_mpilib="$(echo $flavor | cut -d/ -f2)"
+    if [ -z "$compiler_and_mpilib" ]; then
+        # rev can be omitted - try to get it from the BZR repository
+        compiler_and_mpilib="$rev"
+        if test -d .bzr; then
+            rev=$( cat .bzr/branch/last-revision | (read revno rest; echo r$revno) );
+        elif bzr revno >/dev/null; then
+            rev=r$(bzr revno);
+        else
+            rev=UNKNOWN
+        fi
+    fi
+
+    compiler="$(echo $compiler_and_mpilib | (IFS=- read one two; echo $one) )"
     if [ -z "$compiler" ]; then
         compiler=gcc443
     fi
-    mpi="$(echo $flavor |  (IFS=- read one two three; echo $two) )"
+    mpi="$(echo $compiler_and_mpilib |  (IFS=- read one two; echo $two) )"
     if [ -z "$mpi" ]; then
         mpi=ompi
     fi
+
+    # rebuild flavor as a correct filename
+    flavor="${rev}-${compiler}-${mpi}"
 
     ## load modules
     source /panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/Modules/default/init/sh
@@ -145,6 +167,7 @@ set_mpi_and_compiler_flavor () {
 show_build_information () {
     echo === running info ===
     echo flavor: $flavor
+    echo revno: $rev
     echo compiler: $compiler
     echo mpi: $mpi
     echo node: $(hostname)

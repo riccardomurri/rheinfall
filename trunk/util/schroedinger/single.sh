@@ -2,17 +2,20 @@
 
 flavor="$1"; shift
 
-compiler="$(echo $flavor | cut -d- -f1)"
+rev="$(echo $flavor | cut -d/ -f1)"
+compiler_and_mpilib="$(echo $flavor | cut -d/ -f2)"
+if [ -z "$compiler_and_mpilib" ]; then
+    compiler_and_mpilib="$rev"
+    rev="$( cat .bzr/branch/last-revision | (read revno rest; echo r$revno) )"
+fi
+
+compiler=$(echo $compiler_and_mpilib | cut -d- -f1)
 if [ -z "$compiler" ]; then
     compiler=gcc443
 fi
-mpi="$(echo $flavor | cut -d- -f2)"
+mpi="$(echo $compiler_and_mpilib | cut -d- -f2)"
 if [ -z "$mpi" ]; then
     mpi=ompi
-fi
-rev="$(echo $flavor | cut -d- -f3)"
-if [ -z "$rev" ]; then
-    rev="$( cat .bzr/branch/last-revision | (read revno rest; echo r$revno) )"
 fi
 
 bindir="run/${flavor}"
@@ -25,12 +28,9 @@ flavor="${rev}-${compiler}-${mpi}"
 
 for prog in \
     rank-int \
-    rank-int32 \
-    rank-int64 \
+    rank-int-omp \
     rank-mod \
-    rank-double \
-    crank-int \
-    crank-double \
+    rank-mod-omp \
     ; 
 do
     if test ! -x "${bindir}/${prog}"; then
