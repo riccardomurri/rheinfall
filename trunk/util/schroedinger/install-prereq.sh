@@ -19,8 +19,8 @@ LINBOX=1.1.7rc0
 GMP=5.0.1
 GIVARO=3.3.2
 ATLAS=3.8.3
-BOOST=1.44.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.44.0/boost_1_44_0.tar.gz
-TCMALLOC=1.5 # http://google-perftools.googlecode.com/files/google-perftools-1.5.tar.gz
+BOOST=1.43.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.43.0/boost_1_43_0.tar.gz
+TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
 
 
 ## No customization should be necessary further down here
@@ -31,7 +31,7 @@ usage () {
 cat <<EOF
 Usage: $PROG [COMPILER[-MPILIB]]
 
-Download and install all required software for 'mgn.sh' to
+Download and install all required software for 'rheinfall' to
 work into the "`pwd`/sw-COMPILER-MPILIB" directory.
 
 First argument FLAVOR selects the compiler type (gcc443, gcc450, intel);
@@ -88,6 +88,9 @@ esac
 # load modules
 source /panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/Modules/default/init/sh
 
+supported_compilers='gcc412 gcc441 gcc443 gcc450 icc'
+supported_mpilibs='openmpi mvapich intel none'
+
 # load MPI - must match what the binary was compiled with!
 case "$mpi" in
     ompi|openmpi) 
@@ -124,7 +127,7 @@ case "$mpi" in
         done
         ;;
     *) 
-        die 1 "Unknown MPI library '${mpi}' - please choose one of 'ompi', 'mvapich', 'intel' or 'none'"
+        die 1 "Unknown MPI library '${mpi}' - please choose one of: $supported_mpilibs"
         ;;
 esac
 
@@ -167,7 +170,7 @@ case "$compiler" in
         toolset=intel
         ;;
     *) 
-        die 1 "Unknown compiler flavor '${compiler} - please choose one of 'gcc443', 'gcc450', 'icc'"
+        die 1 "Unknown compiler flavor '${compiler}' - please choose one of: $supported_compilers"
         ;;
 esac
 
@@ -184,8 +187,11 @@ set -e # exit on error here, in case the compiler does not have enough licences
 ${CXX} --version
 set +e
 
-which mpicxx
-echo
+if [ "x${mpi}" != 'none' ]; then
+    which mpicxx
+    mpicxx --version
+    echo
+fi
 
 which as
 as --version
@@ -433,12 +439,5 @@ if [ -n "$TCMALLOC" ]; then
     set +x
 fi
 
-
-# finally, make ranks
-#_ Making "rank_mpi" binaries
-#cd ${sw}/..
-#set -x
-#make rank_mpi
-#set +x
 
 _ All done.
