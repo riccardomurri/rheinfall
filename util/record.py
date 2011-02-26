@@ -15,6 +15,11 @@ import sqlite3
 import subprocess
 import sys
 
+# patch sys.path to include likely locations for the `namedtuple` module
+p = os.path.dirname(sys.argv[0])
+sys.path.append(p)
+sys.path.append(os.path.join(p, 'util'))
+
 try:
     from collections import namedtuple
 except ImportError:
