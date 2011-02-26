@@ -38,20 +38,26 @@
 switchboard_t* 
 switchboard_new(const int ncols
 #ifdef WITH_MPI
-                , MPI_Comm comm_
+                , MPI_Comm comm
 #endif
                 ) {
   switchboard_t* sb = xmalloc(sizeof(switchboard_t));
 #ifdef WITH_MPI
-  sb->comm = comm_;
+  sb->comm = comm;
   MPI_Comm_rank(sb->comm, &(sb->me));
   MPI_Comm_size(sb->comm, &(sb->comm_size));
+#else
+  // simulate running with just 1 MPI rank
+  sb->me = 0;
+  sb->comm_size = 1;
 #endif
   sb->ncols = ncols;
-  sb->nvpus = ncols;
-  sb->vpu = xmalloc(ncols * sizeof(vpu_t*));
-  for (int n = 0; n < ncols; ++n)
-    sb->vpu[n] = vpu_new(n);
+  sb->nvpus = 0;
+  sb->vpu = xmalloc(sizeof(vpu_t*) * (1 + ncols / sb->comm_size));
+  for (int n = 0; (sb->me + n*sb->comm_size) < ncols; ++n) {
+    sb->vpu[n] = vpu_new(sb->me + n*sb->comm_size);
+    sb->nvpus += 1;
+  };
   return sb;
 };
 
@@ -59,7 +65,7 @@ switchboard_new(const int ncols
 void
 switchboard_free(switchboard_t* sb)
 {
-  for (int n = 0; n < sb->ncols; ++n)
+  for (int n = 0; n < sb->nvpus; ++n)
     if (NULL != sb->vpu[n])
       vpu_free(sb->vpu[n]);
   free(sb->vpu);

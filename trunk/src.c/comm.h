@@ -43,10 +43,8 @@
 #endif
 
 
-int comm_send_end(const switchboard_t* sb, const coord_t dest);
+int comm_send_end(const switchboard_t* sb, coord_t dest);
 int comm_send_row(const switchboard_t* sb, outbox_t* const outbox, const row_t* cargo);
-//int comm_send_sparse_row(const switchboard_t* sb, outbox_t* outbox, sparse_row_t* row);
-//int comm_send_dense_row(const switchboard_t* sb, outbox_t* outbox, dense_row_t* row);
 void comm_receive(const switchboard_t* sb);
 outbox_t* comm_remove_completed(outbox_t* outbox);
 outbox_t* comm_wait_all_and_then_free(outbox_t* outbox);

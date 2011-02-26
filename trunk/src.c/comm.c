@@ -32,10 +32,10 @@
 
 #include "common.h"
 #include "row.h"
-#include "errors.h"
 #include "switchboard.h"
 #include "vpu.h"
 
+#include <error.h>
 #include <xalloc.h>
 
 #include <assert.h>
@@ -61,8 +61,7 @@ enum mpi_tags {
 static omp_lock_t mpi_send_lock_;
 #endif
 
-
-int comm_send_end(const switchboard_t* sb, const coord_t dest)
+int comm_send_end(const switchboard_t* sb, coord_t dest)
 {
   if (sb->ncols == dest)
     return 0;
@@ -75,8 +74,8 @@ int comm_send_end(const switchboard_t* sb, const coord_t dest)
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
     omp_set_lock(&mpi_send_lock_);
 # endif
-    const int rc = MPI_Send(&dest, 1, MPI_LONG, 
-                            remote_owner(sb, dest), TAG_END, MPI_COMM_WORLD);
+    const int rc = MPI_Send((void*)&dest, 1, mpitype_coord_t, 
+                            remote_owner(sb, dest), TAG_END, sb->comm);
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(&mpi_send_lock_);
 # endif
@@ -88,6 +87,19 @@ int comm_send_end(const switchboard_t* sb, const coord_t dest)
 }
 
 
+#ifdef WITH_MPI
+static void
+mpi_fatal(const switchboard_t* sb, const MPI_Status* statusp, const char* msg)
+{
+  char mpi_error_string[MPI_MAX_ERROR_STRING];
+  int len;
+  MPI_Error_string(statusp->MPI_ERROR, mpi_error_string, &len);
+  error(0, 0, "%s: %s", msg, mpi_error_string);
+  MPI_Abort(sb->comm, statusp->MPI_ERROR);
+}
+#endif
+
+
 int comm_send_sparse_row(const switchboard_t* sb, outbox_t* outbox, sparse_row_t* row)
 {
   coord_t column = row->starting_column_;
@@ -97,8 +109,8 @@ int comm_send_sparse_row(const switchboard_t* sb, outbox_t* outbox, sparse_row_t
   }
 #ifdef WITH_MPI
   else { // ship to remote process
-    MPI_Request* req_p = requests_list_extend1(&outbox->requests);
-    row_t* row_p = rows_list_extend1(&outbox->rows);
+    MPI_Request* req_p = requests_list_extend1(&(outbox->requests));
+    row_t* row_p = rows_list_extend1(&(outbox->rows));
     row_p->data = row; /* will free row when MPI req is complete */
     row_p->kind = ROW_SPARSE; 
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
@@ -128,8 +140,8 @@ int comm_send_dense_row(const switchboard_t* sb, outbox_t* outbox, dense_row_t* 
   }
 #ifdef WITH_MPI
   else { // ship to remote process
-    MPI_Request* req_p = requests_list_extend1(&outbox->requests);
-    row_t* row_p = rows_list_extend1(&outbox->rows);
+    MPI_Request* req_p = requests_list_extend1(&(outbox->requests));
+    row_t* row_p = rows_list_extend1(&(outbox->rows));
     row_p->data = row; /* will free row when MPI req is complete */
     row_p->kind = ROW_DENSE;
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
@@ -150,7 +162,7 @@ int comm_send_dense_row(const switchboard_t* sb, outbox_t* outbox, dense_row_t* 
 }
 
 
-int comm_send_row(const switchboard_t* sb, outbox_t* const outbox, const row_t* cargo)
+int comm_send_row(const switchboard_t* sb, outbox_t* outbox, const row_t* cargo)
 {
   if (ROW_SPARSE == cargo->kind)
     return comm_send_sparse_row(sb, outbox, (sparse_row_t*)cargo->data);
@@ -163,18 +175,18 @@ int comm_send_row(const switchboard_t* sb, outbox_t* const outbox, const row_t* 
 
 outbox_t* comm_remove_completed(outbox_t* outbox)
 {
+  assert(NULL != outbox);
 #ifdef WITH_MPI
   const int size = requests_list_size(outbox->requests);
   if (size > 0) {
     int count = 0;
-    int* completed = calloc(sizeof(int), size);
-    int* statuses = malloc(sizeof(MPI_Status)*size);
+    int* completed = xcalloc(sizeof(int), size);
+    MPI_Status* statuses = xmalloc(sizeof(MPI_Status)*size);
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
     omp_set_lock(&mpi_send_lock_);
 # endif
     // check if some test messages have arrived...
-    MPI_Testsome(requests_list_size(outbox->requests),
-                 outbox->requests->storage,
+    MPI_Testsome(size, outbox->requests->storage,
                  &count, completed, statuses);
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(&mpi_send_lock_);
@@ -191,17 +203,17 @@ outbox_t* comm_remove_completed(outbox_t* outbox)
         };
       }; // for (int m = ...)
       if (copy) {
-        MPI_Request* req_p = requests_list_extend1(& new_outbox->requests);
+        MPI_Request* req_p = requests_list_extend1(&(new_outbox->requests));
         *req_p = outbox->requests->storage[n];
-        void* row_p = rows_list_extend1(& new_outbox->rows);
-        *row_p->data = outbox->rows->storage[n]->data;
-        *row_p->kind = outbox->rows->storage[n]->kind;
+        row_t* row = rows_list_extend1(&(new_outbox->rows));
+        row->data = outbox->rows->storage[n].data;
+        row->kind = outbox->rows->storage[n].kind;
       }
       else { // free rows corresponding to completed requests
-        if (ROW_SPARSE == outbox->rows->storage[n]->kind)
-          sparse_row_free((sparse_row_t*)outbox->rows->storage[n]->data);
+        if (ROW_SPARSE == outbox->rows->storage[n].kind)
+          sparse_row_free((sparse_row_t*) outbox->rows->storage[n].data);
         else
-          dense_row_free((dense_row_t*)outbox->rows->storage[n]->data);
+          dense_row_free((dense_row_t*) outbox->rows->storage[n].data);
       };
     }; // for (int n = ...)
     outbox_free(outbox);
@@ -210,9 +222,8 @@ outbox_t* comm_remove_completed(outbox_t* outbox)
     free(statuses);
     return new_outbox;
   };
-#else
-  return 0;
-#endif
+#endif // WITH_MPI
+  return outbox;
 }
 
 
@@ -221,7 +232,6 @@ outbox_t* comm_wait_all_and_then_free(outbox_t* outbox)
 #ifdef WITH_MPI
   const int size = requests_list_size(outbox->requests);
   if (size > 0) {
-    int count = 0;
     MPI_Status* statuses = calloc(sizeof(MPI_Status), size);
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
     omp_set_lock(&mpi_send_lock_);
@@ -233,21 +243,21 @@ outbox_t* comm_wait_all_and_then_free(outbox_t* outbox)
 # endif
     // ...free corresponding rows...
     for (int n = 0; n < size; ++n) {
-      if (ROW_SPARSE == outbox->rows->storage[n]->kind)
-        sparse_row_free(((sparse_row_t*)outbox)->rows->storage[n]->data);
+      if (ROW_SPARSE == outbox->rows->storage[n].kind)
+        sparse_row_free((sparse_row_t*) outbox->rows->storage[n].data);
       else
-        dense_row_free(((dense_row_t*)outbox)->rows->storage[n]->data);
+        dense_row_free((dense_row_t*) outbox->rows->storage[n].data);
     };
     outbox_free(outbox);
     // finally, free local resources and return
     free(statuses);
   };
-#else
-  return 0;
-#endif
+#endif // WITH_MPI
+  return NULL;
 }
 
 
+#include <stdio.h> // DEBUG
 void
 comm_receive(const switchboard_t* sb)
 {
@@ -263,24 +273,28 @@ comm_receive(const switchboard_t* sb)
     switch(status.MPI_TAG) {
     case TAG_ROW_SPARSE: {
       sparse_row_t* new_row = sparse_row_alloc_placed(xa, size);
+      assert(NULL != new_row);
+      //fprintf(stderr, "DEBUG: MPI rank %d: about to receive sparse row with: MPI_Recv(%p, %d, MPI_BYTE, %d, %d, ...)\n", sb->me, new_row, size, status.MPI_SOURCE, status.MPI_TAG);
       MPI_Recv(new_row, size, MPI_BYTE,
                status.MPI_SOURCE, status.MPI_TAG, MPI_COMM_WORLD,
                &status);
-      critical(status.MPI_ERROR == MPI_SUCCESS, 
-               "Got error from MPI_Recv");
+      if (status.MPI_ERROR != MPI_SUCCESS)
+        mpi_fatal(sb, &status, "Got error while receiving sparse row");
       assert(is_local(sb, new_row->starting_column_));
-      vpu_recv_row(local_owner(sb, new_row->starting_column_), new_row);
+      vpu_recv_row(local_owner(sb, new_row->starting_column_), new_row, ROW_SPARSE);
       break;
     };
     case TAG_ROW_DENSE: {
       dense_row_t* new_row = dense_row_alloc_placed(xa, size);
+      assert(NULL != new_row);
+      //fprintf(stderr, "DEBUG: MPI rank %d: about to receive dense row with: MPI_Recv(%p, %d, MPI_BYTE, %d, %d, ...)\n", sb->me, new_row, size, status.MPI_SOURCE, status.MPI_TAG);
       MPI_Recv(new_row, size, MPI_BYTE,
                status.MPI_SOURCE, status.MPI_TAG, MPI_COMM_WORLD,
                &status);
-      critical(status.MPI_ERROR == MPI_SUCCESS, 
-               "Got error from MPI_Recv");
+      if (status.MPI_ERROR != MPI_SUCCESS)
+        mpi_fatal(sb, &status, "Got error while receiving dense row");
       assert(is_local(sb, new_row->starting_column_));
-      vpu_recv_row(local_owner(sb, new_row->starting_column_), new_row);
+      vpu_recv_row(local_owner(sb, new_row->starting_column_), new_row, ROW_DENSE);
       break;
     };
     case TAG_END: {
@@ -290,11 +304,12 @@ comm_receive(const switchboard_t* sb)
       // pass anyway.  All this boils down to: set a flag,
       // make another iteration, and end the loop next time.
       coord_t column;
+      //fprintf(stderr, "DEBUG: MPI rank %d: about to receive END tag with: MPI_Recv(%p, %d, MPI_BYTE, %d, %d, ...)\n", sb->me, &column, 1, status.MPI_SOURCE, status.MPI_TAG);
       MPI_Recv(&column, 1, MPI_LONG,
                status.MPI_SOURCE, status.MPI_TAG, MPI_COMM_WORLD,
                &status);
-      critical(status.MPI_ERROR == MPI_SUCCESS, 
-               "Got error from MPI_Recv");
+      if (status.MPI_ERROR != MPI_SUCCESS)
+        mpi_fatal(sb, &status, "Got error while receiving sparse END tag");
       assert(column >= 0 && is_local(sb, column));
       vpu_end_phase(local_owner(sb, column));
       break;

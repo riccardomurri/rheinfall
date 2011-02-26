@@ -4,7 +4,7 @@ irank_SOURCES = src.c/main.c src.c/rheinfall.c src.c/vpu.c src.c/switchboard.c s
 
 
 # FIXME: GCC-specific flags!
-AM_CFLAGS = -Wall
+AM_CFLAGS = -Wall -DWITH_MPI
 SUBDIRS =
 LDADD =
 

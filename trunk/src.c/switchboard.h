@@ -48,9 +48,9 @@
 struct switchboard_s {
 #ifdef WITH_MPI
   MPI_Comm comm;     /**< MPI communicator to use */
+#endif
   int comm_size;     /**< MPI communicator size */
   int me;            /**< MPI rank of this process */
-#endif
   int ncols;         /**< Total number of columns */
   size_t nvpus;      /**< Number of local VPUs */
   struct vpu_s** vpu;/**< Array of local VPUs */

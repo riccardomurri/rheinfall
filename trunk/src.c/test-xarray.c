@@ -126,5 +126,86 @@ int main(int argc, char** argv)
   /* finally, free it */
   row_free(r);
 
+
+  /* now, do the same checks, but allocated the buffer separately with malloc */
+  void* buf = malloc(256);
+  assert(NULL != buf);
+  r = row_alloc_placed(buf, 256);
+  assert(row_size(r) == 0);
+  assert(r->allocated >= 0);
+
+  /* add one element */
+  p = row_extend1(&r);
+  assert(row_size(r) == 1);
+  p->coord = 0;
+  p->val = 1;
+  /* check it back */
+  p = row_at(r, 0);
+  assert(0 == p->coord);
+  assert(1.0 == p->val);
+
+  /* request more storage space */
+  row_reserve(&r, 3);
+  assert(row_size(r) == 1);
+  assert(r->allocated >= 4);
+
+  /* add more items one at a time */
+  for (int n = 1; n < 10; ++n) {
+    p = row_extend1(&r);
+    assert(row_size(r) == n+1);
+    p->coord = n;
+    p->val = n+1;
+  };
+  check_row(r);
+
+  row_shorten1(&r);
+  assert(row_size(r) == 9);
+  check_row(r);
+
+  row_shorten(&r, 4);
+  assert(row_size(r) == 5);
+  check_row(r);
+
+  row_clear(&r);
+  assert(row_size(r) == 0);
+
+  /* now try adding back 5 elements at a time */
+  p = row_extend(&r, 5);
+  assert(row_size(r) == 5);
+  for (int n = 0; n < 5; ++n) {
+    p->coord = n;
+    p->val = n+1;
+    ++p;
+  };
+  check_row(r);
+
+  /* replace them and then insert some more */
+  p = r->storage;
+  for (int n = 0; n < 5; ++n) {
+    p->coord = 2*n;
+    p->val = 2*n+1;
+    ++p;
+  };
+  for (int n = 3; n >= 0; --n) {
+    p = row_insert(&r, n+1);
+    p->coord = 2*n+1;
+    p->val = 2*n+2;
+  }
+  assert(row_size(r) == 9);
+  check_row(r);
+
+  /* erase elements in even position */
+  for (int n = 4; n >= 0; --n)
+    row_erase(&r, 2*n);
+  assert(row_size(r) == 4);
+  for (int n = 0; n < 4; ++n) {
+    p = row_at(r, n);
+    assert(2*n+1 == p->coord);
+    assert(2*n+2 == p->val);
+  }
+
+  /* finally, free it */
+  row_free(r);
+
   return 0;
 }

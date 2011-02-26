@@ -88,7 +88,7 @@ _inline aname##_t* aname##_alloc(const size_t nmemb) {                 \
 _inline aname##_t* aname##_alloc_placed(void* xa, const size_t size) { \
   assert(NULL != xa);                                                  \
   assert(size > sizeof(aname##_t));                                    \
-  if(size > sizeof(aname##_t));                                        \
+  if(size < sizeof(aname##_t))                                         \
     return NULL;                                                       \
                                                                        \
   aname##_t* xa_ = (aname##_t*)xa;                                     \
