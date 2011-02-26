@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 #
 """
-Import run data from irank* output.
+Import run data from rank*/lbrank* output.
 """
 __docformat__ = 'reStructuredText'
 
@@ -42,7 +42,7 @@ cmdline.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 
 if (options.csv_file is not None and options.sql_file is not None) \
         or (options.csv_file is None and options.sql_file is None):
-    sys.stderr.write("Please specify one and only one of options '-a' and '-b'.")
+    sys.stderr.write("Please specify one and only one of options '-a' or '-b'.")
     sys.exit(1)
 
 class Logger(object):
@@ -62,8 +62,10 @@ logger = Logger(options.verbose, os.path.basename(sys.argv[0]))
 # build record defaults
 defaults = { 
     'compiler':None,
+    'exitcode':None,
     'mpi':None,
     'mpilib':None,
+    'nonzero':None,
     'omp':None,
     'revno':None,
     'w':1,
@@ -93,7 +95,9 @@ class BaseStatsDb(object):
         self._defaults = defaults
     def add(self, row):
         for k,v in self._defaults.items():
-            if not row.has_key(k):
+            try:
+                row[k]
+            except KeyError:
                 row[k] = v
         self._data.add(self._recordtype(**row))
     def load(self, filename=None):
@@ -186,17 +190,19 @@ if options.csv_file:
             ('matrix',     str),            # matrix file processed
             ('rows',       int),            # no. of matrix rows
             ('cols',       int),            # no. of matrix columns
-            ('nonzero',    int),            # no. of nonzero entries
+            ('nonzero',    nullable(int)),  # no. of nonzero entries
             ('rank',       nullable(int)),  # computed matrix rank
             ('cputime',    nullable(float)) # CPU time consumed on MPI rank 0
             ('wctime',     nullable(float)) # wall-clock time on MPI rank 0
-            ('omp',        nullable(int)),  # no. of OpenMP threads (0 = no OpenMP)
-            ('mpi',        nullable(int)),  # no. of MPI ranks (0 = no MPI)
+            ('omp',        nullable(int)),  # no. of OpenMP threads (`None` if no OpenMP)
+            ('mpi',        nullable(int)),  # no. of MPI ranks (`None` if no MPI)
             ('w',          int),            # width of a band of columns
             ('compiler',   nullable(str)),  # compiler used for compiling the C++ source
             ('mpilib',     nullable(str)),  # MPI library used 
             ('revno',      nullable(int)),  # BZR revision no. of the C++ source
-            ('provenance', str),            # file name where this info was extracted from
+            ('provenance', str),            # output file name where this info was extracted from
+            ('file',       str),            # input file where matrix data was read from
+            ('program',    str),            # name of the program that generated this
             ), defaults)
     if os.path.exists(options.csv_file): 
         db.load(options.csv_file)
@@ -217,6 +223,8 @@ elif options.sql_file:
             ('mpilib',     'INTEGER'), # MPI library used 
             ('revno',      'INTEGER'), # BZR revision no. of the C++ source
             ('provenance',    'TEXT'), # file name where this info was extracted from
+            ('file',          'TEXT'), # input file where matrix data was read from
+            ('program',       'TEXT'), # name of the program that generated this
             ), defaults)
     if os.path.exists(options.sql_file): 
         db.load()
@@ -224,46 +232,75 @@ elif options.sql_file:
 
 ## main 
 
-rank_line_re = re.compile(r'^[^ ]+/rank(_mpi|_omp){0,2} file:')
-jobid_re = re.compile(r'.[eo]([0-9]+)')
+rank_line_re = re.compile(r'^[^ ]+/(?P<program>[idqz]?rank(-int|-mod|-double)?([_-]mpi|[_-]omp){0,2}|lbrank_(?:bb|se_linear|se_none)) file:')
+jobid_re = re.compile(r'.[eo](?P<jobid>[0-9]+)')
 whitespace_re = re.compile(r'\s+', re.X)
-garbage_re = re.compile(r'(MPI process \(rank: \d+\) terminated unexpectedly|\[[0-9a-z]+:\d+\] \[ *\d+\]).*')
+garbage_re = re.compile(r'(MPI process \(rank: \d+\) terminated unexpectedly|\[[0-9a-z]+:\d+\] \[ *\d+\]|.*SIG[A-Z]+[0-9]*|/[/a-z0-9_]+: line [0-9]+: [0-9]+ Aborted|\[[a-z0-9]+:[0-9]+\] \*\*\* Process received signal).*')
 
 for input_file_name in args:
     input_file = open(input_file_name, 'r')
     logger.log(1, "Processing file %s ...", input_file_name)
     for line in input_file.readlines():
         line = line.strip()
-        if not rank_line_re.match(line):
+        match = rank_line_re.match(line)
+        if not match:
             continue
         line = garbage_re.sub('', line)
+        if len(line) == 0:
+            continue
         words = line.split(' ')[1:]
-        outcome = { 'provenance':input_file_name }
+        outcome = { 
+            'program':match.group('program'),
+            'provenance':input_file_name,
+            }
         outcome.update(dict([(k,v) for k,v in defaults.items()]))
-        outcome.update(dict(w.split(':',1) for w in words))
+        try:
+            outcome.update(dict(w.split(':',1) for w in words))
+        except ValueError:
+            sys.stderr.write("Error parsing line: '%s'\n" % line)
+            sys.exit(1)
+        if outcome.has_key('time') and not outcome.has_key('cputime'):
+            outcome['cputime'] = outcome['time']
+            del outcome['time']
+        if outcome.has_key('cputime') and not outcome.has_key('wctime'):
+            outcome['wctime'] = outcome['cputime']
         # extract matrix name from file name
-        outcome['matrix'] = os.path.splitext(os.path.basename(outcome['file']))[0]
-        del outcome['file']
+        try:
+            outcome['matrix'] = os.path.splitext(os.path.basename(outcome['file']))[0]
+        except KeyError:
+            sys.stderr.write("Error: missing 'file' keyword in line: '%s'\n" % line)
+            sys.exit(1)
         if not outcome.has_key('rank'):
             # computation failed, try to get exitcode from SGE
             match = jobid_re.search(input_file_name)
-            jobid = match.group(1)
-            logger.log(2, "Running 'qacct -j %s' ...", jobid)
-            qacct = subprocess.Popen(["qacct", "-j", jobid], 
-                                     stdout=subprocess.PIPE).communicate()[0]
-            for kv in qacct.split('\n')[1:]:
-                kv = kv.strip()
-                k, v = whitespace_re.split(kv, 1)
-                if k == 'exit_status':
-                    outcome['exitcode'] = int(v)
-                    break
+            if match:
+                jobid = match.group('jobid')
+                logger.log(2, "Running 'qacct -j %s' ...", jobid)
+                qacct = subprocess.Popen(["qacct", "-j", jobid], 
+                                         stdout=subprocess.PIPE).communicate()[0]
+                for kv in qacct.split('\n')[1:]:
+                    kv = kv.strip()
+                    k, v = whitespace_re.split(kv, 1)
+                    if k == 'exit_status':
+                        outcome['exitcode'] = int(v)
+                        break
+            # if the job was no longer in SGE's accounting db,
+            # supply a default value for failed jobs
+            if not outcome.has_key('exitcode'):
+                outcome['exitcode'] = -1
             # supply NULL values for unknown fields
             outcome['rank'] = None
             outcome['cputime'] = None
             outcome['wctime'] = None
         else:
             outcome['exitcode'] = 0
-        db.add(outcome)
+        try:
+            db.add(outcome)
+        except TypeError:
+            sys.stderr.write("Incomplete data in line '%s': %s\n"
+                             % (line, str.join(", ", (("%s=%s" % (k,repr(v))) 
+                                                      for k,v in outcome.items()))))
+            sys.exit(1)
 db.save()
 db.close()
 
