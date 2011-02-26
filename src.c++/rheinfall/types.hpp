@@ -213,7 +213,6 @@ namespace rheinfall {
   RF_TYPE_IS_DIVISION_RING(mpf_class)
 #endif 
 
-  // modular arithmetic
   /** Declare template specializations for instances of a type
    *  modeling an unordered division ring (i.e., like @ref
    *  RF_TYPE_IS_DIVISION_RING but no relational operators are
@@ -231,13 +230,28 @@ namespace rheinfall {
     b = 1;                                          \
   };                                                \
 
-  RF_TYPE_IS_UNORDERED_DIVISION_RING(modular::Modular<int>)
-  RF_TYPE_IS_UNORDERED_DIVISION_RING(modular::Modular<long>)
+  /** Declare template specializations for instances of a type
+   *  modeling a modular ring, i.e., take advantage of the fact that
+   *  multiplication is cheaper than division and never overflows.
+   */
+#define RF_TYPE_IS_MODULAR_RING(T)                  \
+  template <>                                       \
+  void get_row_multipliers<T>(T const& lead_x,      \
+                              T const& lead_y,      \
+                              T& a, T& b)           \
+  {                                                 \
+    assert(lead_x != 0);                            \
+    a = - lead_y;                                   \
+    b = lead_x;                                     \
+  };                                                \
+
+  RF_TYPE_IS_MODULAR_RING(modular::Modular<int>)
+  RF_TYPE_IS_MODULAR_RING(modular::Modular<long>)
 #ifdef HAVE_LONG_LONG_INT
-  RF_TYPE_IS_UNORDERED_DIVISION_RING(modular::Modular<long long>)
+  RF_TYPE_IS_MODULAR_RING(modular::Modular<long long>)
 #endif
 #ifdef HAVE_INT128_T
-  RF_TYPE_IS_UNORDERED_DIVISION_RING(modular::Modular<int128_t>)
+  RF_TYPE_IS_MODULAR_RING(modular::Modular<int128_t>)
 #endif
 
 
