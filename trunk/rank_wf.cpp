@@ -51,6 +51,10 @@
 #include <boost/serialization/vector.hpp>
 namespace mpi = boost::mpi;
 
+#ifdef WITH_OPENMP
+#include <omp.h>
+#endif
+
 
 enum { TAG_END=0, TAG_ROW_SPARSE=1, TAG_ROW_DENSE=2 };
 
@@ -415,10 +419,14 @@ Waterfall::rank()
     if (procs.size()-1 == n0)
       break;
     // step all processors
+#ifdef WITH_OPENMP
+#pragma omp parallel for
+#endif
     for (size_t n = n0; n < procs.size(); ++n) {
       r[n] = procs[n]->step();
     };
     // manage arrival of messages
+    int ending_this_turn = -1;
     while (boost::optional<mpi::status> status = comm.iprobe()) { 
       switch(status->tag()) {
       case TAG_ROW_SPARSE: {
@@ -447,10 +455,12 @@ Waterfall::rank()
         coord_t column = -1;
         comm.recv(status->source(), status->tag(), column);
         assert(column >= 0 and is_local(column));
-        local_owner(column).end_phase();
+        ending_this_turn = column;
       };
       }; // switch(status->tag())
-    };
+    }; // while(iprobe)
+    if (ending_this_turn >= 0)
+      local_owner(ending_this_turn).end_phase();
   };
 
   // the partial rank is computed as the sum of all ranks computed
@@ -502,7 +512,9 @@ Waterfall::remote_owner(const coord_t c) const
 inline void 
 Waterfall::Processor::recv_row(row_ptr new_row) 
 {
-  // FIXME: requires locking for MT operation
+#ifdef WITH_OPENMP
+#pragma omp single
+#endif
   inbox.push_back(new_row);
 };
 
