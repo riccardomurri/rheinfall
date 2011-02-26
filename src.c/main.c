@@ -8,7 +8,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -234,18 +234,19 @@ main(int argc, char** argv)
 
   // parse command-line options
   int width = 1;
+  bool transpose = false;
 
   static struct option long_options[] = {
-    {"help",    0, 0, 'h'},
-    {"memory",  1, 0, 'm'},
-    {"verbose", 0, 0, 'v'},
-    {"width",   1, 0, 'w'},
+    {"help",      0, 0, 'h'},
+    {"verbose",   0, 0, 'v'},
+    {"transpose", 0, 0, 't'},
+    {"width",     1, 0, 'w'},
     {0, 0, 0, 0}
   };
 
   int c;
   while (true) {
-    c = getopt_long(argc, argv, "hm:vw:",
+    c = getopt_long(argc, argv, "hvtw:",
                     long_options, NULL);
     if (-1 == c)
       break;
@@ -253,34 +254,8 @@ main(int argc, char** argv)
       usage(stdout, argc, argv);
       return 0;
     }
-    else if ('m' == c) {
-      rlim_t required_memory = atoi(optarg);
-      if (required_memory < 1) {
-        fprintf(stderr, "Argument to option -m/--memory must be a positive integer,"
-                " got '%ld' instead. Aborting.\n", required_memory);
-        return 1;
-      };
-      required_memory *= 1000*1000*1000;
-      struct rlimit limit;
-      getrlimit(RLIMIT_AS, &limit);
-      if (limit.rlim_cur != RLIM_INFINITY && limit.rlim_cur > required_memory) {
-        fprintf(stderr, "%s: WARNING: Requested memory limit of %ld bytes"
-                " is higher than current system soft limit of %ld bytes."
-                " Capping requested memory to system limit.\n",
-                argv[0], required_memory, limit.rlim_cur);
-        required_memory = limit.rlim_cur;
-      };
-      if (limit.rlim_max != RLIM_INFINITY && limit.rlim_max > required_memory) {
-        fprintf(stderr, "%s: WARNING: Requested memory limit of %ld bytes"
-                " is higher than current system hard limit of %ld bytes."
-                " Capping requested memory to system limit.\n",
-                argv[0], required_memory, limit.rlim_max);
-        required_memory = limit.rlim_max;
-      };
-      limit.rlim_cur = required_memory;
-      limit.rlim_max = required_memory;
-      setrlimit(RLIMIT_AS, &limit);
-    }
+    else if ('t' == c)
+      transpose = true;
     else if ('v' == c)
       verbose = 2;
     else if ('w' == c) {
@@ -359,16 +334,6 @@ main(int argc, char** argv)
       assert ('M' == M);
       if (0 == me)
         printf(" rows:%ld cols:%ld", rows, cols);
-
-      // possibly transpose matrix so that rows = min(rows, cols)
-      // i.e., minimize the number of eliminations to perform
-      bool transpose = false;
-      if (rows > cols) {
-        coord_t tmp = rows;
-        rows = cols;
-        cols = tmp;
-        transpose = true;
-      };
 
 #ifdef WITH_MPI
       switchboard_t* rf = switchboard_new(cols, width, MPI_COMM_WORLD);
