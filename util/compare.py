@@ -105,7 +105,7 @@ translate = {
 rank_line_re = re.compile(r'^[^ ]+/(?:[idqz]?rank(-int|-mod|-double)?([_-]mpi|[_-]omp){0,2}|lbrank_(?:bb|se_linear|se_none)) file:')
 jobid_re = re.compile(r'.[eo]([0-9]+)')
 whitespace_re = re.compile(r'\s+', re.X)
-garbage_re = re.compile(r'(MPI process \(rank: \d+\) terminated unexpectedly|\[[0-9a-z]+:\d+\] \[ *\d+\]).*')
+garbage_re = re.compile(r'(MPI process \(rank: \d+\) terminated unexpectedly|\[[0-9a-z]+:\d+\] \[ *\d+\]|.*SIG[A-Z]+[0-9]*|/[/a-z0-9_]+: line [0-9]+: [0-9]+ Aborted|\[[a-z0-9]+:[0-9]+\] \*\*\* Process received signal).*')
 
 def process_input_file(input_file_name, keys):
     result = { }
