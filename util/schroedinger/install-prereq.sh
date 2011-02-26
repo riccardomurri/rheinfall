@@ -322,7 +322,7 @@ if [ -n "$GMP" ]; then
         --enable-cxx \
         CC=${CC} CXX=${CXX} CFLAGS="${cflags}"
     rm -rf ${sw}/include/gmp* ${sw}/lib/libgmp* # avoid `libtool` errors
-    $concurrent_make
+    $concurrent_make clean all
     make install
     set +x
 fi # GMP
@@ -346,7 +346,7 @@ if [ -n "$GIVARO" ]; then
         --enable-shared ${GMP:+"--with-gmp=${sw}"} \
         CC=${CC} CXX=${CXX} CFLAGS="${cflags}"
     rm -rf ${sw}/include/givaro* ${sw}/lib/libgivaro* # avoid `libtool` errors
-    $concurrent_make
+    $concurrent_make clean all
     make install
     set +x
 fi # GIVARO
@@ -394,7 +394,7 @@ if [ -n "$LINBOX" ]; then
         ${GIVARO:+"--with-givaro=${sw}"} \
         CC=${CC} CXX=${CXX} CFLAGS="${cflags}";
     rm -rf ${sw}/include/linbox* ${sw}/lib/liblinbox* # avoid `libtool` errors
-    $concurrent_make
+    $concurrent_make clean all
     make install
     set +x
 fi # LINBOX
@@ -451,7 +451,7 @@ if [ -n "$TCMALLOC" ]; then
           --enable-frame-pointers \
           CC=${CC} CXX=${CXX} CFLAGS="${cflags}" CXXFLAGS="${cflags}"
     )
-    $concurrent_make
+    $concurrent_make clean all
     $concurrent_make install
     set +x
 fi
