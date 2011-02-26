@@ -3,15 +3,17 @@
 SUBDIRS = gnulib
 
 # binaries built here
-EXTRA_PROGRAMS = irank-homo-omp irank-homo-mpi irank-homo-mpi-omp
-bin_PROGRAMS = irank-homo
+EXTRA_PROGRAMS = crank-int-omp crank-int-mpi crank-int-mpi-omp
+EXTRA_PROGRAMS += crank-double-omp crank-double-mpi crank-double-mpi-omp
+EXTRA_PROGRAMS += crank-longdouble-omp crank-longdouble-mpi crank-longdouble-mpi-omp
+bin_PROGRAMS = crank-int crank-double crank-longdouble
 if HAVE_OPENMP_CC
-  bin_PROGRAMS +=  irank-homo-omp
+  bin_PROGRAMS +=  crank-int-omp crank-double-omp crank-longdouble-omp
 endif
 if HAVE_MPICC
-  bin_PROGRAMS += irank-homo-mpi
+  bin_PROGRAMS += crank-int-mpi crank-double-mpi crank-longdouble-mpi
 if HAVE_OPENMP_CC
-    bin_PROGRAMS += irank-homo-mpi-omp
+    bin_PROGRAMS += crank-int-mpi-omp crank-double-mpi-omp crank-longdouble-mpi-omp
 endif
 endif
 
@@ -20,29 +22,79 @@ AM_CFLAGS =
 AM_LDFLAGS =
 LDADD =
 
-irank_homo_SOURCES = main.c rheinfall.c vpu.c switchboard.c comm.c row.c ge.c 
-irank_homo_CPPFLAGS = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/src.c/gnulib
-irank_homo_CFLAGS = $(AM_CFLAGS)
-irank_homo_LDFLAGS = $(AM_LDFLAGS)
-irank_homo_LDADD = $(LDADD)
+crank_int_SOURCES = main.c rheinfall.c vpu.c switchboard.c comm.c row.c ge.c 
+crank_int_CPPFLAGS = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/src.c/gnulib -DWITH_INTMAX_VALUES
+crank_int_CFLAGS = $(AM_CFLAGS)
+crank_int_LDFLAGS = $(AM_LDFLAGS)
+crank_int_LDADD = $(LDADD)
 
-irank_homo_omp_SOURCES = $(irank_homo_SOURCES)
-irank_homo_omp_CPPFLAGS = $(irank_homo_CPPFLAGS) $(OPENMP_CPPFLAGS)
-irank_homo_omp_CFLAGS = $(irank_homo_CFLAGS) $(OPENMP_CFLAGS)
-irank_homo_omp_LDFLAGS = $(OPENMP_LDFLAGS) $(OPENMP_LDFLAGS)
-irank_homo_omp_LDADD = $(irank_homo_LDADD) $(OPENMP_LIBS)
+crank_int_omp_SOURCES = $(crank_int_SOURCES)
+crank_int_omp_CPPFLAGS = $(crank_int_CPPFLAGS) $(OPENMP_CPPFLAGS)
+crank_int_omp_CFLAGS = $(crank_int_CFLAGS) $(OPENMP_CFLAGS)
+crank_int_omp_LDFLAGS = $(OPENMP_LDFLAGS) $(OPENMP_LDFLAGS)
+crank_int_omp_LDADD = $(crank_int_LDADD) $(OPENMP_LIBS)
 
-irank_homo_mpi_SOURCES = $(irank_homo_SOURCES)
-irank_homo_mpi_CPPFLAGS = $(irank_homo_CPPFLAGS) -DWITH_MPI $(MPI_CFLAGS)
-irank_homo_mpi_CFLAGS = $(irank_homo_CFLAGS) 
-irank_homo_mpi_LDFLAGS = $(irank_homo_CFLAGS) $(MPI_CLDFLAGS)
-irank_homo_mpi_LDADD = $(irank_homo_LDADD) 
+crank_int_mpi_SOURCES = $(crank_int_SOURCES)
+crank_int_mpi_CPPFLAGS = $(crank_int_CPPFLAGS) -DWITH_MPI $(MPI_CFLAGS)
+crank_int_mpi_CFLAGS = $(crank_int_CFLAGS) 
+crank_int_mpi_LDFLAGS = $(crank_int_CFLAGS) $(MPI_CLDFLAGS)
+crank_int_mpi_LDADD = $(crank_int_LDADD) 
 
-irank_homo_mpi_omp_SOURCES = $(irank_homo_SOURCES)
-irank_homo_mpi_omp_CPPFLAGS = $(irank_homo_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
-irank_homo_mpi_omp_CFLAGS = $(irank_homo_mpi_CFLAGS) $(OPENMP_CFLAGS)
-irank_homo_mpi_omp_LDFLAGS = $(irank_homo_mpi_LDFLAGS) $(OPENMP_LDFLAGS)
-irank_homo_mpi_omp_LDADD = $(irank_homo_mpi_LDADD) $(OPENMP_LIBS)
+crank_int_mpi_omp_SOURCES = $(crank_int_SOURCES)
+crank_int_mpi_omp_CPPFLAGS = $(crank_int_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+crank_int_mpi_omp_CFLAGS = $(crank_int_mpi_CFLAGS) $(OPENMP_CFLAGS)
+crank_int_mpi_omp_LDFLAGS = $(crank_int_mpi_LDFLAGS) $(OPENMP_LDFLAGS)
+crank_int_mpi_omp_LDADD = $(crank_int_mpi_LDADD) $(OPENMP_LIBS)
+
+
+crank_double_SOURCES = main.c rheinfall.c vpu.c switchboard.c comm.c row.c ge.c 
+crank_double_CPPFLAGS = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/src.c/gnulib -DWITH_DOUBLE_VALUES
+crank_double_CFLAGS = $(AM_CFLAGS)
+crank_double_LDFLAGS = $(AM_LDFLAGS)
+crank_double_LDADD = $(LDADD)
+
+crank_double_omp_SOURCES = $(crank_double_SOURCES)
+crank_double_omp_CPPFLAGS = $(crank_double_CPPFLAGS) $(OPENMP_CPPFLAGS)
+crank_double_omp_CFLAGS = $(crank_double_CFLAGS) $(OPENMP_CFLAGS)
+crank_double_omp_LDFLAGS = $(OPENMP_LDFLAGS) $(OPENMP_LDFLAGS)
+crank_double_omp_LDADD = $(crank_double_LDADD) $(OPENMP_LIBS)
+
+crank_double_mpi_SOURCES = $(crank_double_SOURCES)
+crank_double_mpi_CPPFLAGS = $(crank_double_CPPFLAGS) -DWITH_MPI $(MPI_CFLAGS)
+crank_double_mpi_CFLAGS = $(crank_double_CFLAGS) 
+crank_double_mpi_LDFLAGS = $(crank_double_CFLAGS) $(MPI_CLDFLAGS)
+crank_double_mpi_LDADD = $(crank_double_LDADD) 
+
+crank_double_mpi_omp_SOURCES = $(crank_double_SOURCES)
+crank_double_mpi_omp_CPPFLAGS = $(crank_double_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+crank_double_mpi_omp_CFLAGS = $(crank_double_mpi_CFLAGS) $(OPENMP_CFLAGS)
+crank_double_mpi_omp_LDFLAGS = $(crank_double_mpi_LDFLAGS) $(OPENMP_LDFLAGS)
+crank_double_mpi_omp_LDADD = $(crank_double_mpi_LDADD) $(OPENMP_LIBS)
+
+
+crank_longdouble_SOURCES = main.c rheinfall.c vpu.c switchboard.c comm.c row.c ge.c 
+crank_longdouble_CPPFLAGS = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/src.c/gnulib -DWITH_LONG_DOUBLE_VALUES
+crank_longdouble_CFLAGS = $(AM_CFLAGS)
+crank_longdouble_LDFLAGS = $(AM_LDFLAGS)
+crank_longdouble_LDADD = $(LDADD)
+
+crank_longdouble_omp_SOURCES = $(crank_longdouble_SOURCES)
+crank_longdouble_omp_CPPFLAGS = $(crank_longdouble_CPPFLAGS) $(OPENMP_CPPFLAGS)
+crank_longdouble_omp_CFLAGS = $(crank_longdouble_CFLAGS) $(OPENMP_CFLAGS)
+crank_longdouble_omp_LDFLAGS = $(OPENMP_LDFLAGS) $(OPENMP_LDFLAGS)
+crank_longdouble_omp_LDADD = $(crank_longdouble_LDADD) $(OPENMP_LIBS)
+
+crank_longdouble_mpi_SOURCES = $(crank_longdouble_SOURCES)
+crank_longdouble_mpi_CPPFLAGS = $(crank_longdouble_CPPFLAGS) -DWITH_MPI $(MPI_CFLAGS)
+crank_longdouble_mpi_CFLAGS = $(crank_longdouble_CFLAGS) 
+crank_longdouble_mpi_LDFLAGS = $(crank_longdouble_CFLAGS) $(MPI_CLDFLAGS)
+crank_longdouble_mpi_LDADD = $(crank_longdouble_LDADD) 
+
+crank_longdouble_mpi_omp_SOURCES = $(crank_longdouble_SOURCES)
+crank_longdouble_mpi_omp_CPPFLAGS = $(crank_longdouble_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+crank_longdouble_mpi_omp_CFLAGS = $(crank_longdouble_mpi_CFLAGS) $(OPENMP_CFLAGS)
+crank_longdouble_mpi_omp_LDFLAGS = $(crank_longdouble_mpi_LDFLAGS) $(OPENMP_LDFLAGS)
+crank_longdouble_mpi_omp_LDADD = $(crank_longdouble_mpi_LDADD) $(OPENMP_LIBS)
 
 
 # GNUlib support.  Output from `gnulib-tool --import xalloc xalloc-die`:

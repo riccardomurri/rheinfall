@@ -35,8 +35,12 @@
 
 #include "common.h"
 #include "row.h"
-#include "switchboard.h"
 #include "xarray.h"
+
+// we can't `#include "switchboard.h"` because of circular dependencies,
+// so just declare a pointer type
+typedef struct switchboard_s* switchboard_ptr;
+
 
 #ifdef _OPENMP
 # include <omp.h>
@@ -125,7 +129,7 @@ struct vpu_s {
 struct vpu_s* vpu_new(const coord_t column);
 void vpu_free(struct vpu_s* vpu);
 
-long vpu_step(struct vpu_s* self, struct switchboard_s* sb);
+long vpu_step(struct vpu_s* self, switchboard_ptr sb);
 _inline void vpu_end_phase(struct vpu_s* self);
 _inline bool vpu_is_done(struct vpu_s* self);
 void vpu_recv_row(struct vpu_s* self, void* row, row_kind_t kind);

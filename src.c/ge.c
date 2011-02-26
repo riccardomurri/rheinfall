@@ -37,6 +37,7 @@
 #include <stdbool.h>
 
 
+#if defined(WITH_INTMAX_VALUES)
 /* Needed arithmetic operations */
 static inline
 val_t _gcd(intmax_t const n, intmax_t const m) 
@@ -49,7 +50,7 @@ val_t gcd(intmax_t const n, intmax_t const m)
 { 
   return _gcd(val_abs(n), val_abs(m)); 
 };
-
+#endif // WITH_INTMAX_VALUES
 
 
 /** Perform Gaussian elimination, combining a sparse row @a other with
@@ -67,9 +68,14 @@ gaussian_elimination_sparse_with_sparse_pivot(sparse_row_t* const restrict pivot
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other_row` row
+#if defined(WITH_INTMAX_VALUES)
   const val_t GCD = gcd(other_row->leading_term_, pivot_row->leading_term_);
-  val_t a = - (other_row->leading_term_ / GCD);
-  val_t b = pivot_row->leading_term_ / GCD;
+  const val_t a = - (other_row->leading_term_ / GCD);
+  const val_t b = pivot_row->leading_term_ / GCD;
+#else // `double` or `long double`
+  const val_t a = - other_row->leading_term_ / pivot_row->leading_term_;
+  const val_t b = 1.0;
+#endif
   assert (0 != a && 0 != b);
 
   sparse_row_t* result = NULL;
@@ -170,9 +176,15 @@ gaussian_elimination_dense_with_sparse_pivot(sparse_row_t* const restrict pivot_
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other_row` row
+#if defined(WITH_INTMAX_VALUES)
   const val_t GCD = gcd(other_row->leading_term_, pivot_row->leading_term_);
-  val_t a = - (other_row->leading_term_ / GCD);
-  val_t b = pivot_row->leading_term_ / GCD;
+  const val_t a = - (other_row->leading_term_ / GCD);
+  const val_t b = pivot_row->leading_term_ / GCD;
+#else // `double` or `long double`
+  const val_t a = - other_row->leading_term_ / pivot_row->leading_term_;
+  const val_t b = 1.0;
+#endif
+  assert (0 != a && 0 != b);
 
   const size_t other_row_size = dense_row_size(other_row);
   for (size_t j = 0; j < other_row_size; ++j) 
@@ -191,27 +203,33 @@ gaussian_elimination_dense_with_sparse_pivot(sparse_row_t* const restrict pivot_
     row @a other.  @see gaussian_elimination */
 static inline dense_row_t* 
 gaussian_elimination_dense_with_dense_pivot(dense_row_t* const restrict pivot_row,
-                                            dense_row_t* restrict other)
+                                            dense_row_t* restrict other_row)
 {
-  assert(pivot_row->starting_column_ == other->starting_column_);
+  assert(pivot_row->starting_column_ == other_row->starting_column_);
   assert(0 != pivot_row->leading_term_);
-  assert(0 != other->leading_term_);
-  assert(dense_row_size(pivot_row) == dense_row_size(other));
+  assert(0 != other_row->leading_term_);
+  assert(dense_row_size(pivot_row) == dense_row_size(other_row));
 
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other` row
-  const val_t GCD = gcd(pivot_row->leading_term_, other->leading_term_);
-  val_t a = - (other->leading_term_ / GCD);
-  val_t b = pivot_row->leading_term_ / GCD;
+#if defined(WITH_INTMAX_VALUES)
+  const val_t GCD = gcd(other_row->leading_term_, pivot_row->leading_term_);
+  const val_t a = - (other_row->leading_term_ / GCD);
+  const val_t b = pivot_row->leading_term_ / GCD;
+#else // `double` or `long double`
+  const val_t a = - other_row->leading_term_ / pivot_row->leading_term_;
+  const val_t b = 1.0;
+#endif
+  assert (0 != a && 0 != b);
 
   const size_t pivot_row_size = dense_row_size(pivot_row);
   for (size_t j = 0; j < pivot_row_size; ++j) {
     // XXX: is it faster to allocate new storage and fill it with `a*x+b*y`?
-    other->storage[j] *= a;
-    other->storage[j] += b * pivot_row->storage[j];
+    other_row->storage[j] *= a;
+    other_row->storage[j] += b * pivot_row->storage[j];
   };
-  return dense_row_adjust(other); // update done, adjust size and starting column
+  return dense_row_adjust(other_row); // update done, adjust size and starting column
 }
 
 
@@ -221,16 +239,16 @@ gaussian_elimination_dense_with_dense_pivot(dense_row_t* const restrict pivot_ro
     gaussian_elimination */
 static inline dense_row_t* 
 gaussian_elimination_sparse_with_dense_pivot(dense_row_t* const pivot_row,
-                                             sparse_row_t* other)
+                                             sparse_row_t* other_row)
 {
-  assert(pivot_row->starting_column_ == other->starting_column_);
+  assert(pivot_row->starting_column_ == other_row->starting_column_);
   assert(0 != pivot_row->leading_term_);
-  assert(0 != other->leading_term_);
+  assert(0 != other_row->leading_term_);
 
   // convert `other` to dense storage upfront: adding the non-zero
   // entries from `pivot_row` would made it pretty dense anyway
-  dense_row_t* dense_other = dense_row_new_from_sparse_row(other);
-  sparse_row_free(other);
+  dense_row_t* dense_other = dense_row_new_from_sparse_row(other_row);
+  sparse_row_free(other_row);
   return gaussian_elimination_dense_with_dense_pivot(pivot_row, dense_other);
 }
 
