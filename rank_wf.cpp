@@ -49,8 +49,6 @@
 #include <boost/serialization/access.hpp>
 #include <boost/serialization/utility.hpp>
 #include <boost/serialization/vector.hpp>
-#include <boost/variant.hpp>
-#include <boost/variant/get.hpp>
 namespace mpi = boost::mpi;
 
 
@@ -121,17 +119,14 @@ protected:
 
   public:
     // forward declarations
+    class Row;
     class SparseRow;
     class DenseRow;
+    typedef Row* row_ptr;
     typedef SparseRow* sparse_row_ptr;
+    typedef const SparseRow* const const_sparse_row_ptr;
     typedef DenseRow* dense_row_ptr;
-    typedef boost::variant< sparse_row_ptr,dense_row_ptr > row_ptr;
-#ifndef NDEBUG
-    static sparse_row_ptr __get_sparse_row_ptr(row_ptr r) {
-      return boost::get<sparse_row_ptr,sparse_row_ptr,dense_row_ptr>(r); };
-    static dense_row_ptr __get_dense_row_ptr(row_ptr r) { 
-      return boost::get<dense_row_ptr,sparse_row_ptr,dense_row_ptr>(r); };
-#endif
+    typedef const DenseRow* const const_dense_row_ptr;
 
   protected:     
     Waterfall& parent;
@@ -164,42 +159,74 @@ protected:
     const double dense_threshold;
 
   public:
-    class SparseRow 
+    /** Abstract base class for matrix rows. */
+    class Row 
     {
     public:
-      SparseRow(const coord_t starting_column_, const coord_t ending_column_) 
-        : starting_column(starting_column_), ending_column(ending_column_), storage() 
+      typedef enum { sparse, dense } kind_t;
+      const kind_t kind;
+      /** Constructor. */
+      Row(const kind_t kind_, const coord_t starting_column, const coord_t ending_column)
+        : kind(kind_), starting_column_(starting_column), ending_column_(ending_column)
       { };
-      /** Constructor initializing an invalid row; should call
-          serialize immediately after!  */
-      SparseRow() 
-        : starting_column(-1), ending_column(-1), storage() 
-      { };
+    public:
+      /** Virtual destructor (for actual use in subclasses). */
+      virtual ~Row();
       /** Return index of first column that has a nonzero entry. */
-      coord_t first_nonzero_column() const;
+      virtual coord_t first_nonzero_column() const;
       /** Return number of allocated (i.e., non-zero) entries. */
-      size_t size() const;
+      virtual size_t size() const = 0;
       /** Return a reference to the element stored at column @c col */
-      val_t& operator[](const coord_t col);
+      virtual val_t& operator[](const coord_t col) = 0;
       /** Return a copy of the element stored at column @c col */
-      const val_t operator[](const coord_t col) const;
-      /** Perform Gaussian elimination: sum a multiple of this row and
+      virtual const val_t operator[](const coord_t col) const = 0;
+      /** Perform Gaussian elimination: sum a multiple of this row to
           (a multiple of) row @c r so that the combination has its
           first nonzero entry at a column index strictly larger than
           the one of both rows. Return pointer to the combined row, which
           could possibly be this row if in-place update took place. */
-      sparse_row_ptr gaussian_elimination(sparse_row_ptr other);
-      /** Perform Gaussian elimination: sum a multiple of this row and
+      row_ptr gaussian_elimination(row_ptr other, const double dense_threshold = 40.0) const;
+    protected:
+      coord_t starting_column_; // would-be `const`: can only be modified by ctor and serialization
+      coord_t ending_column_; // would-be `const`: can only be modified by ctor and serialization
+      val_t leading_term_; // would-be `const`: can only be modified by ctor and serialization
+    }; // class Row
+
+    /** Store a matrix row as a vector of (column, entry) pairs. */
+    class SparseRow : public Row
+    {
+    public:
+      SparseRow(const coord_t starting_column, const coord_t ending_column) 
+        : Row(sparse, starting_column, ending_column), storage() 
+      { };
+      /** Constructor initializing an invalid row; should call
+          serialize immediately after!  */
+      SparseRow() 
+        : Row(sparse, -1 , -1), storage() 
+      { };
+      /** Return fill-in percentage, that is the number of actual
+          nonzero entries divided by the number of potential entries.  */
+      double fill_in() const { return 100.0 * size() / (ending_column_ - starting_column_ + 1); };
+      /** Return number of allocated (i.e., non-zero) entries. */
+      virtual size_t size() const;
+      /** Return a reference to the element stored at column @c col */
+      virtual val_t& operator[](const coord_t col);
+      /** Return a copy of the element stored at column @c col */
+      virtual const val_t operator[](const coord_t col) const;
+      /** Perform Gaussian elimination: sum a multiple of this row to
+          (a multiple of) row @c r so that the combination has its
+          first nonzero entry at a column index strictly larger than
+          the one of both rows. Return pointer to the combined row, which
+          could possibly be this row if in-place update took place. */
+      sparse_row_ptr gaussian_elimination(sparse_row_ptr other) const;
+      /** Perform Gaussian elimination: sum a multiple of this row to
           (a multiple of) row @c r so that the combination has its
           first nonzero entry at a column index strictly larger than
           the one of both rows. Return pointer to the combined row, which
           could possibly be this row if in-place update took place. 
           Elimination on a dense row returns a dense row. */
-      dense_row_ptr gaussian_elimination(dense_row_ptr other);
+      dense_row_ptr gaussian_elimination(dense_row_ptr other) const;
     protected:
-      coord_t starting_column; // would-be `const`: can only be modified by ctor and serialization
-      coord_t ending_column; // would-be `const`: can only be modified by ctor and serialization
-      val_t leading_term; // would-be `const`: can only be modified by ctor and serialization
       typedef std::vector< std::pair<coord_t,val_t> > storage_t;
       storage_t storage;
       friend class DenseRow;
@@ -208,7 +235,8 @@ protected:
       void serialize(Archive& ar, const unsigned int version);
     }; // class SparseRow
 
-    class DenseRow
+    /** Store a matrix row in a linear vector of consecutive entries. */
+    class DenseRow : public Row
     {
     public:
       /** Constructor, copying entries from a @c SparseRow instance. */
@@ -219,22 +247,17 @@ protected:
           calling @c serialize immediately after! */
       DenseRow(); // FIXME: make private?
       ~DenseRow();
-      /** Return index of first column that has a nonzero entry. */
-      coord_t first_nonzero_column() const;
       /** Return number of allocated entries. */
-      size_t size() const;
+      virtual size_t size() const;
       /** Return a reference to the element stored at column @c col */
-      val_t& operator[](const coord_t col);
+      virtual val_t& operator[](const coord_t col);
       /** Return a copy of the element stored at column @c col */
-      const val_t operator[](const coord_t col) const;
-      dense_row_ptr gaussian_elimination(const sparse_row_ptr other);
-      dense_row_ptr gaussian_elimination(const dense_row_ptr other);
+      virtual const val_t operator[](const coord_t col) const;
+      dense_row_ptr gaussian_elimination(const sparse_row_ptr other) const;
+      dense_row_ptr gaussian_elimination(const dense_row_ptr other) const;
     protected:
-      coord_t starting_column; 
-      coord_t ending_column; 
-      val_t leading_term; 
       /// Row length.  This is of course the number of elements in the @c storage array.
-      size_t _size;
+      size_t size_;
       /// Plain array of entries.
       val_t* storage; 
       friend class SparseRow;
@@ -247,42 +270,14 @@ protected:
     }; // class DenseRow
 
   public: 
-    void recv_row(row_ptr& new_row);
+    void recv_row(row_ptr new_row);
     /** Send the row data pointed by @c row to the processor owning the
         block starting at @c col. Frees up @c row */
-    void send_row(const coord_t column, row_ptr& row);
-    class __sender : public boost::static_visitor<mpi::request> {
-      mutable Waterfall& wf;
-      const coord_t column;
-    public:
-      __sender(Waterfall& wf_, const coord_t column_);
-      mpi::request operator() (sparse_row_ptr& r) const;
-      mpi::request operator() (dense_row_ptr& r) const;
-    };
+    void send_row(row_ptr row);
 
     /** Make a pass over the block of rows and return either 0 or 1
         (depending whether elimination took place or not). */
     int step();
-    class __delete_row 
-      : public boost::static_visitor<void> {
-    public:
-      void operator() (sparse_row_ptr& r) const;
-      void operator() (dense_row_ptr& r) const;
-    }; // class __delet_row
-    class __first_nonzero_column 
-      : public boost::static_visitor<coord_t> {
-    public:
-      coord_t operator() (sparse_row_ptr& r) const;
-      coord_t operator() (dense_row_ptr& r) const;
-    }; // class __first_nonzero_column
-    class __row_size 
-      : public boost::static_visitor<size_t> {
-    public:
-      size_t operator() (const sparse_row_ptr& r) const;
-      size_t operator() (const dense_row_ptr& r) const;
-    }; // class __row_size
-
-
 
     void end_phase();
 
@@ -292,23 +287,6 @@ protected:
     /** Send the termination signal to the processor owning the block
         starting at @c col. */
     void send_end(const coord_t column) const;
-    /** Perform Gaussian elimination on row `second`, using the entry
-        in the leading column of `first` as a pivot. */
-    row_ptr gaussian_elimination(const row_ptr first, row_ptr second) const;
-    class __ge_op
-      : public boost::static_visitor<row_ptr>
-    {
-      const coord_t starting_column;
-      const coord_t ending_column;
-      const double dense_threshold;
-    public:
-      __ge_op(const coord_t starting_column_, const coord_t ending_column_, 
-              const double dense_threshold_);
-      row_ptr operator() (const sparse_row_ptr first, sparse_row_ptr second) const;
-      row_ptr operator() (const dense_row_ptr first, sparse_row_ptr second) const;
-      row_ptr operator() (const sparse_row_ptr first, dense_row_ptr second) const;
-      row_ptr operator() (const dense_row_ptr first, dense_row_ptr second) const;
-    }; // class __ge_op
   };
 };
 
@@ -328,115 +306,6 @@ static inline
 val_t gcd(long long const n, long long const m) 
 { 
   return _gcd(std::abs(n), std::abs(m)); 
-};
-
-
-// local classes cannot be used as template argument; therefore we
-// need to declare visitors for use with boost::variant at top-level
-// :-(
-
-inline void
-Waterfall::Processor::__delete_row::operator() (sparse_row_ptr& r) const 
-{
-  delete r;
-};
-
-inline void
-Waterfall::Processor::__delete_row::operator() (dense_row_ptr& r) const 
-{
-  delete r;
-};
-
-
-Waterfall::Processor::__ge_op::__ge_op(const coord_t starting_column_, 
-                                       const coord_t ending_column_, 
-                                       const double dense_threshold_)
-  : starting_column(starting_column_), 
-    ending_column(ending_column_),
-    dense_threshold(dense_threshold_)
-{ };
-
-Waterfall::Processor::row_ptr 
-Waterfall::Processor::__ge_op::operator() (const sparse_row_ptr first, 
-                                           sparse_row_ptr second) const 
-{
-  // assume that `first` has already been checked for fill-in
-  // in the main loop, so we won't attempt to convert it here;
-  // just test `second` for too much fill-in
-  const double fill_in = 100.0 * second->size() / (ending_column - starting_column + 1);
-  if (fill_in > dense_threshold) {
-    // FIXME: could merge ctor+elimination in one funcall
-    dense_row_ptr dense_second(new DenseRow(second));
-    delete second;
-    return first->gaussian_elimination(dense_second);
-  }
-  else {
-    return first->gaussian_elimination(second);
-  }; // if (fill_in > dense_threshold)
-};
-
-Waterfall::Processor::row_ptr 
-Waterfall::Processor::__ge_op::operator() (const dense_row_ptr first, 
-                                           sparse_row_ptr second) const 
-{
-  return first->gaussian_elimination(second);
-};
-  
-Waterfall::Processor::row_ptr 
-Waterfall::Processor::__ge_op::operator() (const sparse_row_ptr first, 
-                                           dense_row_ptr second) const 
-{
-  return first->gaussian_elimination(second);
-};
-
-Waterfall::Processor::row_ptr 
-Waterfall::Processor::__ge_op::operator() (const dense_row_ptr first, 
-                                           dense_row_ptr second) const 
-{
-  return first->gaussian_elimination(second);
-};
-
-
-inline coord_t 
-Waterfall::Processor::__first_nonzero_column::operator() (sparse_row_ptr& r) const 
-{
-  return r->first_nonzero_column();
-};
-
-inline coord_t 
-Waterfall::Processor::__first_nonzero_column::operator() (dense_row_ptr& r) const 
-{
-  return r->first_nonzero_column();
-};
-
-
-inline size_t 
-Waterfall::Processor::__row_size::operator() (const sparse_row_ptr& r) const 
-{
-  return r->size();
-};
-
-inline size_t 
-Waterfall::Processor::__row_size::operator() (const dense_row_ptr& r) const 
-{
-  return r->size();
-};
-
-
-Waterfall::Processor::__sender::__sender(Waterfall& wf_, const coord_t column_) 
-  : wf(wf_), column(column_) 
-{ };
-
-inline mpi::request 
-Waterfall::Processor::__sender::operator() (sparse_row_ptr& r) const
-{
-  return wf.comm.isend(wf.remote_owner(column), TAG_ROW_SPARSE, r);
-};
-
-inline mpi::request 
-Waterfall::Processor::__sender::operator() (dense_row_ptr& r) const
-{
-  return wf.comm.isend(wf.remote_owner(column), TAG_ROW_DENSE, r);
 };
 
 
@@ -494,8 +363,7 @@ Waterfall::read_noninterleaved(std::istream& input)
             {
               (*r)[it->first] = it->second;
             }; 
-          boost::variant<Processor::SparseRow*,Processor::DenseRow*> r_(r);
-          local_owner(starting_column).recv_row(r_);
+          local_owner(starting_column).recv_row(r);
         }; // if is_local(starting_column)
         row.clear();
         current_row_index = i;
@@ -601,30 +469,37 @@ Waterfall::remote_owner(const coord_t c) const
 // ------- Processor -------
 
 inline void 
-Waterfall::Processor::recv_row(row_ptr& new_row) 
+Waterfall::Processor::recv_row(row_ptr new_row) 
 {
   // FIXME: requires locking for MT operation
   inbox.push_back(new_row);
   // DEBUG
-  sparse_row_ptr r = __get_sparse_row_ptr(new_row);
   std::cerr << "DEBUG: Processor " <<this 
             << " received row"
-            << " of size " << r->size()
-            << " starting at column " << r->first_nonzero_column()
-            << " (sparse_row_ptr " <<r<< ")"
+            << " of size " << new_row->size()
+            << " starting at column " << new_row->first_nonzero_column()
+            << " (row_ptr " <<new_row<< ")"
             << std::endl;
 };
 
 
 inline void 
-Waterfall::Processor::send_row(const coord_t column, row_ptr& row) 
+Waterfall::Processor::send_row(row_ptr row) 
 {
+  coord_t column = row->first_nonzero_column();
   if (parent.is_local(column))
     parent.local_owner(column).recv_row(row);
   else { // ship to remote process
-    const __sender sender(parent, column);
-    mpi::request req = boost::apply_visitor(sender, row);
+    mpi::request req;
+    if (row->kind == Row::sparse)
+      req = parent.comm.isend(parent.remote_owner(column), TAG_ROW_SPARSE, row);
+    else if (row->kind == Row::dense)
+      req = parent.comm.isend(parent.remote_owner(column), TAG_ROW_DENSE, row);
+    else
+      // should not happen!
+      throw std::logic_error("Unhandled row type in Processor::send_row()");
     outbox.push_back(req);
+    delete row; // no longer needed
   };
 };
 
@@ -635,51 +510,26 @@ Waterfall::Processor::step()
   assert(not is_done()); // cannot be called once finished
   std::cerr << "DEBUG: stepping Processor " << this << std::endl;
 
-  // delete row with boost::variant
-  class _delete_row {
-  public:
-    void operator() (row_ptr& r) {
-      return boost::apply_visitor(__delete_row(), r);
-    };
-  } delete_row;
-
-  // get first nonzero column with boost::variant
-  class _first_nonzero_column {
-  public:
-    coord_t operator() (row_ptr& r) {
-      return boost::apply_visitor(__first_nonzero_column(), r);
-    };
-  } first_nonzero_column;
-
-  // get row size with boost::variant
-  class _row_size {
-  public:
-    size_t operator() (row_ptr& r) const {
-      return boost::apply_visitor(__row_size(), r);
-    };
-  } row_size; 
-
   // receive new rows
   for (inbox_t::iterator it = inbox.begin(); it != inbox.end(); ++it) {
     row_ptr new_row = *it;
     rows.push_back(new_row);
-    if (row_size(new_row) < row_size(rows.front()))
+    if (new_row->size() < rows.front()->size())
       // less nonzero entries: we have a new leading row
-      std::swap(rows.front(), rows.back());
+      std::swap(rows.back(), rows.front());
   };
   inbox.clear();
           
   if (rows.size() > 0) {
-    row_ptr first = rows[0];
+    row_ptr first = rows.front();
     for (block::iterator second = rows.begin()+1; second < rows.end(); ++second) {
       // perform elimination
-      row_ptr new_row = gaussian_elimination(first, *second);
+      row_ptr new_row = first->gaussian_elimination(*second, dense_threshold);
           
       // ship reduced rows to other processors
-      if (row_size(new_row) > 0) {
-        send_row(first_nonzero_column(new_row), new_row);
+      if (new_row->size() > 0) {
+        send_row(new_row);
       }
-      delete_row(new_row);
     };
     // just keep the "first" row
     rows.clear();
@@ -706,7 +556,7 @@ Waterfall::Processor::step()
     // all done
     phase = done;
   };
-      
+
   // exit with 0 only if we never processed any row
   assert(rows.size() <= 1);
   return rows.size();
@@ -738,41 +588,77 @@ Waterfall::Processor::send_end(const coord_t column) const
 }; // send_end
 
 
-inline Waterfall::Processor::row_ptr 
-Waterfall::Processor::gaussian_elimination(const row_ptr first, row_ptr second) const
+
+// ------- Row -------
+
+Waterfall::Processor::Row::~Row()
 {
-  const __ge_op ge_op(starting_column, ending_column, dense_threshold);
-  return boost::apply_visitor(ge_op, first, second);
-}; // gaussian_elimination
+  // override in sub-classes
+};
+
+
+inline coord_t 
+Waterfall::Processor::Row::first_nonzero_column() const 
+{
+  assert(0 != leading_term_);
+  return starting_column_;
+};
+
+
+inline Waterfall::Processor::row_ptr
+Waterfall::Processor::Row::gaussian_elimination(row_ptr other, const double dense_threshold) const
+{
+  if (sparse == this->kind and sparse == other->kind) {
+    const_sparse_row_ptr s1 = static_cast<const_sparse_row_ptr>(this);
+    sparse_row_ptr s2 = static_cast<sparse_row_ptr>(other);
+    // assume that `this` has already been checked for fill-in
+    // in the main loop, so we won't attempt to convert it here;
+    // just test `other` for too much fill-in
+    if (s2->fill_in() > dense_threshold) {
+      // FIXME: could merge ctor+elimination in one funcall
+      dense_row_ptr dense_other(new DenseRow(s2));
+      delete other;
+      return s1->gaussian_elimination(dense_other);
+    }
+    else { // `other` kept sparse
+    return s1->gaussian_elimination(s2);
+    }; // if (fill_in > ...)
+  }
+  else if (sparse == this->kind and dense == other->kind) {
+    const_sparse_row_ptr s = static_cast<const_sparse_row_ptr>(this);
+    dense_row_ptr d = static_cast<dense_row_ptr>(other);
+    return s->gaussian_elimination(d);
+  }
+  else if (dense == this->kind and sparse == other->kind) {
+    const_dense_row_ptr d = static_cast<const_dense_row_ptr>(this);
+    sparse_row_ptr s = static_cast<sparse_row_ptr>(other);
+    return d->gaussian_elimination(s);
+  }
+  else if (dense == this->kind and dense == other->kind) {
+    const_dense_row_ptr d1 = static_cast<const_dense_row_ptr>(this);
+    dense_row_ptr d2 = static_cast<dense_row_ptr>(other);
+    return d1->gaussian_elimination(d2);
+  }
+  else
+    // should not happen!
+    throw std::logic_error("Unhandled row type combination in Row::gaussian_elimination()");
+};
+
 
 
 // ------- SparseRow -------
 
-inline coord_t 
-Waterfall::Processor::SparseRow::first_nonzero_column() const 
-{
-  assert(0 != leading_term);
-  return starting_column;
-};
-
-inline size_t 
-Waterfall::Processor::SparseRow::size() const 
-{ 
-  return storage.size(); 
-};
-
-
 Waterfall::Processor::sparse_row_ptr 
-Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) 
+Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) const
 {
-  assert(this->starting_column == other->starting_column);
+  assert(this->starting_column_ == other->starting_column_);
 
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other` row
-  const val_t GCD = gcd(leading_term, other->leading_term);
-  val_t a = - (other->leading_term / GCD);
-  val_t b = leading_term / GCD;
+  const val_t GCD = gcd(leading_term_, other->leading_term_);
+  val_t a = - (other->leading_term_ / GCD);
+  val_t b = leading_term_ / GCD;
 
   sparse_row_ptr result = NULL; // XXX: use boost::optional<...> instead?
 
@@ -783,18 +669,18 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other)
     coord_t this_col;
     if (this_i != this->storage.end()) {
       this_col = this_i->first;
-      assert (this_col > this->starting_column);
+      assert (this_col > this->starting_column_);
     }
     else // this_i reached end of vector, use out-of-range value
-      this_col = this->ending_column + 1;
+      this_col = this->ending_column_ + 1;
 
     coord_t other_col;
     if (other_i != other->storage.end()) {
       other_col = other_i->first;
-      assert (other_col > other->starting_column);
+      assert (other_col > other->starting_column_);
     }
     else 
-      other_col = other->ending_column + 1;
+      other_col = other->ending_column_ + 1;
 
     bool nonzero_found = false;
     coord_t coord;
@@ -831,8 +717,8 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other)
       // from SparseRow::operator[] for efficiency
       if (NULL == result) {
         // allocate new SparseRow
-        result = new SparseRow(coord, ending_column);
-        result->leading_term = entry;
+        result = new SparseRow(coord, ending_column_);
+        result->leading_term_ = entry;
         result->storage.reserve(storage.size() + other->storage.size());
       }
       else {
@@ -841,23 +727,31 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other)
       }; 
     }; 
   }; // while(this_i < storage.rend() ...)
+#ifndef NDEBUG
+  if (NULL != result) {
+    assert(result->starting_column_ > this->starting_column_);
+    assert(result->starting_column_ > other->starting_column_);
+    assert(result->ending_column_ == this->ending_column_);
+    assert(result->size() <= this->size() + other->size());
+  };
+#endif
   delete other; // release old storage
   if (NULL == result) // row full of zeroes
-    return new SparseRow(ending_column, ending_column);
-  else
+    return new SparseRow(ending_column_, ending_column_);
+  else 
     return result;
 }; // sparse_row_ptr gaussian_elimination(sparse_row_ptr r)
 
 
 Waterfall::Processor::dense_row_ptr 
-Waterfall::Processor::SparseRow::gaussian_elimination(dense_row_ptr other) 
+Waterfall::Processor::SparseRow::gaussian_elimination(dense_row_ptr other) const
 {
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other` row
-  const val_t GCD = gcd(leading_term, other->leading_term);
-  val_t a = - (other->leading_term / GCD);
-  val_t b = leading_term / GCD;
+  const val_t GCD = gcd(leading_term_, other->leading_term_);
+  val_t a = - (other->leading_term_ / GCD);
+  val_t b = leading_term_ / GCD;
 
   for (size_t j = 0; j < other->size(); ++j) 
     other->storage[j] *= b;
@@ -865,7 +759,7 @@ Waterfall::Processor::SparseRow::gaussian_elimination(dense_row_ptr other)
        it != storage.end();
        ++it)
     {
-      assert(it->first > starting_column and it->first <= ending_column);
+      assert(it->first > starting_column_ and it->first <= ending_column_);
       other->storage[it->first] += a*it->second;
     };
 
@@ -877,9 +771,9 @@ Waterfall::Processor::SparseRow::gaussian_elimination(dense_row_ptr other)
 inline val_t& 
 Waterfall::Processor::SparseRow::operator[](const coord_t col) 
 {
-  assert(col >= starting_column and col <= ending_column);
-  if (col == starting_column) 
-    return leading_term;
+  assert(col >= starting_column_ and col <= ending_column_);
+  if (col == starting_column_) 
+    return leading_term_;
   // else, fast-forward to place where element is/would be stored
   size_t jj = 0;
   while (jj < storage.size() and storage[jj].first < col)
@@ -903,9 +797,9 @@ Waterfall::Processor::SparseRow::operator[](const coord_t col)
 inline const val_t
 Waterfall::Processor::SparseRow::operator[](const coord_t col) const
 {
-  assert(col >= starting_column and col <= ending_column);
-  if (col == starting_column) 
-    return leading_term;
+  assert(col >= starting_column_ and col <= ending_column_);
+  if (col == starting_column_) 
+    return leading_term_;
   if (storage.size() == 0)
     return 0;
   // else, fast-forward to place where element is/would be stored
@@ -932,22 +826,29 @@ Waterfall::Processor::SparseRow::serialize(Archive& ar, const unsigned int versi
   // When the class Archive corresponds to an output archive, the
   // & operator is defined similar to <<.  Likewise, when the class Archive
   // is a type of input archive the & operator is defined similar to >>.
-  ar & starting_column & ending_column & leading_term & storage;
-  assert(starting_column >= 0);
-  assert(ending_column >= 0);
+  ar & starting_column_ & ending_column_ & leading_term_ & storage;
+  assert(starting_column_ >= 0);
+  assert(ending_column_ >= 0);
 }; // SparseRow::serialize(...)
+
+
+inline size_t 
+Waterfall::Processor::SparseRow::size() const 
+{ 
+  return storage.size(); 
+};
+
 
 
 // ------- DenseRow -------
 
 Waterfall::Processor::DenseRow::DenseRow(const sparse_row_ptr r) 
-  : starting_column(r->starting_column), 
-    ending_column(r->ending_column),
-    _size(ending_column - starting_column + 1),
-    storage(new val_t[_size]) 
+  : Row(dense, r->starting_column_, r->ending_column_),
+    size_(ending_column_ - starting_column_ + 1),
+    storage(new val_t[size_]) 
 { 
-  assert(std::distance(r->storage.begin(), r->storage.end()) <= _size);
-  std::fill_n(storage, _size, 0);
+  assert(std::distance(r->storage.begin(), r->storage.end()) <= size_);
+  std::fill_n(storage, size_, 0);
   for (SparseRow::storage_t::const_iterator it = r->storage.begin();
        it != r->storage.end();
        ++it) 
@@ -958,43 +859,32 @@ Waterfall::Processor::DenseRow::DenseRow(const sparse_row_ptr r)
 
 
 inline
-Waterfall::Processor::DenseRow::DenseRow(const coord_t starting_column_, 
-                                         const size_t ending_column_) 
-  : starting_column(starting_column_), 
-    ending_column(ending_column_),
-    _size(ending_column - starting_column + 1),
-    storage(new val_t[_size]) 
+Waterfall::Processor::DenseRow::DenseRow(const coord_t starting_column, 
+                                         const size_t ending_column) 
+  : Row(dense, starting_column, ending_column),
+    size_(ending_column_ - starting_column_ + 1),
+    storage(new val_t[size_]) 
 { 
-  std::fill_n(storage, _size, 0);
+  std::fill_n(storage, size_, 0);
 };
 
 
 inline
 Waterfall::Processor::DenseRow::DenseRow() 
-  : starting_column(-1), 
-    ending_column(-1),
-    _size(0),
+  : Row(dense, -1, -1),
+    size_(0),
     storage(NULL) 
 { };
 
 
-inline
 Waterfall::Processor::DenseRow::~DenseRow() 
 { 
   delete [] storage; 
 };
 
 
-inline coord_t 
-Waterfall::Processor::DenseRow::first_nonzero_column() const 
-{
-  assert (0 != leading_term);
-  return starting_column;
-};
-
-
 inline Waterfall::Processor::dense_row_ptr 
-Waterfall::Processor::DenseRow::gaussian_elimination(const sparse_row_ptr other) 
+Waterfall::Processor::DenseRow::gaussian_elimination(const sparse_row_ptr other) const
 {
   // convert `other` to dense storage upfront: adding the
   // non-zero entries from `this` would made it pretty dense
@@ -1006,15 +896,15 @@ Waterfall::Processor::DenseRow::gaussian_elimination(const sparse_row_ptr other)
 
 
 inline Waterfall::Processor::dense_row_ptr 
-Waterfall::Processor::DenseRow::gaussian_elimination(const dense_row_ptr other) 
+Waterfall::Processor::DenseRow::gaussian_elimination(const dense_row_ptr other) const
 {
   assert(this->size() == other->size());
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other` row
-  const val_t GCD = gcd(leading_term, other->leading_term);
-  val_t a = - (other->leading_term / GCD);
-  val_t b = leading_term / GCD;
+  const val_t GCD = gcd(leading_term_, other->leading_term_);
+  val_t a = - (other->leading_term_ / GCD);
+  val_t b = leading_term_ / GCD;
 
   for (size_t j = 0; j < size(); ++j) {
     // XXX: is it faster to allocate new storage and fill it with `a*x+b*y`?
@@ -1029,28 +919,22 @@ Waterfall::Processor::DenseRow::gaussian_elimination(const dense_row_ptr other)
 inline val_t& 
 Waterfall::Processor::DenseRow::operator[](const coord_t col) 
 {
-#ifndef NDEBUG
-  if (col < starting_column or col > ending_column)
-    throw std::out_of_range("DenseRow::operator[] was passed a column index out of valid range");
-#endif
-  if (col == starting_column)
-    return leading_term;
+  assert(col >= starting_column_ and col <= ending_column_);
+  if (col == starting_column_)
+    return leading_term_;
   else
-    return storage[_size - col - 1];
+    return storage[size_ - col - 1];
 };
 
 
 inline const val_t
 Waterfall::Processor::DenseRow::operator[](const coord_t col) const
 {
-#ifndef NDEBUG
-  if (col < starting_column or col > ending_column)
-    throw std::out_of_range("DenseRow::operator[] was passed a column index out of valid range");
-#endif
-  if (col == starting_column)
-    return leading_term;
+  assert(col >= starting_column_ and col <= ending_column_);
+  if (col == starting_column_)
+    return leading_term_;
   else
-    return storage[_size - col - 1];
+    return storage[size_ - col - 1];
 };
 
 
@@ -1058,15 +942,15 @@ inline size_t
 Waterfall::Processor::DenseRow::_resize()
 {
   // compute new starting column
-  coord_t new_starting_column = ending_column;
-  assert(_size > 0);
-  for (size_t j = 0; j < _size; ++j)
+  coord_t new_starting_column = ending_column_;
+  assert(size_ > 0);
+  for (size_t j = 0; j < size_; ++j)
     if ((*this)[j] != 0)
-      new_starting_column = starting_column + j;
+      new_starting_column = starting_column_ + j;
 
-  _size -= new_starting_column - starting_column;
-  starting_column = new_starting_column;
-  return _size;
+  size_ -= new_starting_column - starting_column_;
+  starting_column_ = new_starting_column;
+  return size_;
 };
 
 
@@ -1078,13 +962,13 @@ Waterfall::Processor::DenseRow::serialize(Archive& ar, const unsigned int versio
   // When the class Archive corresponds to an output archive, the
   // & operator is defined similar to <<.  Likewise, when the class Archive
   // is a type of input archive the & operator is defined similar to >>.
-  ar & starting_column & ending_column & leading_term & _size;
-  assert(starting_column >= 0);
-  assert(ending_column >= 0);
-  assert(_size >= 0);
+  ar & starting_column_ & ending_column_ & leading_term_ & size_;
+  assert(starting_column_ >= 0);
+  assert(ending_column_ >= 0);
+  assert(size_ >= 0);
   if (NULL == storage)
-    storage = new val_t[_size];
-  for (size_t j = 0; j < _size; ++j) {
+    storage = new val_t[size_];
+  for (size_t j = 0; j < size_; ++j) {
     ar & storage[j];
   };
 };
@@ -1093,7 +977,7 @@ Waterfall::Processor::DenseRow::serialize(Archive& ar, const unsigned int versio
 inline size_t 
 Waterfall::Processor::DenseRow::size() const 
 { 
-  return _size; 
+  return size_; 
 };
 
 
