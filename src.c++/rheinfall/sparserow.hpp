@@ -298,7 +298,8 @@ namespace rheinfall {
 
   template <typename val_t, typename coord_t>
   SparseRow<val_t,coord_t>* 
-  SparseRow<val_t,coord_t>::gaussian_elimination(SparseRow<val_t,coord_t>* other) const
+  SparseRow<val_t,coord_t>::gaussian_elimination(SparseRow<val_t,coord_t>* restrict other) 
+    const restrict_this
   {
     assert(this->__ok());
     assert(other->__ok());
@@ -309,7 +310,7 @@ namespace rheinfall {
                                           other->Row_::leading_term_,
                                           a, b);
 
-    SparseRow<val_t,coord_t>* result = NULL; // XXX: use boost::optional<...> instead?
+    SparseRow<val_t,coord_t>* restrict result = NULL; // XXX: use boost::optional<...> instead?
 
     typename storage_t::const_iterator this_i = this->storage.begin(); 
     typename storage_t::const_iterator other_i = other->storage.begin();
@@ -393,7 +394,8 @@ namespace rheinfall {
 
   template <typename val_t, typename coord_t>
   DenseRow<val_t,coord_t>* 
-  SparseRow<val_t,coord_t>::gaussian_elimination(DenseRow<val_t,coord_t>* other) const
+  SparseRow<val_t,coord_t>::gaussian_elimination(DenseRow<val_t,coord_t>* restrict other) 
+    const restrict_this
   {
     assert(this->starting_column_ == other->starting_column_);
     assert(this->__ok());

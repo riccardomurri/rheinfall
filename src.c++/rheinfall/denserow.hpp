@@ -144,7 +144,7 @@ namespace rheinfall {
 
   template <typename val_t, typename coord_t>
   inline
-  DenseRow<val_t,coord_t>::DenseRow(const SparseRow<val_t,coord_t>* r) 
+  DenseRow<val_t,coord_t>::DenseRow(const SparseRow<val_t,coord_t>* restrict r) 
     : Row_::Row(Row_::dense, r->starting_column_, r->ending_column_, r->leading_term_),
       storage(Row_::ending_column_ - Row_::starting_column_, 0) 
   { 
@@ -215,7 +215,8 @@ namespace rheinfall {
 
   template <typename val_t, typename coord_t>
   inline DenseRow<val_t,coord_t>* 
-  DenseRow<val_t,coord_t>::gaussian_elimination(const SparseRow<val_t,coord_t>* other) const
+  DenseRow<val_t,coord_t>::gaussian_elimination(const SparseRow<val_t,coord_t>* restrict other) 
+    const restrict_this
   {
     assert(this->starting_column_ == other->starting_column_);
     assert(0 != this->leading_term_);
@@ -232,7 +233,8 @@ namespace rheinfall {
 
   template <typename val_t, typename coord_t>
   inline DenseRow<val_t,coord_t>*
-  DenseRow<val_t,coord_t>::gaussian_elimination(const DenseRow<val_t,coord_t>* other) const
+  DenseRow<val_t,coord_t>::gaussian_elimination(const DenseRow<val_t,coord_t>* restrict other) 
+    const restrict_this
   {
     assert(this->Row_::starting_column_ == other->Row_::starting_column_);
     assert(this->Row_::ending_column_ == other->Row_::ending_column_);
@@ -245,8 +247,8 @@ namespace rheinfall {
                                           other->Row_::leading_term_, 
                                           a, b);
 
-    DenseRow<val_t,coord_t>* result = new DenseRow(1 + this->Row_::starting_column_, 
-                                                   this->Row_::ending_column_);
+    DenseRow<val_t,coord_t>* restrict result = 
+      new DenseRow(1 + this->Row_::starting_column_, this->Row_::ending_column_);
     assert(result->size() == this->size() - 1);
     size_t this_j = 0; 
     size_t other_j = 0; 

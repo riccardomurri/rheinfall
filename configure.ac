@@ -122,6 +122,8 @@ AC_CHECK_HEADERS([inttypes.h stdlib.h string.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
+AC_C_RESTRICT
+AX_CXX_RESTRICT_THIS
 AC_HEADER_STDBOOL
 AC_TYPE_SIZE_T
 AC_TYPE_INTMAX_T
