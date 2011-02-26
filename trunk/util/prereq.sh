@@ -13,8 +13,8 @@ LINBOX=1.1.7rc0
 GMP=5.0.1
 GIVARO=3.3.2
 ATLAS=3.8.3
-BOOST=1.43.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.44.0/boost_1_44_0.tar.gz
-TCMALLOC=1.5 # http://google-perftools.googlecode.com/files/google-perftools-1.5.tar.gz
+BOOST=1.43.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.43.0/boost_1_43_0.tar.gz
+TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
 
 # undefine when running on a non-homogeneous cluster
 # (i.e., nodes may have different arch and/or memory size)
