@@ -204,9 +204,9 @@ namespace rheinfall {
     for (; p0 != p1; ++p0) {
       const coord_t coord = p0->first;
       const val_t value = p0->second;
-      assert(0 != value);
+      assert(not is_zero(value));
       if (coord < starting_column) {
-        if (0 != leading_term)
+        if (not is_zero(leading_term))
           row->set(starting_column, leading_term);
         starting_column = coord;
         leading_term = value;
@@ -250,7 +250,7 @@ namespace rheinfall {
   {
     assert(0 <= Row_::starting_column_);
     assert(Row_::starting_column_ <= Row_::ending_column_);
-    assert(0 != Row_::leading_term_);
+    assert(not is_zero(Row_::leading_term_));
     // entries in `this->storage` are *always* ordered by increasing column index
     coord_t s1 = Row_::starting_column_;
     for (typename storage_t::const_iterator it = storage.begin(); 
@@ -258,7 +258,7 @@ namespace rheinfall {
          ++it) {
       assert(s1 < it->first);
       assert(it->first <= Row_::ending_column_);
-      assert(0 != it->second);
+      assert(not is_zero(it->second));
       s1 = it->first;
     };
     return true;
@@ -274,7 +274,7 @@ namespace rheinfall {
       Row_::starting_column_ = storage.front().first;
       assert(0 <= Row_::starting_column_ and Row_::starting_column_ < Row_::ending_column_);
       Row_::leading_term_ = storage.front().second;
-      assert(0 != Row_::leading_term_);
+      assert(not is_zero(Row_::leading_term_));
       storage.erase(storage.begin());
       assert(this->__ok());
       return this;
@@ -337,14 +337,14 @@ namespace rheinfall {
       val_t entry;
       if (other_col < this_col) {
         entry = b * other_i->second;
-        assert(0 != entry);
+        assert(not is_zero(entry));
         coord = other_col;
         nonzero_found = true;
         ++other_i;
       }
       else if (other_col == this_col) {
         entry = a * this_i->second + b * other_i->second;
-        if (0 != entry) {
+        if (not is_zero(entry)) {
           coord = this_col;
           nonzero_found = true;
         };
@@ -353,7 +353,7 @@ namespace rheinfall {
       }
       else if (other_col > this_col) {
         entry = a * this_i->second;
-        assert(0 != entry);
+        assert(not is_zero(entry));
         coord = this_col;
         nonzero_found = true;
         ++this_i;
