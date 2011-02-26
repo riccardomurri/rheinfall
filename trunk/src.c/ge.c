@@ -74,23 +74,23 @@ gaussian_elimination_sparse_with_sparse_pivot(sparse_row_t* const pivot_row,
 
   sparse_row_t* result = NULL;
 
-  size_t pivot_i = 0;
-  size_t other_i = 0;
-  const size_t pivot_row_size = sparse_row_size(pivot_row);
-  const size_t other_row_size = sparse_row_size(other_row);
+  entry_t* pivot_row_cur = sparse_row_at(pivot_row, 0);
+  entry_t* other_row_cur = sparse_row_at(other_row, 0);
+  const entry_t* pivot_row_ub = sparse_row_ub(pivot_row);
+  const entry_t* other_row_ub = sparse_row_ub(other_row);
   // loop while one of the two indexes is still valid
-  while(pivot_i < pivot_row_size || other_i < other_row_size) {
+  while(pivot_row_cur < pivot_row_ub || other_row_cur < other_row_ub) {
     coord_t pivot_col;
-    if (pivot_i != pivot_row_size) {
-      pivot_col = pivot_row->storage[pivot_i].column;
+    if (pivot_row_cur < pivot_row_ub) {
+      pivot_col = pivot_row_cur->column;
       assert (pivot_col > pivot_row->starting_column_);
     }
     else // this_i reached end of vector, use out-of-range value
       pivot_col = pivot_row->ending_column_ + 1;
 
     coord_t other_col;
-    if (other_i != other_row_size) {
-      other_col = other_row->storage[other_i].column;
+    if (other_row_cur < other_row_ub) {
+      other_col = other_row_cur->column;
       assert (other_col > other_row->starting_column_);
     }
     else 
@@ -100,27 +100,27 @@ gaussian_elimination_sparse_with_sparse_pivot(sparse_row_t* const pivot_row,
     coord_t coord;
     val_t value;
     if (other_col < pivot_col) {
-      value = b * other_row->storage[other_i].value;
+      value = b * other_row_cur->value;
       assert(0 != value);
       coord = other_col;
       nonzero_found = true;
-      ++other_i;
+      ++other_row_cur;
     }
     else if (other_col == pivot_col) {
-      value = a * pivot_row->storage[pivot_i].value + b * other_row->storage[other_i].value;
+      value = a * pivot_row_cur->value + b * other_row_cur->value;
       if (0 != value) {
         coord = pivot_col;
         nonzero_found = true;
       };
-      ++pivot_i;
-      ++other_i;
+      ++pivot_row_cur;
+      ++other_row_cur;
     }
     else if (other_col > pivot_col) {
-      value = a * pivot_row->storage[pivot_i].value;
+      value = a * pivot_row_cur->value;
       assert(0 != value);
       coord = pivot_col;
       nonzero_found = true;
-      ++pivot_i;
+      ++pivot_row_cur;
     }
     else 
       assert(0); // should not happen!
@@ -128,7 +128,7 @@ gaussian_elimination_sparse_with_sparse_pivot(sparse_row_t* const pivot_row,
     if (nonzero_found) {
       if (NULL == result) {
         // allocate new SparseRow
-        result = sparse_row_alloc(pivot_row_size + other_row_size);
+        result = sparse_row_alloc(sparse_row_size(pivot_row) + sparse_row_size(other_row));
         result->starting_column_ = coord;
         result->ending_column_ = other_row->ending_column_;
         result->leading_term_ = value;
@@ -146,7 +146,7 @@ gaussian_elimination_sparse_with_sparse_pivot(sparse_row_t* const pivot_row,
     assert(result->starting_column_ > pivot_row->starting_column_);
     assert(result->starting_column_ > other_row->starting_column_);
     assert(result->ending_column_ == pivot_row->ending_column_);
-    assert(sparse_row_size(result) <= pivot_row_size + other_row_size);
+    assert(sparse_row_size(result) <= sparse_row_size(pivot_row) + sparse_row_size(other_row));
   };
 #endif
   sparse_row_free(other_row); // release old storage
@@ -170,7 +170,7 @@ gaussian_elimination_dense_with_sparse_pivot(sparse_row_t* const pivot_row,
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other_row` row
-  const val_t GCD = gcd(pivot_row->leading_term_, other_row->leading_term_);
+  const val_t GCD = gcd(other_row->leading_term_, pivot_row->leading_term_);
   val_t a = - (other_row->leading_term_ / GCD);
   val_t b = pivot_row->leading_term_ / GCD;
 
