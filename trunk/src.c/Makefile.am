@@ -7,12 +7,12 @@ EXTRA_PROGRAMS = crank-int-omp crank-int-mpi crank-int-mpi-omp
 EXTRA_PROGRAMS += crank-double-omp crank-double-mpi crank-double-mpi-omp
 bin_PROGRAMS = crank-int crank-double
 if HAVE_OPENMP_CC
-  bin_PROGRAMS +=  crank-int-omp crank-double-omp 
+  bin_PROGRAMS +=  #crank-int-omp crank-double-omp 
 endif
 if HAVE_MPICC
   bin_PROGRAMS += crank-int-mpi crank-double-mpi 
 if HAVE_OPENMP_CC
-    bin_PROGRAMS += crank-int-mpi-omp crank-double-mpi-omp 
+    bin_PROGRAMS += #crank-int-mpi-omp crank-double-mpi-omp 
 endif
 endif
 
