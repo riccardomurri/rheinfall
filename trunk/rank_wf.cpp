@@ -420,7 +420,7 @@ Waterfall::rank()
       break;
     // step all processors
 #ifdef WITH_OPENMP
-#pragma omp parallel for
+#pragma omp parallel for schedule(auto)
 #endif
     for (size_t n = n0; n < procs.size(); ++n) {
       r[n] = procs[n]->step();
@@ -513,7 +513,7 @@ inline void
 Waterfall::Processor::recv_row(row_ptr new_row) 
 {
 #ifdef WITH_OPENMP
-#pragma omp single
+#pragma omp critical
 #endif
   inbox.push_back(new_row);
 };
