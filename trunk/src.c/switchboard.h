@@ -28,45 +28,49 @@
 #ifndef SWITCHBOARD_H
 #define SWITCHBOARD_H
 
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include "common.h"
+#include "config.h"
 #include "vpu.h"
-
-#include <xalloc.h> // from GNUlib
-
-#include <stdbool.h>
 
 #ifdef WITH_MPI
 # include <mpi.h>
 #endif
 
 
-struct switchboard_s {
+typedef struct {
 #ifdef WITH_MPI
-  MPI_Comm comm;     /**< MPI communicator to use */
+  MPI_Comm comm;    /**< MPI communicator to use */
+  size_t comm_size; /**< MPI communicator size */
+  int me;           /**< MPI rank of this process */
 #endif
-  int comm_size;     /**< MPI communicator size */
-  int me;            /**< MPI rank of this process */
-  int ncols;         /**< Total number of columns */
-  size_t nvpus;      /**< Number of local VPUs */
-  struct vpu_s** vpu;/**< Array of local VPUs */
+  int ncols;        /**< Total number of columns */
+  size_t nvpus;     /**< Number of local VPUs */
+  vpu_t* vpu;       /**< Array of local VPUs */
+} switchboard_t;
+
+
+#ifdef WITH_MPI
+inline switchboard_t* switchboard_new(const int ncols, MPI_Comm comm_) {
+  switchboard_t* sb = xmalloc(sizeof(switchboard_t));
+  sb->comm = comm_;
+  MPI_Comm_rank(sb->comm, &(sb->me));
+  MPI_Comm_size(sb->comm, &(sb->comm_size));
+  sb->nvpus = ncols;
+  for (int n = 0; n < ncols; ++n) {
+    sb->vpu[n] = vpu_new(n, sb);
+  };
 };
-//typedef struct switchboard_s switchboard_t;
-#define switchboard_t struct switchboard_s
-
-
-#ifdef WITH_MPI
-switchboard_t* switchboard_new(const int ncols, MPI_Comm comm);
 #else
-switchboard_t* switchboard_new(const int ncols);
+inline switchboard_t* switchboard_new(const int ncols) {
+  switchboard_t* sb = xmalloc(sizeof(switchboard_t));
+  sb->nvpus = ncols;
+  for (int n = 0; n < ncols; ++n) {
+    sb->vpu[n] = vpu_new(n, sb);
+  };
+};
 #endif
-void switchboard_free(switchboard_t* sb);
 
-_inline bool is_local(const switchboard_t* sb, const coord_t column) {
+
+inline bool is_local(const switchboard_t* sb, const coord_t column) {
 #ifdef WITH_MPI
   return (column % sb->comm_size) == sb->me;
 #else
@@ -75,17 +79,17 @@ _inline bool is_local(const switchboard_t* sb, const coord_t column) {
 };
 
 
-_inline struct vpu_s* local_owner(const switchboard_t* sb, const coord_t column) {
+inline vpu_t* local_owner(const switchboard_t* sb, const coord_t column) {
 #ifdef WITH_MPI
-  return sb->vpu[column / sb->comm_size]; 
+  return vpu[column / sb->comm_size]; 
 #else
-  return sb->vpu[column];
+  return vpu[column];
 #endif
 };
 
 
 #ifdef WITH_MPI
-_inline int remote_owner(const switchboard_t* sb, const coord_t column) {
+inline int remote_owner(const switchboard_t* sb, const coord_t column) {
   return (column % sb->comm_size); 
 };
 #endif

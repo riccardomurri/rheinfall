@@ -101,6 +101,9 @@ BOOST_TEST([],
 AM_CONDITIONAL([HAVE_BOOST_TEST], [test "x$have_boost_test" != no])
 
 
+# check for OpenMP
+AC_OPENMP
+
 # Checks for header files.
 AC_CHECK_HEADERS([inttypes.h stdlib.h string.h])
 

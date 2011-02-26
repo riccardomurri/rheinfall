@@ -28,12 +28,8 @@
 #ifndef VPU_H
 #define VPU_H
 
-
-#ifdef HAVE_CONFIG_H
-# include <config.h>
-#endif
-
-#include "common.h"
+#include "config.h"
+#include "comm.h"
 #include "row.h"
 #include "switchboard.h"
 #include "xarray.h"
@@ -41,12 +37,6 @@
 #ifdef _OPENMP
 # include <omp.h>
 #endif
-
-#ifdef WITH_MPI
-# include <mpi.h>
-#endif
-
-#include <stdbool.h>
 
 
 /** Phases of the VPU algorithm.  When in @c VPU_RUNNING state, rows
@@ -63,48 +53,11 @@ typedef enum {
 } vpu_phase_t;
 
 
-#ifdef WITH_MPI
-/** An `outbox` is a list of pending MPI requests and associated row
-    pointers (the payload of such requests). These lists are kept in
-    separate xarrays in order to be able to use the xarray's storage
-    directly to MPI_{Test,Wait} calls. */
-XARRAY_DECLARE(requests_list, MPI_Request, /* no extra data */);
-typedef struct {
-  requests_list_t* requests;
-  rows_list_t*     rows;
-} outbox_t;
-
-/** Allocate a new @c outbox_t structure and return a pointer to it. */
-_inline outbox_t* outbox_new(size_t nmemb) {
-  outbox_t* ob = xmalloc(sizeof(outbox_t));
-  ob->requests = requests_list_alloc(nmemb);
-  ob->rows = rows_list_alloc(nmemb);
-  return ob;
-};
-
-/** Free an @c outbox_t object previously allocated with `outbox_new`. */
-_inline void outbox_free(outbox_t *ob) {
-  requests_list_free(ob->requests);
-  rows_list_free(ob->rows);
-  free(ob);
-};
-
-_inline size_t outbox_size(outbox_t* ob) {
-  assert(requests_list_size(ob->requests) == rows_list_size(ob->rows));
-  return rows_list_size(ob->rows);
-};
-#else
-typedef void outbox_t;
-#endif // WITH_MPI
-
-
 /** VPUs perform elimination on a set of rows beginning at the same column. */
-struct vpu_s {
+typedef struct {
   coord_t column;
   vpu_phase_t phase;
-  struct switchboard_s* sb;
-  /** Chosen row for performing elimination. */
-  row_t u;
+  switchboard_t* sb;
 #ifdef _OPENMP
   omp_lock_t inbox_lock;
 #endif
@@ -112,33 +65,26 @@ struct vpu_s {
   rows_list_t* workset; 
   /** Block of rows arriving from other VPUs. */ 
   rows_list_t* inbox;
-#ifdef WITH_MPI
-  /** List of sent rows, of which the receiver has not yet acknowledged receipt. */
-  outbox_t* outbox;
-#else
-  void* outbox; // placeholder
-#endif
-};
-//typedef struct vpu_s vpu_t;
-#define vpu_t struct vpu_s
+  /** Chosen row for performing elimination. */
+  row_t u;
+} vpu_t;
 
+vpu_t* vpu_new(const coord_t column, switchboard_t* sb);
+void vpu_free(vpu_t* vpu);
 
-struct vpu_s* vpu_new(const coord_t column);
-void vpu_free(struct vpu_s* vpu);
-
-long vpu_step(struct vpu_s* self, struct switchboard_s* sb);
-_inline void vpu_end_phase(struct vpu_s* self);
-_inline bool vpu_is_done(struct vpu_s* self);
-void vpu_recv_row(struct vpu_s* self, void* row, row_kind_t kind);
+long vpu_step(vpu_t* self);
+inline void vpu_end_phase(vpu_t* self);
+inline bool vpu_is_done(vpu_t* self);
+void vpu_recv_row(vpu_t* self, void* row, row_kind_t kind);
 
 
 // --- inline defs ---
 
-_inline void vpu_end_phase(struct vpu_s* self) {
+inline void vpu_end_phase(vpu_t* self) {
   self->phase = VPU_ENDING;
 };
 
-_inline bool vpu_is_done(struct vpu_s* self) {
+inline bool vpu_is_done(vpu_t* self) {
   return VPU_DONE == self->phase;
 };
 
