@@ -119,7 +119,18 @@ protected:
         starting_column(starting_column_), ending_column(ending_column_), rows(), 
         phase(running), inbox(), outbox(), 
         dense_threshold(dense_threshold_) 
-    { };
+    { 
+#ifdef WITH_OPENMP
+      omp_init_lock(&inbox_lock_);
+#endif
+    };
+    /** Destructor. Releases OpenMP lock. */
+    ~Processor()
+    {
+#ifdef WITH_OPENMP
+      omp_destroy_lock(&inbox_lock_);
+#endif
+    };
 
   public:
     // forward declarations
@@ -152,6 +163,10 @@ protected:
         consists of a message tag (an int) and (optionally) a rows. */
     typedef std::list< row_ptr > inbox_t;
     inbox_t inbox;
+#ifdef WITH_OPENMP
+    /** Lock for accessing the @c inbox */
+    omp_lock_t inbox_lock_;
+#endif
 
     /** List of rows sent to other processors and the associated MPI request. 
         We need to keep track of these in order to free the resources when we're done. */
@@ -420,7 +435,7 @@ Waterfall::rank()
       break;
     // step all processors
 #ifdef WITH_OPENMP
-#pragma omp parallel for schedule(auto)
+#pragma omp parallel for
 #endif
     for (size_t n = n0; n < procs.size(); ++n) {
       r[n] = procs[n]->step();
@@ -513,9 +528,12 @@ inline void
 Waterfall::Processor::recv_row(row_ptr new_row) 
 {
 #ifdef WITH_OPENMP
-#pragma omp critical
+  omp_set_lock(&inbox_lock_);
 #endif
   inbox.push_back(new_row);
+#ifdef WITH_OPENMP
+  omp_unset_lock(&inbox_lock_);
+#endif
 };
 
 
@@ -1085,8 +1103,13 @@ main(int argc, char** argv)
         continue;
       };
 
-      if (0 == myid)
-        std::cout << argv[0] << " file:"<<argv[i];
+      if (0 == myid) {
+        std::cout << argv[0] << " file:"<<argv[i]
+                  << " mpi:"<< world.size();
+#ifdef WITH_OPENMP
+        std::cout << " omp:"<< omp_get_max_threads();
+#endif
+      }
 
       // read matrix dimensions
       size_t rows, cols;
