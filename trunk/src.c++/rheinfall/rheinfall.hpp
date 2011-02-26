@@ -36,7 +36,8 @@
 #include "denserow.hpp"
 
 #ifdef _OPENMP
-#include <omp.h>
+# include <omp.h>
+# include <boost/optional.hpp>
 #endif
 
 #include <iostream>
@@ -161,14 +162,18 @@ public:
     outbox_t outbox;
 #endif
 
-#ifdef _OPENMP
-    /** Used by the adaptive scheduler to collect thread running time. */
-    double runtime;
-#endif
-
     /** A row will switch its storage to dense format when the percent of
         nonzero entries w.r.t. total length exceeds this value. */
     const double dense_threshold_;
+
+    /** Stores the result of the last invocation of @c step(). */
+    coord_t result_;
+
+#ifdef _OPENMP
+  private:
+    /** Lock for running the @c step() function. */
+    omp_lock_t processing_lock_;
+#endif
 
   public: 
 
@@ -177,7 +182,7 @@ public:
 
     /** Make a pass over the block of rows and return either 0 or 1
         (depending whether elimination took place or not). */
-    int step();
+    coord_t step();
 
     /** Switch processor to @c ending state: after one final round of
         elimination, a @c TAG_END message will be sent to the next
@@ -213,6 +218,9 @@ protected:
 
     /** Return @c true if the VPU processing column @a c is in the local @c vpus array. */
     bool       is_local(const coord_t c) const; 
+    /** Return index of @c Processor instance processing column @a c
+        within local @a vpus array. */
+    coord_t    vpu_index_for_column(const coord_t c) const;
     /** Return @c Processor instance processing column @a c. */
     Processor& vpu_for_column(const coord_t c) const;
 #ifdef WITH_MPI
@@ -466,9 +474,17 @@ protected:
   coord_t 
   Rheinfall<val_t,coord_t>::rank() 
   {
+#ifdef _OPENMP
+    boost::optional <coord_t> ending_next;
+#endif
+
     // kickstart termination signal
-    if (is_local(0))
+    if (is_local(0)) {
       vpu_for_column(0).end_phase();
+#ifdef _OPENMP
+      ending_next = 0;
+#endif
+    };
 
     // collect (partial) ranks
     std::vector<int> r(vpus.size(), 0);
@@ -483,10 +499,52 @@ protected:
       if (n0 >= vpus.size())
         break; // out of the while(n0 < vpus.size()) loop
 #ifdef _OPENMP
-# pragma omp parallel for schedule(guided)        
-#endif // _OPENMP
-      for (size_t n = n0; n < vpus.size(); ++n)
+      size_t total_size, chunk_size, bottom, top;
+#     pragma omp parallel private(total_size,chunk_size,bottom,top) default(shared)
+      {
+        if (!! ending_next) {
+          assert(*ending_next == 0);
+          if (omp_get_thread_num() == 0) {
+            // master thread takes care of the ending ranks
+            coord_t col = *ending_next;
+            while (col < ncols_ and is_local(col)) {
+              const coord_t n = vpu_index_for_column(col);
+              r[n] = vpus[n]->step();
+              col++;
+            };
+            if (col < ncols_) 
+              n0 = vpu_index_for_column(col);
+            else
+              n0 = vpus.size();
+            ending_next.reset();
+          }
+          else {
+            // other threads loop over all VPUs with a non-empty inbox
+            total_size = vpus.size() - n0;
+            chunk_size = total_size / std::max(1, omp_get_num_threads()-1);
+            bottom = n0 + chunk_size * (omp_get_thread_num() - 1);
+            top = std::min(bottom + chunk_size, vpus.size());
+            for (coord_t n = bottom; n < top; ++n)
+              if (not vpus[n]->inbox.empty()) {
+#               pragma omp task untied firstprivate(n)
+                r[n] = vpus[n]->step();
+              }
+#           pragma omp taskwait
+            { /* no-op for taskwait */ };
+          };
+        } // end if (!! ending_next)
+        else {
+          // run parallel loop over all VPUs with a non-empty inbox
+#         pragma omp for schedule(static)
+          for (coord_t n = n0; n < vpus.size(); ++n)
+            if (not vpus[n]->inbox.empty()) 
+              r[n] = vpus[n]->step();
+        }; // end else if (!! ending_next)
+      }; // end omp parallel
+#else // no OpenMP, loop over all VPUs
+      for (coord_t n = n0; n < vpus.size(); ++n)
         r[n] = vpus[n]->step();
+#endif // _OPENMP
 #ifdef WITH_MPI
       while (boost::optional<mpi::status> status = comm_.iprobe()) { 
         switch(status->tag()) {
@@ -514,6 +572,9 @@ protected:
           comm_.recv(status->source(), status->tag(), column);
           assert(column >= 0 and is_local(column));
           vpu_for_column(column).end_phase();
+# ifdef _OPENMP
+          ending_next = column;
+# endif
           break;
         };
         }; // switch(status->tag())
@@ -535,7 +596,7 @@ protected:
     int rank = 0;
     mpi::all_reduce(comm_, local_rank, rank, std::plus<int>());
 #else
-    int rank = local_rank;
+    const int rank = local_rank;
 #endif
 
     return rank;
@@ -555,11 +616,19 @@ protected:
   
 
   template <typename val_t, typename coord_t>
+  inline coord_t 
+  Rheinfall<val_t,coord_t>::vpu_index_for_column(const coord_t c) const
+  { 
+    assert(c >= 0 and c < ncols_);
+    return (w_ * ((c/w_) / nprocs_) + (c % w_)); 
+  };
+
+
+  template <typename val_t, typename coord_t>
   inline typename Rheinfall<val_t,coord_t>::Processor& 
   Rheinfall<val_t,coord_t>::vpu_for_column(const coord_t c) const
   { 
-    assert(c >= 0 and c < ncols_);
-    return *(vpus[w_ * ((c/w_) / nprocs_) + (c % w_)]); 
+    return *(vpus[vpu_index_for_column(c)]); 
   };
 
 
@@ -645,13 +714,11 @@ Rheinfall<val_t,coord_t>::send_end(Processor const& origin, const coord_t column
 #ifdef WITH_MPI
         outbox(), 
 #endif
-#ifdef _OPENMP
-        runtime(0),
-#endif
         dense_threshold_(dense_threshold)
     { 
 #ifdef _OPENMP
       omp_init_lock(&inbox_lock_);
+      omp_init_lock(&processing_lock_);
 #endif
     };
 
@@ -661,6 +728,7 @@ Rheinfall<val_t,coord_t>::Processor::~Processor()
 {
 #ifdef _OPENMP
       omp_destroy_lock(&inbox_lock_);
+      omp_destroy_lock(&processing_lock_);
 #endif
       if (NULL != u)
         delete u;
@@ -688,10 +756,15 @@ Rheinfall<val_t,coord_t>::Processor::~Processor()
 
 
 template <typename val_t, typename coord_t>
-int 
+coord_t
 Rheinfall<val_t,coord_t>::Processor::step() 
 {
-  assert(not is_done()); // cannot be called once finished
+#ifdef _OPENMP
+  omp_set_lock(&processing_lock_);
+#endif
+
+  if (is_done())
+    return result_;
 
   // receive new rows
 #ifdef _OPENMP
@@ -744,9 +817,10 @@ Rheinfall<val_t,coord_t>::Processor::step()
       // ship reduced rows to other processors
        if (NULL != new_row)
         parent_.send_row(*this, new_row);
-    };
+    }; // end for (it = rows.begin(); ...)
     rows.clear();
-  };
+    result_ = (NULL == u? 0 : 1);
+  }; // end if not rows.empty()
   assert(rows.empty());
 
   if (running == phase) {
@@ -784,8 +858,11 @@ Rheinfall<val_t,coord_t>::Processor::step()
     phase = done;
   };
 
+#ifdef _OPENMP
+  omp_unset_lock(&processing_lock_);
+#endif
   // exit with 0 only if we never processed any row
-  return (NULL == u? 0 : 1);
+  return result_;
 }
 
 
