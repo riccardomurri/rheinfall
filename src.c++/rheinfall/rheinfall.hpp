@@ -301,10 +301,10 @@ protected:
                                       const double dense_threshold)
   : ncols_(ncols)
   , vpus()
-  , w_(width)
   , comm_(comm)
   , me_(comm.rank())
   , nprocs_(comm.size())
+  , w_(width)
 {  
   // setup the array of processors
   vpus.reserve(1 + ncols_ / nprocs_);
@@ -524,7 +524,7 @@ protected:
             chunk_size = total_size / std::max(1, omp_get_num_threads()-1);
             bottom = n0 + chunk_size * (omp_get_thread_num() - 1);
             top = std::min(bottom + chunk_size, vpus.size());
-            for (coord_t n = bottom; n < top; ++n)
+            for (coord_t n = top-1; n >= bottom; --n)
               if (not vpus[n]->inbox.empty()) {
 #               pragma omp task untied firstprivate(n)
                 r[n] = vpus[n]->step();
@@ -580,11 +580,11 @@ protected:
         }; // switch(status->tag())
       }; // while(iprobe)
 #endif // WITH_MPI
-    }; // while(n0 < vpus.size())
+    }; // end while(n0 < vpus.size())
 
     // the partial rank is computed as the sum of all ranks computed
     // by local processors
-    int local_rank = 0;
+    coord_t local_rank = 0;
     for (size_t n = 0; n < r.size(); ++n)
       local_rank += r[n];
 
@@ -593,10 +593,10 @@ protected:
     comm_.barrier();
 
     // collect the partial ranks for all processes
-    int rank = 0;
+    coord_t rank = 0;
     mpi::all_reduce(comm_, local_rank, rank, std::plus<int>());
 #else
-    const int rank = local_rank;
+    const coord_t rank = local_rank;
 #endif
 
     return rank;
@@ -714,7 +714,8 @@ Rheinfall<val_t,coord_t>::send_end(Processor const& origin, const coord_t column
 #ifdef WITH_MPI
         outbox(), 
 #endif
-        dense_threshold_(dense_threshold)
+        dense_threshold_(dense_threshold),
+        result_(0)
     { 
 #ifdef _OPENMP
       omp_init_lock(&inbox_lock_);
