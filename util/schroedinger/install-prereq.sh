@@ -1,5 +1,5 @@
 #! /bin/bash
-#$ -l h_cpu=40000 
+#$ -l s_rt=40000 
 #$ -cwd 
 #$ -S /bin/bash
 #$ -j y
@@ -100,8 +100,8 @@ esac
 if [ -n "${PYTHON}" ]; then
     _ Installing Python ${PYTHON}
     cd ${sw}/build/
-    #wget -N http://www.python.org/ftp/python/${PYTHON}/Python-${PYTHON}.tar.bz2
     set -x
+    #wget -N http://www.python.org/ftp/python/${PYTHON}/Python-${PYTHON}.tar.bz2
     mkdir -p Python-${PYTHON}
     cd Python-${PYTHON}
     ${src_home}/Python-${PYTHON}/configure --prefix=${sw} \
@@ -115,8 +115,8 @@ fi # PYTHON
 if [ -n "${SWIG}" ]; then
     _ Downloading SWIG ${SWIG}
     cd ${sw}/build/
-    #wget -N http://mirror.switch.ch/ftp/ubuntu/pool/main/s/swig1.3/swig1.3_${SWIG}.orig.tar.gz
     set -x
+    #wget -N http://mirror.switch.ch/ftp/ubuntu/pool/main/s/swig1.3/swig1.3_${SWIG}.orig.tar.gz
     mkdir -p swig-${SWIG}
     cd swig-${SWIG}
     ${src_home}/swig-${SWIG}/configure --prefix=${sw} \
@@ -149,8 +149,8 @@ fi # SWIG
 if [ -n "$CYTHON" ]; then
     _ Installing Cython-${CYTHON}
     cd ${sw}/build/
-    #wget -N http://www.cython.org/Cython-${CYTHON}.tar.gz
     set -x
+    #wget -N http://www.cython.org/Cython-${CYTHON}.tar.gz
     tar -xzf ${src_home}/Cython-${CYTHON}.tar.gz
     cd Cython-${CYTHON}
     python setup.py build
@@ -166,9 +166,9 @@ if [ -n "$GMP" ]; then
     _ Installing GMP ${GMP}
     cd ${sw}/build
     rm -rf gmp-${GMP}
-    #wget -N ftp://sunsite.cnlab-switch.ch/mirror/gnu/gmp/gmp-${GMP}.tar.bz2    
-    set -x
     mkdir -p gmp-${GMP}
+    set -x
+    #wget -N ftp://sunsite.cnlab-switch.ch/mirror/gnu/gmp/gmp-${GMP}.tar.bz2    
     cd gmp-${GMP}
     ${src_home}/gmp-${GMP}/configure --prefix=${sw} \
         --enable-cxx \
@@ -187,9 +187,8 @@ if [ -n "$GIVARO" ]; then
     cd ${sw}/build
     rm -rf givaro-${givaro_vers}
     #wget -N http://www-lmc.imag.fr/CASYS/LOGICIELS/givaro/Downloads/givaro-${GIVARO}.tar.gz
-    tar -xzf ${src_home}/givaro-${GIVARO}.tar.gz
     set -x
-    mkdir -p givaro-$givaro_vers
+    tar -xzf ${src_home}/givaro-${GIVARO}.tar.gz
     cd givaro-$givaro_vers
     # work around bug in ./configure: the test for GMP cannot find it
     # unless it's in the LD_LIBRARY_PATH
@@ -272,7 +271,8 @@ if [ -n "$BOOST" ]; then
     # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
     sed -e 's|^//#define BOOST_MPI_HOMOGENEOUS|#define BOOST_MPI_HOMOGENEOUS|' \
         -i boost/mpi/config.hpp
-    ./bootstrap.sh --prefix=${sw} --with-libraries=mpi,serialization,test link=static threading=multi
+    ./bootstrap.sh --prefix=${sw} --with-libraries=mpi,serialization,test \
+        toolset=${toolset} variant=release threading=multi
     cat >> project-config.jam <<EOF
 # Boost will not build Boost.MPI unless it is explicitly 
 # told to by the following line:
@@ -283,7 +283,7 @@ EOF
     # then, build Boost with the new `bjam`
     PATH=$(pwd)/tools/jam/src/bin.$(uname -s | tr A-Z a-z)$(uname -m):$PATH
     export PATH
-    bjam --prefix=${sw} toolset=${toolset} link=static threading=multi install
+    bjam --prefix=${sw} toolset=${toolset} threading=multi variant=release install
     set +x
 fi # BOOST
 
@@ -292,16 +292,17 @@ fi # BOOST
 if [ -n "$TCMALLOC" ]; then
     _ Installing Google PerfTools $TCMALLOC ...
     cd ${sw}/build
+    rm -rf google-perftools-${TCMALLOC}
+    mkdir -p google-perftools-${TCMALLOC}
     set -x
     #wget -N http://google-perftools.googlecode.com/files/google-perftools-${TCMALLOC}.tar.gz
-    mkdir -p google-perftools-${TCMALLOC}
     cd google-perftools-${TCMALLOC}
     ${src_home}/google-perftools-${TCMALLOC}/configure --prefix=${sw} \
         --enable-frame-pointers --disable-debugalloc \
         CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
         CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}"
     $concurrent_make clean all
-    $concurrent_make install
+    make install
     set +x
 fi
 
