@@ -39,10 +39,20 @@ namespace mpl = boost::mpl;
 # include <gmpxx.h>
 #endif
 
+#include <algorithm>
 #include <cassert>
 #include <cstdlib> // std::abs
+#include <iostream>
 #include <limits>
+#include <sstream>
 
+#ifdef HAVE_INT128_T
+// workaround for missing std::abs(int128_t) overload
+namespace std {
+  inline int128_t
+  abs(int128_t __x) { return __x >= 0 ? __x : -__x; }
+};
+#endif // HAVE_INT128_T
 
 
 namespace rheinfall {
@@ -139,6 +149,9 @@ namespace rheinfall {
 #ifdef HAVE_LONG_LONG_INT
   RF_TYPE_IS_GCD_RING(long long, pod_gcd<long long>)
 #endif
+#ifdef HAVE_INT128_T
+  RF_TYPE_IS_GCD_RING(int128_t, pod_gcd<int128_t>)
+#endif
 
 #ifdef HAVE_GMPXX
   /** Adapt GMPXX's @c mpz_gcd function to our calling convention. */
@@ -199,7 +212,6 @@ namespace rheinfall {
 #endif 
 
 
-
   // by default, do NOT use in-place update within DenseRow::gaussian_elimination
   template<typename T> class use_inplace_update : public mpl::bool_<false> { };
 
@@ -210,6 +222,53 @@ namespace rheinfall {
   template<> class use_inplace_update<mpz_class> : public mpl::bool_<true> { };
 #endif 
 
+
+  // workaround for libstdc++ lacking operator<< and operator>>
+  // overloads for `int128_t`.  It's slow, but we only need this for
+  // debugging anyway
+  template<typename T>
+  const std::string to_printable(const T& num)
+  {
+    std::ostringstream os;
+    os << num;
+    return os.str();
+  };
+  
+#ifdef HAVE_INT128_T
+  template<>
+  const std::string to_printable(const int128_t& num)
+  {
+    std::ostringstream os;
+    int128_t num_ = num;
+    bool negative = (num < 0)? true : false;
+    do {
+      os << std::abs(static_cast<int>(num_ % 10));
+      num_ /= 10;
+    } while(0 != num_);
+    if (negative)
+      os << "-";
+    std::string result(os.str());
+    std::reverse(result.begin(), result.end());
+    return result;
+  };
+#endif // HAVE_INT128_T
+
+  
+  template<typename T>
+  void read_value(std::istream& in, T& value)
+  {
+    in >> value;
+  };
+
+#ifdef HAVE_INT128_T
+  template<>
+  void read_value(std::istream& in, int128_t& value)
+  {
+    long long value_; 
+    in >> value_;
+    value = value_;
+  };
+#endif // HAVE_INT128_T
 
 }; // namespace rheinfall
 

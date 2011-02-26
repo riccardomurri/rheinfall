@@ -354,9 +354,9 @@ namespace rheinfall {
   DenseRow<val_t,coord_t>::print_on(std::ostream& out) const 
   {
     out << "["
-        << Row_::starting_column_ <<":"<< Row_::leading_term_;
+        << Row_::starting_column_ <<":"<< to_printable(Row_::leading_term_);
     for (int j = storage.size()-1; j >= 0; --j)
-      out <<","<< storage[j];
+      out <<","<< to_printable(storage[j]);
     out << "]";
   };
 

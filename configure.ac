@@ -135,7 +135,11 @@ AC_TYPE_SIZE_T
 AC_TYPE_INTMAX_T
 AC_TYPE_LONG_LONG_INT
 AC_TYPE_LONG_DOUBLE
-
+AC_CHECK_TYPES([int128_t], [],
+    [AC_CHECK_TYPES([__int128_t],
+            [AC_DEFINE([HAVE_INT128_T])
+             AC_DEFINE([int128_t], [__int128_t], [Name of the 128-bit integer type.])
+             ])])
 
 # Checks for library functions.
 AC_FUNC_MALLOC

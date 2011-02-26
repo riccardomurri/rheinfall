@@ -369,7 +369,8 @@ public:
     coord_t i, j;
     val_t value;
     while (not input.eof()) {
-      input >> i >> j >> value;
+      // `read_value` ugliness to circumvent lack of operator>> for `int128_t`
+      input >> i >> j; read_value(input, value);
       assert(0 <= i and i <= nrows);
       assert(0 <= j and j <= ncols);
       // ignore zero entries in matrix -- they shouldn't be here in the first place
@@ -428,7 +429,8 @@ public:
     coord_t i, j;
     val_t value;
     while (not input.eof()) {
-      input >> i >> j >> value;
+      // `read_value` ugliness to circumvent lack of operator>> for `int128_t`
+      input >> i >> j; read_value(input, value);
       if (0 == i and 0 == j and 0 == value)
         break; // end of matrix stream
       if (transpose)
