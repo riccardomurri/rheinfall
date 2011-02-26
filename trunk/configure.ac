@@ -2,13 +2,13 @@
 ##   aclocal -I build-aux/m4 && autoheader && autoconf && automake
 ##
 
-AC_PREREQ([2.63])
-AC_INIT([rheinfall], [0.11.26], [riccardo.murri@gmail.com])
+AC_PREREQ([2.67])
+AC_INIT([rheinfall],[0.11.26],[riccardo.murri@gmail.com])
 AC_CONFIG_SRCDIR([src.c++/rheinfall/rheinfall.hpp])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
 AM_INIT_AUTOMAKE([1.10 no-define])
-AM_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADERS([config.h])
 
 
 # Checks for programs.
@@ -153,4 +153,5 @@ AC_CONFIG_FILES([
         src.c/Makefile
         src.c/gnulib/Makefile
 ])
-AC_OUTPUT(Makefile)
+AC_CONFIG_FILES([Makefile])
+AC_OUTPUT
