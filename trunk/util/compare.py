@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 #
 """
-Import run data from irank* output.
+Import run data from rank*/lbrank* output.
 """
 __docformat__ = 'reStructuredText'
 
@@ -64,13 +64,13 @@ if options.defaults is not None:
 
 
 
-def nullable(fn):
-    def fn_or_None(x):
+def nullable(ctor):
+    def ctor_or_None(x):
         if x is None or x == '':
             return None
         else:
-            return fn(x)
-    return fn_or_None
+            return ctor(x)
+    return ctor_or_None
     
 schema = {
     'exitcode':   int,            # UNIX exit code
@@ -90,7 +90,12 @@ schema = {
     'provenance': str,            # file name where this info was extracted from
 }
 
-rank_line_re = re.compile(r'^[^ ]+/[idqz]?rank(-int|-mod|-double)?([_-]mpi|[_-]omp){0,2} file:')
+# these have been renamed over time
+translate = {
+    'time': 'cputime',
+}
+
+rank_line_re = re.compile(r'^[^ ]+/(?:[idqz]?rank(-int|-mod|-double)?([_-]mpi|[_-]omp){0,2}|lbrank_(?:bb|se_linear|se_none)) file:')
 jobid_re = re.compile(r'.[eo]([0-9]+)')
 whitespace_re = re.compile(r'\s+', re.X)
 garbage_re = re.compile(r'(MPI process \(rank: \d+\) terminated unexpectedly|\[[0-9a-z]+:\d+\] \[ *\d+\]).*')
@@ -115,9 +120,15 @@ def process_input_file(input_file_name, keys):
         # format according to schema
         outcome_is_valid = True
         for k in outcome:
-            if k in schema:
+            if k in translate:
+                k_ = translate[k]
+            else:
+                k_ = k
+            if k_ in schema:
                 try:
-                    outcome[k] = schema[k](outcome[k])
+                    outcome[k_] = schema[k_](outcome[k])
+                    if k_ != k:
+                        del outcome[k]
                 except:
                     # invalid input
                     outcome_is_valid = False
@@ -171,12 +182,12 @@ def center(text, width):
         padding = ((width - len(text)) / 2) * " "
         return  padding + text + padding
 
-hdr = ("=" * 16) + " " + (" " + ("=" * 8) + " " + ("=" * 8) + " " + ("=" * 7) + " ") * len(options.compare)
+hdr = ("=" * 24) + " " + (" " + ("=" * 8) + " " + ("=" * 8) + " " + ("=" * 7) + " ") * len(options.compare)
 print(hdr)
-print(("%-16s " % center("Matrix", 16))
+print(("%-24s " % center("Matrix", 24))
       + str.join('', [(" %25s " % center(k, 25)) for k in options.compare]))
-print((16 * '-') + " " + (" " + (25 * '-') + " ") * len(options.compare))
-print((16 * " ") + " " 
+print(('-' * 24) + " " + (" " + ('-' * 25) + " ") * len(options.compare))
+print((" " * 24) + " " 
       + (" %8s %8s %7s " % (center("A", 8), center("B", 8), center("var%", 7))) * len(options.compare))
 print(hdr)
 
@@ -233,6 +244,10 @@ for m in sorted(matrices, cmp=cmp_numerically):
         r2 = result2[m]
         for k in options.compare:
             values += ["***", "%.2f" % r2[k], ""]
-    print(("%-16s " + (" %8s %8s %7s ") * len(options.compare)) % tuple(values))
+    else:
+        # should not happen!
+        sys.stderr.write("Could not extract valid values for matrix '%s' - skipping!\n" % m)
+        continue
+    print(("%-24s " + (" %8s %8s %7s ") * len(options.compare)) % tuple(values))
 
 print(hdr)
