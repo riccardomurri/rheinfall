@@ -64,7 +64,7 @@ AM_CONDITIONAL([HAVE_MPICXX], [test "_$have_CXX_mpi" = '_yes'])
 
 
 # check for needed Boost libraries 
-BOOST_REQUIRE([1.35]) # Boost.MPI released with Boost 1.35.0
+BOOST_REQUIRE([1.45]) # Boost.MPI has issend support only starting 1.46
 BOOST_STATIC
 BOOST_SERIALIZATION
 BOOST_TEST([], 
@@ -73,15 +73,34 @@ BOOST_TEST([],
     [have_boost_test=yes])
 AM_CONDITIONAL([HAVE_BOOST_TEST], [test "_$have_boost_test" = '_yes'])
 if test "_$have_CXX_mpi" = '_yes'; then
-    if test "_$boost_major_version" = "_144"; then
-        # see: http://lists.boost.org/boost-users/2010/11/63980.php
-        AC_MSG_ERROR([There is a known issue with Boost.MPI 1.44, please use 1.43 or a later version.])
-    fi
     BOOST_MPI([], 
         [# disable MPI/C++ altogether
-            have_CXX_mpi=no;
-            AC_MSG_WARN([Could not find a usable Boost.MPI library; not compiling MPI example C++ programs.])],
-        [], 
+           have_CXX_mpi=no;
+           AC_MSG_WARN([Could not find a usable Boost.MPI library; not compiling MPI example C++ programs.])],
+        [# check for `issend`
+         AC_MSG_CHECKING([whether Boost.MPI provides the issend() function])
+         AC_LANG_PUSH([C++])
+         save_CXXFLAGS="$CXXFLAGS"
+         CXXFLAGS="$CXXFLAGS $MPI_CXXFLAGS"
+         AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+#include <boost/mpi.hpp>
+int main(int argc, char** argv) 
+{
+        boost::mpi::environment env(argc, argv);
+        boost::mpi::communicator world;
+        int i = 0;
+        world.issend(0, 0, i);
+        return 0;
+}
+                                            ])],
+                           [AC_MSG_RESULT([yes])],
+                           [# disable MPI/C++ altogether
+                            AC_MSG_RESULT([no])
+                            have_CXX_mpi=no;
+                            AC_MSG_WARN([Boost.MPI does not provide the issend() function; not compiling MPI example C++ programs.])])
+         CXXFLAGS="$save_CXXFLAGS"
+         AC_LANG_POP([C++])
+        ], 
         [$MPI_CXXFLAGS],
         [$MPI_CXXFLAGS],
         [$MPI_CXXLDFLAGS],
@@ -123,7 +142,7 @@ AM_CONDITIONAL([WITH_GE], [test "_$with_ge" = '_yes'])
 
 
 # Checks for header files.
-AC_CHECK_HEADERS([inttypes.h stdlib.h string.h])
+AC_CHECK_HEADERS([inttypes.h malloc.h stdlib.h string.h sys/time.h unistd.h])
 
 
 # Checks for typedefs, structures, and compiler characteristics.
@@ -146,7 +165,7 @@ AM_CONDITIONAL([HAVE_LONG_DOUBLE], [test "_$ac_cv_type_long_double" = '_yes'])
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
-AC_CHECK_FUNCS([memmove])
+AC_CHECK_FUNCS([backtrace backtrace_symbols_fd gettimeofday memmove])
 
 
 # Final output
