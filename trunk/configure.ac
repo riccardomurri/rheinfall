@@ -68,9 +68,9 @@ BOOST_REQUIRE([1.35]) # Boost.MPI released with Boost 1.35.0
 BOOST_STATIC
 BOOST_SERIALIZATION
 BOOST_TEST([], 
-    [have_boost_test=yes], 
     [have_boost_test=no;
-        AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])])
+        AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])],
+    [have_boost_test=yes])
 AM_CONDITIONAL([HAVE_BOOST_TEST], [test "_$have_boost_test" = '_yes'])
 if test "_$have_CXX_mpi" = '_yes'; then
     if test "_$boost_major_version" = "_144"; then
@@ -78,10 +78,10 @@ if test "_$have_CXX_mpi" = '_yes'; then
         AC_MSG_ERROR([There is a known issue with Boost.MPI 1.44, please use 1.43 or a later version.])
     fi
     BOOST_MPI([], 
-        [], 
         [# disable MPI/C++ altogether
             have_CXX_mpi=no;
             AC_MSG_WARN([Could not find a usable Boost.MPI library; not compiling MPI example C++ programs.])],
+        [], 
         [$MPI_CXXFLAGS],
         [$MPI_CXXFLAGS],
         [$MPI_CXXLDFLAGS],
