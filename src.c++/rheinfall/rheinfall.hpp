@@ -437,7 +437,9 @@ protected:
          ++it) {
       if (it->second.begin() != it->second.end()) { // non-null matrix row
         SparseRow<val_t,coord_t>* row = 
-          new SparseRow<val_t,coord_t>(it->second.begin(), it->second.end(), ncols-1);
+          SparseRow<val_t,coord_t>::new_from_range(it->second.begin(), it->second.end(), ncols-1);
+        if (NULL == row)
+          continue; // with next `it`
         const coord_t starting_column = row->first_nonzero_column();
         // commit row
         if (is_local(starting_column))
@@ -840,9 +842,6 @@ Rheinfall<val_t,coord_t>::Processor::step()
 #endif
   }
   else { // `phase == ending`: end message already received
-    // pass end message along
-    parent_.send_end(*this, column_ + 1);
-
 #ifdef WITH_MPI        
     if (outbox.size() > 0) {
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
@@ -855,6 +854,10 @@ Rheinfall<val_t,coord_t>::Processor::step()
 # endif
     };
 #endif
+
+    // pass end message along
+    parent_.send_end(*this, column_ + 1);
+
     // all done
     phase = done;
   };
