@@ -61,12 +61,18 @@ set_mpi_and_compiler_flavor () {
             export PATH=/opt/parastation/mpi2/bin:/opt/parastation/bin:$PATH
             export LD_LIBRARY_PATH=/opt/parastation/mpi2/lib:$LD_LIBRARY_PATH
             export LD_RUN_PATH=$LD_LIBRARY_PATH
+	    # apparently required for PSMPI to run,
+	    # see ChriBo's email to hpcnlist on 2011-02-09
+	    export PBS_NODEFILE=$TMPDIR/machines
             ;;
         para*mt) # systemwide Parastation w/ threads support
             pe=parastation
             export PATH=/opt/parastation/mpi2-mt/bin:/opt/parastation/bin:$PATH
             export LD_LIBRARY_PATH=/opt/parastation/mpi2-mt/lib:$LD_LIBRARY_PATH
             export LD_RUN_PATH=$LD_LIBRARY_PATH
+            # apparently required for PSMPI to run,
+            # see ChriBo's email to hpcnlist on 2011-02-09
+            export PBS_NODEFILE=$TMPDIR/machines
             ;;
         mvapich) # MVAPICH is not supported by modules, apparently
             pe=mpich_rsh

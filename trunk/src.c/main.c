@@ -393,7 +393,7 @@ main(int argc, char** argv)
       double elapsed = tdelta.tv_sec + (tdelta.tv_usec / 1000000.0);
 
       if (0 == me)
-        printf(" cputime:%.3f wctime:%.3f\n", consumed, elapsed);
+        printf(" cputime:%.6f wctime:%.6f\n", consumed, elapsed);
 
       switchboard_free(rf);
     };

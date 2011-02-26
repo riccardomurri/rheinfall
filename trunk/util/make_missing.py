@@ -15,7 +15,15 @@ import re
 import sys
 
 
-cmdline = OptionParser()
+cmdline = OptionParser("%prog [options] LISTFILE [...] : RESULTFILE [...]",
+                       description="""
+Output the list of matrices (present in LISTFILEs) that do not occur
+in any of the RESULTFILEs.
+
+LISTFILEs should list path to matrix files, 1 per line.
+
+RESULTFILEs are the output files from the Rheinfall example programs.
+""")
 cmdline.add_option('-d', '--duration', dest='duration', action='store', default="140000",
                    help="Set duration to fake for missing matrices (default: %default)")
 cmdline.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
@@ -68,9 +76,9 @@ for list_file in list_files:
 
 ## process result files
 
-rank_line_re = re.compile(r'^[^ ]+/(?P<program>[idqz]?rank(-int|-mod|-double)?([_-]mpi|[_-]omp){0,2}|lbrank_(?:bb|se_linear|se_none)) file:')
+rank_line_re = re.compile(r'^[^ ]+/(?P<program>[idqz]?rank(-int|-mod|-double)?([_-]mpi|[_-]omp){0,2}|lbrank_(?:bb|se_linear|se_none)) file:[^ ]+ ([a-z]+:[0-9]+ *)+ *((cpu|wc)?time:[0-9]+\.[0-9]+ *)+ *$')
 whitespace_re = re.compile(r'\s+', re.X)
-garbage_re = re.compile(r'(MPI process \(rank: \d+\) terminated unexpectedly|\[[0-9a-z]+:\d+\] \[ *\d+\]).*')
+garbage_re = re.compile(r'(MPI process \(rank: \d+\) terminated unexpectedly|\[[0-9a-z]+:\d+\] \[ *\d+\]|.*SIG[A-Z]+[0-9]*|/[/a-z0-9_]+: line [0-9]+: [0-9]+ Aborted|\[[a-z0-9]+:[0-9]+\] \*\*\* Process received signal).*')
 
 def process_input_file(input_file_name):
     """
