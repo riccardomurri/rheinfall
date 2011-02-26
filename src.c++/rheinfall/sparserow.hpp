@@ -69,11 +69,11 @@ namespace rheinfall {
   public:
 
     /** Construct a row with the given starting and ending column. The
-        entry at @a starting_column is set to @a leading_entry, any
+        entry at @a starting_column is set to @a leading_term, any
         other entry is null. */
     SparseRow(const coord_t starting_column, 
               const coord_t ending_column, 
-              const val_t leading_entry);
+              const val_t leading_term);
 
     /** Constructor initializing row with coordinate/value pairs
         gotten from interval [p0, p1). */
@@ -167,13 +167,12 @@ namespace rheinfall {
   inline
   SparseRow<val_t,coord_t>::SparseRow(const coord_t starting_column, 
                                       const coord_t ending_column, 
-                                      const val_t leading_entry) 
-    : Row_::Row(Row_::sparse, starting_column, ending_column),
+                                      const val_t leading_term) 
+    : Row_::Row(Row_::sparse, starting_column, ending_column, leading_term),
       storage() 
   { 
-    this->set(starting_column, leading_entry); 
+    // init-only ctor
   };
-
 
   template <typename val_t, typename coord_t>
   template <typename ForwardIter>
@@ -181,20 +180,27 @@ namespace rheinfall {
   SparseRow<val_t,coord_t>::SparseRow(ForwardIter p0,
                                       ForwardIter p1,
                                       const coord_t ending_column) 
-    : Row_::Row(Row_::sparse, 0, ending_column),
+    : Row_::Row(Row_::sparse, 0, ending_column, 0),
       storage() 
   { 
     coord_t starting_column = ending_column;
+    val_t leading_term = 0;
     for (p0; p0 != p1; ++p0) {
       const coord_t coord = p0->first;
       const val_t value = p0->second;
-      if (0 != value) {
+      assert(0 != value);
+      if (coord < starting_column) {
+        if (0 != leading_term)
+          this->set(starting_column, leading_term);
+        starting_column = coord;
+        leading_term = value;
+      }
+      else {
         this->set(coord, value);
-        if (coord < starting_column)
-          starting_column = coord;
       };
     };
     this->Row_::starting_column_ = starting_column;
+    this->Row_::leading_term_ = leading_term;
     assert(this->__ok());
   };
 
@@ -214,7 +220,7 @@ namespace rheinfall {
   template <typename val_t, typename coord_t>
   inline
   SparseRow<val_t,coord_t>::SparseRow() 
-    : Row_::Row(Row_::sparse, -1, -1),
+    : Row_::Row(Row_::sparse, -1, -1, 0),
       storage() 
   { 
     // init-only ctor
@@ -229,8 +235,9 @@ namespace rheinfall {
   {
     assert(0 <= Row_::starting_column_);
     assert(Row_::starting_column_ <= Row_::ending_column_);
+    assert(0 != Row_::leading_term_);
     // entries in `this->storage` are *always* ordered by increasing column index
-    coord_t s1 = Row_::starting_column_-1;
+    coord_t s1 = Row_::starting_column_;
     for (typename storage_t::const_iterator it = storage.begin(); 
          it < storage.end(); 
          ++it) {
@@ -249,9 +256,11 @@ namespace rheinfall {
   SparseRow<val_t,coord_t>::adjust()
   {
     if (storage.size() > 0) {
-      assert(0 != storage.front().second);
       Row_::starting_column_ = storage.front().first;
       assert(0 <= Row_::starting_column_ and Row_::starting_column_ < Row_::ending_column_);
+      Row_::leading_term_ = storage.front().second;
+      assert(0 != Row_::leading_term_);
+      storage.erase(storage.begin());
       assert(this->__ok());
       return this;
     }
@@ -281,14 +290,14 @@ namespace rheinfall {
     assert(this->starting_column_ == other->starting_column_);
 
     val_t a, b;
-    rheinfall::get_row_multipliers<val_t>(this->first_nonzero_value(),
-                                          other->first_nonzero_value(),
+    rheinfall::get_row_multipliers<val_t>(this->Row_::leading_term_,
+                                          other->Row_::leading_term_,
                                           a, b);
 
     SparseRow<val_t,coord_t>* result = NULL; // XXX: use boost::optional<...> instead?
 
-    typename storage_t::const_iterator this_i = this->storage.begin() + 1; 
-    typename storage_t::const_iterator other_i = other->storage.begin() + 1;
+    typename storage_t::const_iterator this_i = this->storage.begin(); 
+    typename storage_t::const_iterator other_i = other->storage.begin();
     // loop while one of the two indexes is still valid
     while(this_i != this->storage.end() or other_i != other->storage.end()) {
       coord_t this_col;
@@ -346,7 +355,7 @@ namespace rheinfall {
           result = new SparseRow(coord, Row_::ending_column_, entry);
           assert(storage.size() + other->storage.size() <= result->storage.max_size());
           result->storage.reserve(storage.size() + other->storage.size());
-          assert(1 == result->storage.size());
+          assert(0 == result->storage.size());
         }
         else {
           result->storage.push_back(std::make_pair(coord, entry));
@@ -373,11 +382,11 @@ namespace rheinfall {
   {
     assert(this->starting_column_ == other->starting_column_);
     assert(this->__ok());
-    assert(0 != other->first_nonzero_value());
+    assert(0 != other->leading_term_);
 
     val_t a, b;
-    rheinfall::get_row_multipliers(this->first_nonzero_value(),
-                                   other->first_nonzero_value(),
+    rheinfall::get_row_multipliers(this->Row_::leading_term_,
+                                   other->Row_::leading_term_,
                                    a, b);
 
     for (size_t j = 0; j < other->size(); ++j) 
@@ -399,6 +408,8 @@ namespace rheinfall {
   SparseRow<val_t,coord_t>::get(const coord_t col) const
   {
     assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
+    if (col == Row_::starting_column_) 
+      return Row_::leading_term_;
     if (storage.size() == 0)
       return 0;
     // else, fast-forward to place where element is/would be stored
@@ -421,6 +432,8 @@ namespace rheinfall {
   inline void
   SparseRow<val_t,coord_t>::print_on(std::ostream& out) const 
   {
+    out << "{ "
+        << Row_::starting_column_ <<":"<< Row_::leading_term_;
     for (typename storage_t::const_iterator it = storage.begin(); 
          it != storage.end(); 
          ++it) {
@@ -453,7 +466,11 @@ namespace rheinfall {
   SparseRow<val_t,coord_t>::set(const coord_t col, const val_t value) 
   {
     assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
-    // fast-forward to place where element is/would be stored
+    if (col == Row_::starting_column_) {
+      Row_::leading_term_ = value;
+      return;
+    };
+    // else, fast-forward to place where element is/would be stored
     size_t jj = 0;
     while (jj < storage.size() and storage[jj].first < col)
       ++jj;
