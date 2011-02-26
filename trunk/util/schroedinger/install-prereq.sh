@@ -297,6 +297,11 @@ if [ -n "$TCMALLOC" ]; then
     set -x
     #wget -N http://google-perftools.googlecode.com/files/google-perftools-${TCMALLOC}.tar.gz
     cd google-perftools-${TCMALLOC}
+    if [ "_$CC" = '_icc' ]; then
+        # need to downgrade CFLAGS on icc -- "-fast" breaks the build
+        cflags='-xHOST -O3'
+        cxxflags='-xHOST -O3'
+    fi
     ${src_home}/google-perftools-${TCMALLOC}/configure --prefix=${sw} \
         --enable-frame-pointers --disable-debugalloc \
         CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
