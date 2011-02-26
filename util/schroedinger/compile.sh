@@ -44,6 +44,7 @@ CXXFLAGS="$*"
 if [ -z "$CXXFLAGS" ]; then
   CXXFLAGS='-O3 -DNDEBUG'
 fi
+CFLAGS="$CXXFLAGS"
 
 
 
@@ -62,7 +63,8 @@ set -e
 rm -rf "$build_dir"
 mkdir -p "$build_dir"
 cd "$build_dir"
-$top_src_dir/configure CXXFLAGS="$CXXFLAGS $cxxflags" --with-boost=$sw --with-gmp=$sw
+$top_src_dir/configure --with-ge=yes --with-boost=$sw --with-gmp=$sw \
+    CXXFLAGS="$CXXFLAGS $cxxflags" CFLAGS="$CFLAGS $cflags"
 set +e
 make
 rc=$?
