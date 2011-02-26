@@ -37,6 +37,7 @@
 # include <gmpxx.h>
 #endif
 
+#include <cassert>
 #include <cstdlib> // std::abs
 
 

@@ -29,7 +29,11 @@
 #ifndef RHEINFALL_HPP
 #define RHEINFALL_HPP
 
+
+#include "config.hpp"
 #include "row.hpp"
+#include "sparserow.hpp"
+#include "denserow.hpp"
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -60,7 +64,11 @@ public:
               const double dense_threshold = 40.0);
 #endif // WITH_MPI
 
+    /** Destructor. When using OpenMP and MPI serialization, destroys
+        the @c mpi_send_lock_; otherwise, does nothing. */
+    ~Rheinfall();
   
+
   /** Read a matrix stream into the processors. Does not make any
       assumption on the order of entries in the input stream,
       therefore all entries have to be read into memory. Return number
@@ -220,11 +228,11 @@ protected:
     
     /** Send the termination signal to the processor owning the block
         starting at @c col. */
-    void send_end(const coord_t column) const;
+    void send_end(const Processor& origin, const coord_t column) const;
 
     /** Send the row data pointed by @c row to the processor owning the
         block starting at @c col. Frees up @c row */
-    void send_row(Row<val_t,coord_t>* row);
+    void send_row(Processor& origin, Row<val_t,coord_t>* row);
 
 #ifdef WITH_MPI
     /** Receive messages that have arrived during a computation cycle. */
@@ -233,12 +241,14 @@ protected:
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     /// Lock used to to serialize all outgoing MPI calls
     /// (receives are already done by the master thread only)
-    static omp_lock_t mpi_send_lock_;
+    // XXX: being an instance variable, this won't serialize
+    // MPI calls if there are two concurrent `Rheinfall` operating...
+    mutable omp_lock_t mpi_send_lock_;
 # endif
 #endif // WITH_MPI
 
 #ifdef _OPENMP
-    omp_lock_t stderr_lock_;
+    mutable omp_lock_t stderr_lock_;
 #endif
 
   private:
@@ -258,9 +268,9 @@ protected:
     : ncols_(ncols)
     , vpus()
 #ifdef WITH_MPI
-    , comm(MPI_COMM_WORLD, mpi::comm_attach)
-    , me_(comm.rank())
-    , nprocs_(comm.size())
+    , comm_(MPI_COMM_WORLD, mpi::comm_attach)
+    , me_(comm_.rank())
+    , nprocs_(comm_.size())
 #endif
   {  
     // setup the array of processors
@@ -274,21 +284,30 @@ protected:
   template <typename val_t, typename coord_t>
   Rheinfall<val_t,coord_t>::Rheinfall(const coord_t ncols, mpi::communicator& comm, 
                        const double dense_threshold)
-  : nrows_(nrows)
-  , ncols_(ncols)
+  : ncols_(ncols)
   , vpus()
   , comm_(comm)
   , me_(comm.rank())
   , nprocs_(comm.size())
-  , verbose_(0)
-  , iter_(0)
 {  
   // setup the array of processors
   vpus.reserve(1 + ncols_ / nprocs_);
   for (int n = 0; (me_ + n * nprocs_) < ncols_; ++n)
     vpus.push_back(new Processor(*this, me_ + n * nprocs_, ncols_-1));
+#if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+    omp_init_lock(& mpi_send_lock_); 
+#endif // _OPENMP && WITH_MPI_SERIALIZED
 };
 #endif
+
+
+  template <typename val_t, typename coord_t>
+  Rheinfall<val_t,coord_t>::~Rheinfall()
+  {
+#if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+    omp_destroy_lock(& mpi_send_lock_); 
+#endif // _OPENMP && WITH_MPI_SERIALIZED
+  };
 
   
   template <typename val_t, typename coord_t>
@@ -496,15 +515,15 @@ protected:
         while (boost::optional<mpi::status> status = comm_.iprobe()) { 
           switch(status->tag()) {
           case TAG_ROW_SPARSE: {
-            Processor::sparse_row_ptr new_row = new Processor::SparseRow();
-            comm_.recv(status->source(), status->tag(), *new_row);
+            SparseRow<val_t,coord_t>* new_row = 
+              SparseRow<val_t,coord_t>::new_from_mpi_message(comm_, status->source(), status->tag());
             assert(is_local(new_row->first_nonzero_column()));
             local_owner(new_row->first_nonzero_column()).recv_row(new_row);
             break;
           };
           case TAG_ROW_DENSE: {
-            Processor::dense_row_ptr new_row = new Processor::DenseRow();
-            comm_.recv(status->source(), status->tag(), *new_row);
+            DenseRow<val_t,coord_t>* new_row = 
+              DenseRow<val_t,coord_t>::new_from_mpi_message(comm_, status->source(), status->tag());
             assert(is_local(new_row->first_nonzero_column()));
             local_owner(new_row->first_nonzero_column()).recv_row(new_row);
             break;
@@ -580,7 +599,7 @@ protected:
 
   template <typename val_t, typename coord_t>
   inline void
-  Rheinfall<val_t,coord_t>::send_row(Row<val_t,coord_t>* row) 
+  Rheinfall<val_t,coord_t>::send_row(Processor& origin, Row<val_t,coord_t>* row) 
 {
   coord_t column = row->first_nonzero_column();
   if (is_local(column))
@@ -589,21 +608,21 @@ protected:
   else { // ship to remote process
     mpi::request req;
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-    omp_set_lock(&mpi_send_lock_);
+    omp_set_lock(& mpi_send_lock_);
 # endif
     if (row->kind == Row<val_t,coord_t>::sparse)
       req = comm_.isend(remote_owner(column), TAG_ROW_SPARSE, 
-                        *(static_cast<SparseRow*>(row)));
+                        *(static_cast<SparseRow<val_t,coord_t>*>(row)));
     else if (row->kind == Row<val_t,coord_t>::dense)
       req = comm_.isend(remote_owner(column), TAG_ROW_DENSE, 
-                        *(static_cast<DenseRow*>(row)));
+                        *(static_cast<DenseRow<val_t,coord_t>*>(row)));
     else
       // should not happen!
       throw std::logic_error("Unhandled row type in Processor::send_row()");
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-    omp_unset_lock(&mpi_send_lock_);
+    omp_unset_lock(& mpi_send_lock_);
 # endif
-    outbox.push_back(req);
+    origin.outbox.push_back(req);
     delete row; // no longer needed
   };
 #endif // WITH_MPI
@@ -612,7 +631,7 @@ protected:
 
 template <typename val_t, typename coord_t>
 inline void 
-Rheinfall<val_t,coord_t>::send_end(const coord_t column) const
+Rheinfall<val_t,coord_t>::send_end(Processor const& origin, const coord_t column) const
 {
   if (column >= ncols_)
     return;
@@ -727,7 +746,7 @@ Rheinfall<val_t,coord_t>::Processor::step()
       Row<val_t,coord_t>* new_row = u->gaussian_elimination(*it, dense_threshold_);
       // ship reduced rows to other processors
       if (NULL != new_row)
-        parent_.send_row(new_row);
+        parent_.send_row(*this, new_row);
     };
     rows.clear();
   };
@@ -737,30 +756,30 @@ Rheinfall<val_t,coord_t>::Processor::step()
 #ifdef WITH_MPI
     if (outbox.size() > 0) {
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-      omp_set_lock(&mpi_send_lock_);
+      omp_set_lock(&(parent_.mpi_send_lock_));
 # endif
       // check if some test messages have arrived
       // and free corresponding resources
       outbox.erase(mpi::test_some(outbox.begin(), outbox.end()), outbox.end());
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-      omp_unset_lock(&mpi_send_lock_);
+      omp_unset_lock(&(parent_.mpi_send_lock_));
 # endif
     };
 #endif
   }
   else { // `phase == ending`: end message already received
     // pass end message along
-    parent_.send_end(column_ + 1);
+    parent_.send_end(*this, column_ + 1);
 
 #ifdef WITH_MPI        
     if (outbox.size() > 0) {
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-      omp_set_lock(&mpi_send_lock_);
+      omp_set_lock(&(parent_.mpi_send_lock_));
 # endif
       // wait untill all sent messages have arrived
       mpi::wait_all(outbox.begin(), outbox.end());
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-      omp_unset_lock(&mpi_send_lock_);
+      omp_unset_lock(&(parent_.mpi_send_lock_));
 # endif
     };
 #endif

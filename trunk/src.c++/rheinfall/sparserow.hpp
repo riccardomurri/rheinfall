@@ -30,17 +30,18 @@
 #define RF_SPARSEROW_HPP
 
 
+#include "config.hpp"
 #include "row.hpp"
-#include "denserow.hpp"
-#include "rheinfall.hpp"
 
 #ifdef WITH_MPI
 # include <boost/mpi.hpp>
-# include <boost/optional.hpp>
+  namespace mpi = boost::mpi;
 # include <boost/serialization/access.hpp>
 # include <boost/serialization/utility.hpp>
 # include <boost/serialization/vector.hpp>
-  namespace mpi = boost::mpi;
+# ifdef WITH_GMPXX
+#  include <gmpxx_boost_serialization.hpp>
+# endif
 #endif
 
 #include <cassert>
@@ -66,9 +67,22 @@ namespace rheinfall {
   {
   public:
 
+    /** Construct a row with the given starting and ending column. The
+        entry at @a starting_column is set to @a leading_term, any
+        other entry is null. */
     SparseRow(const coord_t starting_column, 
               const coord_t ending_column, 
               const val_t leading_term);
+
+#ifdef WITH_MPI
+    /** Make a @a SparseRow instance from an MPI message payload.
+        The MPI message is identified by the triple
+        communicator/source/tag, that is passed unchanged to @c
+        boost::mpi::communicator::recv(). */
+    static
+    SparseRow<val_t,coord_t>* new_from_mpi_message(mpi::communicator& comm, 
+                                                   const int source, const int tag);
+#endif
 
     /** Return fill-in percentage, that is the number of actual
         nonzero entries divided by the number of potential entries.  */
@@ -122,11 +136,11 @@ namespace rheinfall {
     friend class DenseRow<val_t,coord_t>;
 
 #ifdef WITH_MPI
-    // serialization support
     /** Default constructor, needed by boost::serialize.
         Initializes the row with invalid values; should call
         serialize immediately after!  */
     SparseRow();
+    // serialization support
     friend class boost::serialization::access;
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version);
@@ -143,6 +157,7 @@ namespace rheinfall {
   // ------- inline methods -------
 
 #include "mathdefs.hpp"
+#include "denserow.hpp"
 
 namespace rheinfall {
 
@@ -167,14 +182,28 @@ namespace rheinfall {
     // init-only ctor
   };
 
-  // template <typename val_t, typename coord_t>
-  // inline
-  // SparseRow<val_t,coord_t>::SparseRow() 
-  //   : Row_::Row(Row_::sparse, -1, -1, 0, false),
-  //     storage() 
-  // { 
-  //   // init-only ctor
-  // };
+
+#ifdef WITH_MPI
+  template <typename val_t, typename coord_t>
+  inline
+  SparseRow<val_t,coord_t>*
+  SparseRow<val_t,coord_t>::new_from_mpi_message(mpi::communicator& comm, 
+                                                 const int source, const int tag)
+  {
+    SparseRow<val_t,coord_t>* row = new   SparseRow<val_t,coord_t>();
+    comm.recv(source, tag, row);
+    return row;
+  };
+
+  template <typename val_t, typename coord_t>
+  inline
+  SparseRow<val_t,coord_t>::SparseRow() 
+    : Row_::Row(Row_::sparse, -1, -1, 0, false),
+      storage() 
+  { 
+    // init-only ctor
+  };
+#endif // WITH_MPI
 
 
 #ifndef NDEBUG
@@ -406,8 +435,7 @@ namespace rheinfall {
     // When the class Archive corresponds to an output archive, the
     // & operator is defined similar to <<.  Likewise, when the class Archive
     // is a type of input archive the & operator is defined similar to >>.
-    ar & boost::serialization::base_object<Row>(*this) & storage;
-    initialized_ = true;
+    ar & boost::serialization::base_object<Row_>(*this) & storage;
     assert(this->__ok());
   }; // SparseRow::serialize(...)
 #endif // WITH_MPI

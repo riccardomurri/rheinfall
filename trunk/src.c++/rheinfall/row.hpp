@@ -30,12 +30,15 @@
 #define RF_ROW_HPP
 
 
+#include "config.hpp"
+
 #ifdef WITH_MPI
-# include <boost/mpi.hpp>
-# include <boost/optional.hpp>
+// class needs to be serializable for Boost.MPI to handle it
 # include <boost/serialization/access.hpp>
-  namespace mpi = boost::mpi;
-#endif
+# ifdef WITH_GMPXX
+#  include <gmpxx_boost_serialization.hpp>
+# endif
+#endif 
 
 #include <cassert>
 #include <iostream>
@@ -123,8 +126,8 @@ namespace rheinfall {
 
   // ------- inline methods -------
   
-#include "denserow.hpp"
 #include "sparserow.hpp"
+#include "denserow.hpp"
 
 namespace rheinfall {
 
