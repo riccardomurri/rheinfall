@@ -570,15 +570,8 @@ protected:
     omp_set_lock(& mpi_send_lock_);
 # endif
     if (row->kind == Row<val_t,coord_t>::sparse) {
-      SparseRow<val_t,coord_t> *s = static_cast<SparseRow<val_t,coord_t>*>(row);
-      // DEBUG
-      std::cerr << "DEBUG: MPI rank " << comm_.rank()
-                << " about to send SparseRow:"
-                << " starting_column_=" << row->starting_column_
-                << " ending_column_=" << row->ending_column_
-                << " leading_term_=" << row->leading_term_
-                << std::endl;
-      req = comm_.isend(remote_owner(column), TAG_ROW_SPARSE, *s);
+        req = comm_.isend(remote_owner(column), TAG_ROW_SPARSE, 
+                          *(static_cast<SparseRow<val_t,coord_t>*>(row)));
     }
     else if (row->kind == Row<val_t,coord_t>::dense)
       req = comm_.isend(remote_owner(column), TAG_ROW_DENSE, 
