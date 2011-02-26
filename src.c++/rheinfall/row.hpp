@@ -206,7 +206,10 @@ namespace rheinfall {
     // When the class Archive corresponds to an output archive, the
     // & operator is defined similar to <<.  Likewise, when the class Archive
     // is a type of input archive the & operator is defined similar to >>.
-    ar & starting_column_ & ending_column_ & leading_term_;
+    ar 
+      & starting_column_
+      & ending_column_ 
+      & leading_term_;
     assert(starting_column_ >= 0);
     assert(ending_column_ >= 0);
     assert (starting_column_ <= ending_column_);

@@ -569,15 +569,15 @@ protected:
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_set_lock(& mpi_send_lock_);
 # endif
-    if (row->kind == Row<val_t,coord_t>::sparse)
+    if (row->kind == Row<val_t,coord_t>::sparse) 
       req = comm_.isend(remote_owner(column), TAG_ROW_SPARSE, 
                         *(static_cast<SparseRow<val_t,coord_t>*>(row)));
     else if (row->kind == Row<val_t,coord_t>::dense)
       req = comm_.isend(remote_owner(column), TAG_ROW_DENSE, 
                         *(static_cast<DenseRow<val_t,coord_t>*>(row)));
-    else
+    else 
       // should not happen!
-      throw std::logic_error("Unhandled row type in Processor::send_row()");
+      throw std::logic_error("Unhandled row kind in Rheinfall::send_row()");
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(& mpi_send_lock_);
 # endif

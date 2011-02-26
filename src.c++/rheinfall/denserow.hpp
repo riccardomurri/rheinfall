@@ -176,7 +176,7 @@ namespace rheinfall {
                                                 const int source, const int tag)
   {
     DenseRow<val_t,coord_t>* row = new DenseRow<val_t,coord_t>();
-    comm.recv(source, tag, row);
+    comm.recv(source, tag, *row);
     return row;
   };
 

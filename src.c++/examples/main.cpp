@@ -38,6 +38,23 @@
 #ifdef WITH_MPI
 # include <boost/mpi.hpp>
   namespace mpi = boost::mpi;
+
+# include <boost/serialization/export.hpp>
+typedef rheinfall::Row<val_t,coord_t> Row_;
+typedef rheinfall::SparseRow<val_t,coord_t> SparseRow_;
+typedef rheinfall::DenseRow<val_t,coord_t> DenseRow_;
+
+// elminate serialization overhead at the cost of
+// never being able to increase the version.
+BOOST_CLASS_IMPLEMENTATION(Row_, boost::serialization::object_serializable);
+BOOST_CLASS_IMPLEMENTATION(SparseRow_, boost::serialization::object_serializable);
+BOOST_CLASS_IMPLEMENTATION(DenseRow_, boost::serialization::object_serializable);
+
+// eliminate object tracking (even if serialized through a pointer)
+// at the risk of a programming error creating duplicate objects.
+BOOST_CLASS_TRACKING(Row_, boost::serialization::track_never)
+BOOST_CLASS_TRACKING(SparseRow_, boost::serialization::track_never)
+BOOST_CLASS_TRACKING(DenseRow_, boost::serialization::track_never)
 #endif
 
 #ifdef _OPENMP
