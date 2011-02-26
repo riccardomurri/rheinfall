@@ -94,11 +94,35 @@ BOOST_MPI([],
           [# disable MPI/C++ altogether
            have_mpicxx=no;
            AC_MSG_WARN([Could not find a usable Boost.MPI library; not compiling MPI example C++ programs.])])
+BOOST_STATICASSERT
 BOOST_TEST([], 
            [have_boost_test=yes], 
            [have_boost_test=no;
             AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])])
-AM_CONDITIONAL([HAVE_BOOST_TEST], [test "x$have_boost_test" != no])
+AM_CONDITIONAL([HAVE_BOOST_TEST], [test "x$have_boost_test" != 'xno'])
+
+
+# Check for GMP/GMPXX
+AC_ARG_WITH([gmp],
+    [AS_HELP_STRING([--with-gmp=yes|no|@<:@path@:>@],
+            [Build example programs requiring the GMP library. 
+                If argument is 'yes' or empty, the library must be 
+                reachable with the standard compiler search path; 
+                otherwise the GMP include files have to be in 
+                <path>/include and the compiled library has to 
+                reside in <path>/lib.  If the argument is 'no', then
+                example programs that make use of GMP will not be built.])],
+    [ # option '--with-gmp' given
+      if test "$withval" = yes ; then :
+          # require GMP and search for it in default system paths
+          AX_CHECK_GMP
+          AX_CHECK_GMPXX
+      elif test "$withval" != no ; then :
+          AX_CHECK_GMP([], "$withval")
+          AX_CHECK_GMPXX
+      fi
+    ])
+AM_CONDITIONAL([HAVE_GMPXX], [test "x$have_gmpxx" != 'xno'])
 
 
 # check for OpenMP

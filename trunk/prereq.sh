@@ -224,7 +224,7 @@ if [ -n "$LINBOX" ]; then
     cd linbox-${LINBOX}
     ./configure --prefix=${sw} \
         ${ATLAS:+"--with-blas=${sw}/lib"} \
-        ${GMP:+"--with-gmp=${sw}/lib"} \
+        ${GMP:+"--with-gmp=${sw}"} \
         ${GIVARO:+"--with-givaro=${sw}"} \
         ;
     $concurrent_make
