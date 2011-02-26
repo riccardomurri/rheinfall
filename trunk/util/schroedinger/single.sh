@@ -26,12 +26,8 @@ flavor="${rev}-${compiler}-${mpi}"
 for prog in \
     irank \
     drank \
-    qrank \
-    zrank \
     irank-omp \
     drank-omp \
-    qrank-omp \
-    zrank-omp \
     ; 
 do
     if test ! -x "${bindir}/${prog}"; then

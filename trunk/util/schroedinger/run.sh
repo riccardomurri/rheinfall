@@ -166,10 +166,10 @@ export LD_PRELOAD
 ulimit -c 0
 
 case "$exec" in
-    *rank|*rank-omp) # no MPI... just run it!
+    *rank|*rank-omp|*rank-homo|*rank-homo-omp) # no MPI... just run it!
         $exec "$@"
         ;;
-    *rank-mpi) # pure MPI
+    *rank-mpi|*rank-homo-mpi) # pure MPI
         case "$mpi" in 
             none) $exec "$@" ;;
             ompi) mpirun -np $NSLOTS --bynode --nooversubscribe --bind-to-core \
@@ -182,7 +182,7 @@ case "$exec" in
                 $exec "$@" ;;
         esac
         ;;
-    *rank-mpi-omp) # hybrid MPI+OpenMP
+    *rank-mpi-omp|*rank-homo-mpi-omp) # hybrid MPI+OpenMP
         np=$(expr $NSLOTS / $cpus_per_node)
         case "$mpi" in 
             none) $exec "$@" ;;
