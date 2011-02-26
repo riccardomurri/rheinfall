@@ -83,12 +83,11 @@ PYTHONPATH=${sw}/lib/python
 # misc
 concurrent_make="make -j $(grep -c '^processor' /proc/cpuinfo)"
 
-if grep -q '^cpu MHz' /proc/cpuinfo; then
-    mhz=`grep '^cpu MHz' /proc/cpuinfo | head -1 | cut -d: -f2 | cut -d. -f1 | tr -d ' '`
-else
-    bogomips=`fgrep bogomips /proc/cpuinfo | head -1 | cut -d: -f2 | cut -d. -f1`
-    mhz=`expr $bogomips / 2`
-fi
+# the `cpu MHz` line in /proc/cpuinfo states the *current* CPU clock,
+# whereas "bogomips" is approximately twice the maximal clock on all Intel/AMD CPUs,
+# see: http://tldp.org/HOWTO/BogoMips/bogo-faq.html#AEN192
+bogomips=`fgrep bogomips /proc/cpuinfo | head -1 | cut -d: -f2 | cut -d. -f1`
+mhz=`expr $bogomips / 2`
 
 case `uname -m` in
         i?86) bits=32 ;;
