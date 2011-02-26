@@ -284,9 +284,7 @@ if [ -n "$BOOST" ]; then
 # told to by the following line:
 using mpi : mpicxx ;
 EOF
-    # first, need to build `bjam`
-    (cd tools/jam/src; sh ./build.sh)
-    # then, build Boost with the new `bjam`
+    # build Boost with the new `bjam`
     PATH=$(pwd)/tools/jam/src/bin.$(uname -s | tr A-Z a-z)$(uname -m):$PATH
     export PATH
     ./bjam --prefix=${sw} threading=multi variant=release install
