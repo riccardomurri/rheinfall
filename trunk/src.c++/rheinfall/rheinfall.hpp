@@ -72,50 +72,44 @@ public:
   /** Read a matrix stream into the processors. Does not make any
       assumption on the order of entries in the input stream,
       therefore all entries have to be read into memory. Return number
-      of nonzero entries _read_.  If arguments @a nrows and @a ncols
-      are null, then the first line read from stream @a input is
-      assumed to be a header line, from which the number of rows and
-      columns is extracted (and returned in @a nrows and @a ncols);
-      otherwise, if @a nrows is not zero, no header line is read and
-      @a nrows, @a ncols must contain the exact number of rows and
-      columns in the matrix.  If @c transpose is @c true, then row and
-      column values read from the stream are exchanged, i.e., the
-      transpose of the matrix is read into memory. */
-    coord_t read(std::istream& input, coord_t& nrows, coord_t& ncols, 
-                 const bool transpose=false);
+      of nonzero entries _read_.  
 
-  /** Read a matrix stream into the processors. Assumes that entries
-      belonging to one row are not interleaved with entries from other
-      rows; i.e., that it can consider reading row @i i complete as
-      soon as it finds a row index @i j != i. Return number of nonzero
-      entries _read_. If arguments @a nrows and @a ncols
-      are null, then the first line read from stream @a input is
-      assumed to be a header line, from which the number of rows and
-      columns is extracted (and returned in @a nrows and @a ncols);
-      otherwise, if @a nrows is not zero, no header line is read and
-      @a nrows, @a ncols must contain the exact number of rows and
-      columns in the matrix.  If @c transpose is @c true, then row and column
-      values read from the stream are exchanged, i.e., the transpose
-      of the matrix is read into memory. */
-    coord_t read_noninterleaved(std::istream& input, coord_t& nrows, coord_t& ncols, 
-                                const bool transpose=false);
-
-#ifdef WITH_MPI
-  /** Read a matrix stream into the processors. This should be run
-      from one MPI rank only: it will then distribute the data to
-      other MPI ranks. Return total number of nonzero entries read.
       If arguments @a nrows and @a ncols are null, then the first line
       read from stream @a input is assumed to be a header line, from
       which the number of rows and columns is extracted (and returned
       in @a nrows and @a ncols); otherwise, if @a nrows is not zero,
       no header line is read and @a nrows, @a ncols must contain the
-      exact number of rows and columns in the matrix.  If @c transpose
-      is @c true, then row and column values read from the stream are
-      exchanged, i.e., the transpose of the matrix is read into memory. */
-    coord_t read_and_distribute(std::istream& input, coord_t& nrows, coord_t& ncols, 
-                                const bool transpose=false) 
-    { throw "not implemented"; };
-#endif
+      exact number of rows and columns in the matrix.
+
+      If @c local_only is @c true (default), only rows assigned to the
+      local MPI rank are retained and other are discarded.  If @c
+      local_only is @c false, rows are sent to the destination MPI
+      rank as soon as they are read; only one rank should do the I/O.
+
+      If @c transpose is @c true, then row and column values read from
+      the stream are exchanged, i.e., the transpose of the matrix is
+      read into memory. */
+    coord_t read(std::istream& input, coord_t& nrows, coord_t& ncols, 
+                 const bool local_only=true, const bool transpose=false);
+
+  /** Read a matrix stream into the processors. Assumes that entries
+      belonging to one row are not interleaved with entries from other
+      rows; i.e., that it can consider reading row @i i complete as
+      soon as it finds a row index @i j != i. Return number of nonzero
+      entries _read_. 
+
+      If arguments @a nrows and @a ncols are null, then the first line
+      read from stream @a input is assumed to be a header line, from
+      which the number of rows and columns is extracted (and returned
+      in @a nrows and @a ncols); otherwise, if @a nrows is not zero,
+      no header line is read and @a nrows, @a ncols must contain the
+      exact number of rows and columns in the matrix.
+
+      If @c transpose is @c true, then row and column values read from
+      the stream are exchanged, i.e., the transpose of the matrix is
+      read into memory. */
+    coord_t read_noninterleaved(std::istream& input, coord_t& nrows, coord_t& ncols, 
+                                const bool transpose=false);
 
   /** Return rank of matrix after in-place destructive computation. */
   coord_t rank();
@@ -232,7 +226,7 @@ protected:
 
     /** Send the row data pointed by @c row to the processor owning the
         block starting at @c col. Frees up @c row */
-    void send_row(Processor& origin, Row<val_t,coord_t>* row);
+    void send_row(Processor& source, Row<val_t,coord_t>* row);
 
 #ifdef WITH_MPI
     /** Receive messages that have arrived during a computation cycle. */
@@ -317,7 +311,7 @@ protected:
                                                 const bool transpose) 
   {
     // count non-zero items read
-    long nnz = 0;
+    coord_t nnz = 0;
     
     // only read rows whose leading column falls in our domain
     SparseRow<val_t,coord_t>* row = new SparseRow<val_t,coord_t>(ncols_ - 1);
@@ -374,7 +368,7 @@ protected:
   template <typename val_t, typename coord_t>
   coord_t
   Rheinfall<val_t,coord_t>::read(std::istream& input,  coord_t& nrows, coord_t& ncols, 
-                                 const bool transpose) 
+                                 const bool local_only, const bool transpose)
   {
     if (0 == nrows) {
       // read header
@@ -387,7 +381,7 @@ protected:
     };
     
     // count non-zero items read
-    size_t nnz = 0;
+    coord_t nnz = 0;
     
     // need to keep rows in memory until we reach end of file
     _rowmap_t rows;
@@ -415,6 +409,9 @@ protected:
       rows[i]->set(j, value);
     }; // while(not eof)
 
+#ifdef WITH_MPI
+    std::list< mpi::request > outbox;
+#endif
     for (typename _rowmap_t::const_iterator it = rows.begin(); it != rows.end(); ++it) {
       // set correct starting columns and leading term
       SparseRow<val_t,coord_t>* row = it->second->adjust();
@@ -423,12 +420,30 @@ protected:
         // commit row
         if (is_local(starting_column))
           local_owner(starting_column).recv_row(row);
-        else 
+        else {
+#ifdef WITH_MPI
+          if (not local_only) {
+            mpi::request req;
+# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+            omp_set_lock(& mpi_send_lock_);
+# endif 
+            req = comm_.isend(remote_owner(starting_column), TAG_ROW_SPARSE, row);
+# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+            omp_unset_lock(& mpi_send_lock_);
+# endif
+            outbox.push_back(req);
+          }; // if not local_only
+#endif // WITH_MPI
           // discard non-local and null rows
           delete row;
-      };
+        }; // ! is_local(starting_column)
+      }; // row != NULL 
     }; // for (it = rows.begin(); ...)
     
+#ifdef WITH_MPI
+    // wait for all sent rows to arrive
+    mpi::wait_all(outbox.begin(), outbox.end());
+#endif
     return nnz;
   };
 
@@ -599,7 +614,7 @@ protected:
 
   template <typename val_t, typename coord_t>
   inline void
-  Rheinfall<val_t,coord_t>::send_row(Processor& origin, Row<val_t,coord_t>* row) 
+  Rheinfall<val_t,coord_t>::send_row(Processor& source, Row<val_t,coord_t>* row) 
 {
   coord_t column = row->first_nonzero_column();
   if (is_local(column))
@@ -622,7 +637,7 @@ protected:
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(& mpi_send_lock_);
 # endif
-    origin.outbox.push_back(req);
+    source.outbox.push_back(req);
     delete row; // no longer needed
   };
 #endif // WITH_MPI
