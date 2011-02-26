@@ -94,7 +94,8 @@ namespace rheinfall {
       return out;
     };
 
-  protected:
+    //protected:
+  public:
     coord_t starting_column_; // would-be `const`: can only be modified by ctor and serialization
     coord_t ending_column_; // would-be `const`: can only be modified by ctor and serialization
     val_t leading_term_; // would-be `const`: can only be modified by ctor and serialization

@@ -425,7 +425,9 @@ protected:
     // collect (partial) ranks
     std::vector<int> r(vpus.size(), 0);
     size_t n0 = 0;
-
+    
+    int iter = 0;
+    
 #ifdef _OPENMP
     const size_t M = omp_get_max_threads();
     // initial chunk_size
@@ -517,11 +519,13 @@ protected:
             comm_.recv(status->source(), status->tag(), column);
             assert(column >= 0 and is_local(column));
             local_owner(column).end_phase();
+            break;
           };
           }; // switch(status->tag())
         }; // while(iprobe)
 #endif
       }; // if (n0 < vpus.size())
+      iter++;
     }; // while(n0 < vpus.size())
 
     // the partial rank is computed as the sum of all ranks computed
@@ -648,7 +652,7 @@ Rheinfall<val_t,coord_t>::send_end(const coord_t column) const
 #ifdef _OPENMP
         runtime(0),
 #endif
-        dense_threshold_(dense_threshold_)
+        dense_threshold_(dense_threshold)
     { 
 #ifdef _OPENMP
       omp_init_lock(&inbox_lock_);
@@ -664,8 +668,8 @@ Rheinfall<val_t,coord_t>::Processor::~Processor()
 #endif
       if (NULL != u)
         delete u;
-      assert(rows.size() == 0);
-      assert(inbox.size() == 0);
+      assert(rows.empty());
+      assert(inbox.empty());
 }
 
 
@@ -673,6 +677,10 @@ Rheinfall<val_t,coord_t>::Processor::~Processor()
   inline void 
   Rheinfall<val_t,coord_t>::Processor::recv_row(Row<val_t,coord_t>* new_row) 
   {
+    assert(running == phase);
+    assert((Row<val_t,coord_t>::sparse == new_row->kind 
+            or Row<val_t,coord_t>::dense == new_row->kind)
+           and (column_ == new_row->starting_column_));
 #ifdef _OPENMP
     omp_set_lock(&inbox_lock_);
 #endif
@@ -698,6 +706,7 @@ Rheinfall<val_t,coord_t>::Processor::step()
   omp_set_lock(&inbox_lock_);
 #endif
   std::swap(inbox, rows);
+  assert(inbox.empty());
 #ifdef _OPENMP
   omp_unset_lock(&inbox_lock_);
 #endif
@@ -708,7 +717,7 @@ Rheinfall<val_t,coord_t>::Processor::step()
     rows.pop_front();
   }
           
-  if (rows.size() > 0) {
+  if (not rows.empty()) {
     assert (NULL != u);
     for (typename row_list::iterator it = rows.begin(); it != rows.end(); ++it) {
       if ((*it)->size() < u->size())
@@ -722,6 +731,7 @@ Rheinfall<val_t,coord_t>::Processor::step()
     };
     rows.clear();
   };
+  assert(rows.empty());
 
   if (running == phase) {
 #ifdef WITH_MPI
