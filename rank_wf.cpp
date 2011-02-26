@@ -50,6 +50,7 @@
 #include <boost/serialization/utility.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/variant.hpp>
+#include <boost/variant/get.hpp>
 namespace mpi = boost::mpi;
 
 
@@ -67,10 +68,7 @@ class Waterfall {
 public:
   /** Constructor, taking row and column dimension; uses the @c boost::mpi
       default communicator (@c MPI_COMM_WORLD ). */
-  Waterfall(const coord_t nrows, const coord_t ncols)
-    : comm(mpi::communicator()), mpi_id(comm.rank()), mpi_nprocs(comm.size()), procs(),
-      nrows(nrows), ncols(ncols)
- {  };
+  Waterfall(const coord_t nrows, const coord_t ncols);
   
   /** Read a matrix stream into the processors. Assumes that entries
       belonging to one row are not interleaved with entries from other
@@ -97,11 +95,11 @@ private:
   const int mpi_id; /**< MPI rank. */
   const int mpi_nprocs; /**< Total number of ranks in MPI communicator. */
   
-  std::vector<Processor*> procs;   /**< Local processors. */
-
   const coord_t nrows;
   const coord_t ncols;
   
+  std::vector<Processor*> procs;   /**< Local processors. */
+
 protected:
   // implement cyclic distribution of columns to MPI ranks
   bool is_local(const coord_t c) const; 
@@ -128,6 +126,12 @@ protected:
     typedef SparseRow* sparse_row_ptr;
     typedef DenseRow* dense_row_ptr;
     typedef boost::variant< sparse_row_ptr,dense_row_ptr > row_ptr;
+#ifndef NDEBUG
+    static sparse_row_ptr __get_sparse_row_ptr(row_ptr r) {
+      return boost::get<sparse_row_ptr,sparse_row_ptr,dense_row_ptr>(r); };
+    static dense_row_ptr __get_dense_row_ptr(row_ptr r) { 
+      return boost::get<dense_row_ptr,sparse_row_ptr,dense_row_ptr>(r); };
+#endif
 
   protected:     
     Waterfall& parent;
@@ -177,6 +181,8 @@ protected:
       size_t size() const;
       /** Return a reference to the element stored at column @c col */
       val_t& operator[](const coord_t col);
+      /** Return a copy of the element stored at column @c col */
+      const val_t operator[](const coord_t col) const;
       /** Perform Gaussian elimination: sum a multiple of this row and
           (a multiple of) row @c r so that the combination has its
           first nonzero entry at a column index strictly larger than
@@ -219,6 +225,8 @@ protected:
       size_t size() const;
       /** Return a reference to the element stored at column @c col */
       val_t& operator[](const coord_t col);
+      /** Return a copy of the element stored at column @c col */
+      const val_t operator[](const coord_t col) const;
       dense_row_ptr gaussian_elimination(const sparse_row_ptr other);
       dense_row_ptr gaussian_elimination(const dense_row_ptr other);
     protected:
@@ -233,6 +241,9 @@ protected:
       // serialization support (needed for MPI)
       friend class boost::serialization::access;
       template<class Archive> void serialize(Archive& ar, const unsigned int version);
+      /** Adjust @c _size and @c starting_column to reflect the actual
+          contents of the stored row. */
+      size_t _resize();
     }; // class DenseRow
 
   public: 
@@ -252,6 +263,12 @@ protected:
     /** Make a pass over the block of rows and return either 0 or 1
         (depending whether elimination took place or not). */
     int step();
+    class __delete_row 
+      : public boost::static_visitor<void> {
+    public:
+      void operator() (sparse_row_ptr& r) const;
+      void operator() (dense_row_ptr& r) const;
+    }; // class __delet_row
     class __first_nonzero_column 
       : public boost::static_visitor<coord_t> {
     public:
@@ -317,6 +334,19 @@ val_t gcd(long long const n, long long const m)
 // local classes cannot be used as template argument; therefore we
 // need to declare visitors for use with boost::variant at top-level
 // :-(
+
+inline void
+Waterfall::Processor::__delete_row::operator() (sparse_row_ptr& r) const 
+{
+  delete r;
+};
+
+inline void
+Waterfall::Processor::__delete_row::operator() (dense_row_ptr& r) const 
+{
+  delete r;
+};
+
 
 Waterfall::Processor::__ge_op::__ge_op(const coord_t starting_column_, 
                                        const coord_t ending_column_, 
@@ -386,7 +416,7 @@ Waterfall::Processor::__row_size::operator() (const sparse_row_ptr& r) const
   return r->size();
 };
 
-size_t 
+inline size_t 
 Waterfall::Processor::__row_size::operator() (const dense_row_ptr& r) const 
 {
   return r->size();
@@ -401,19 +431,29 @@ inline mpi::request
 Waterfall::Processor::__sender::operator() (sparse_row_ptr& r) const
 {
   return wf.comm.isend(wf.remote_owner(column), TAG_ROW_SPARSE, r);
-  delete r;
 };
 
 inline mpi::request 
 Waterfall::Processor::__sender::operator() (dense_row_ptr& r) const
 {
   return wf.comm.isend(wf.remote_owner(column), TAG_ROW_DENSE, r);
-  delete r;
 };
 
 
 
 // ------- Waterfall -------
+
+Waterfall::Waterfall(const coord_t nrows, const coord_t ncols)
+  : comm(mpi::communicator()), mpi_id(comm.rank()), mpi_nprocs(comm.size()),
+    nrows(nrows), ncols(ncols),
+    procs()
+{  
+  // setup the array of processors
+  procs.reserve(1 + ncols / mpi_nprocs);
+  for (int n = 0; n < 1 + (ncols / mpi_nprocs); ++n)
+    procs.push_back(new Processor(*this, mpi_id + n * mpi_nprocs, ncols-1));
+};
+
 
 size_t
 Waterfall::read_noninterleaved(std::istream& input) 
@@ -443,22 +483,26 @@ Waterfall::read_noninterleaved(std::istream& input)
              it != row.end();
              ++it)
           if (it->first < starting_column)
-              starting_column = it->first;
+            starting_column = it->first;
         // commit row
-        Processor::SparseRow* r = new Processor::SparseRow(starting_column, ncols);
-        for (std::vector< std::pair<coord_t,val_t> >::const_iterator it = row.begin();
-             it != row.end();
-             ++it)
-          {
-            (*r)[it->first] = it->second;
-          }; // for it = row.begin()
-        boost::variant<Processor::SparseRow*,Processor::DenseRow*> r_(r);
-        local_owner(starting_column).recv_row(r_);
+        if (starting_column < ncols // otherwise, row is empty -- ignore it
+            and is_local(starting_column)) {
+          Processor::SparseRow* r = new Processor::SparseRow(starting_column, ncols-1);
+          for (std::vector< std::pair<coord_t,val_t> >::const_iterator it = row.begin();
+               it != row.end();
+               ++it)
+            {
+              (*r)[it->first] = it->second;
+            }; 
+          boost::variant<Processor::SparseRow*,Processor::DenseRow*> r_(r);
+          local_owner(starting_column).recv_row(r_);
+        }; // if is_local(starting_column)
         row.clear();
         current_row_index = i;
-      }; // it i != current_row_index
+      }; // if i != current_row_index
+      row.push_back(std::make_pair(j, value));
     }; // while (! eof)
-
+    
     return nnz;
 };
 
@@ -466,14 +510,18 @@ Waterfall::read_noninterleaved(std::istream& input)
 int 
 Waterfall::rank() 
 {
-  // setup the array of processors
-  for (int n = 0; n < 1 + (nrows / mpi_nprocs); ++n)
-    procs.push_back(new Processor(*this, mpi_id + n * mpi_nprocs, ncols));
-  std::vector<int> r(0);
-  for (size_t n0 = 0; n0 < procs.size(); 
-       /* n0 incremented each time a processor goes into `done` state */ ) {
-    if (procs[n0]->is_done())
+  // kickstart termination signal
+  if (is_local(0))
+    local_owner(0).end_phase();
+  // collect (partial) ranks
+  std::vector<int> r(procs.size(), 0);
+  size_t n0 = 0;
+  while(true) {
+    // n0 incremented each time a processor goes into `done` state 
+    while (procs[n0]->is_done())
       ++n0;
+    if (procs.size()-1 == n0)
+      break;
     // step all processors
     for (size_t n = n0; n < procs.size(); ++n) {
       r[n] = procs[n]->step();
@@ -557,6 +605,14 @@ Waterfall::Processor::recv_row(row_ptr& new_row)
 {
   // FIXME: requires locking for MT operation
   inbox.push_back(new_row);
+  // DEBUG
+  sparse_row_ptr r = __get_sparse_row_ptr(new_row);
+  std::cerr << "DEBUG: Processor " <<this 
+            << " received row"
+            << " of size " << r->size()
+            << " starting at column " << r->first_nonzero_column()
+            << " (sparse_row_ptr " <<r<< ")"
+            << std::endl;
 };
 
 
@@ -577,14 +633,15 @@ int
 Waterfall::Processor::step() 
 {
   assert(not is_done()); // cannot be called once finished
+  std::cerr << "DEBUG: stepping Processor " << this << std::endl;
 
-  // get row size with boost::variant
-  class _row_size {
+  // delete row with boost::variant
+  class _delete_row {
   public:
-    size_t operator() (row_ptr& r) const {
-      return boost::apply_visitor(__row_size(), r);
+    void operator() (row_ptr& r) {
+      return boost::apply_visitor(__delete_row(), r);
     };
-  } row_size; 
+  } delete_row;
 
   // get first nonzero column with boost::variant
   class _first_nonzero_column {
@@ -594,26 +651,35 @@ Waterfall::Processor::step()
     };
   } first_nonzero_column;
 
+  // get row size with boost::variant
+  class _row_size {
+  public:
+    size_t operator() (row_ptr& r) const {
+      return boost::apply_visitor(__row_size(), r);
+    };
+  } row_size; 
+
   // receive new rows
   for (inbox_t::iterator it = inbox.begin(); it != inbox.end(); ++it) {
     row_ptr new_row = *it;
     rows.push_back(new_row);
-    if (row_size(new_row) < row_size(rows[0]))
+    if (row_size(new_row) < row_size(rows.front()))
       // less nonzero entries: we have a new leading row
-      std::swap(rows[0], rows[rows.size()-1]);
+      std::swap(rows.front(), rows.back());
   };
   inbox.clear();
           
   if (rows.size() > 0) {
     row_ptr first = rows[0];
-    for (block::iterator second = rows.begin()+1; second != rows.end(); ++second) {
+    for (block::iterator second = rows.begin()+1; second < rows.end(); ++second) {
       // perform elimination
       row_ptr new_row = gaussian_elimination(first, *second);
           
       // ship reduced rows to other processors
       if (row_size(new_row) > 0) {
         send_row(first_nonzero_column(new_row), new_row);
-      };
+      }
+      delete_row(new_row);
     };
     // just keep the "first" row
     rows.clear();
@@ -629,17 +695,19 @@ Waterfall::Processor::step()
   }
   else { // `phase == ending`: end message already received
     // pass end message along
-    send_end(starting_column + 1);
+    if (starting_column < ending_column)
+      send_end(starting_column + 1);
         
     if (outbox.size() > 0) {
       // wait untill all sent messages have arrived
       mpi::wait_all(outbox.begin(), outbox.end());
     };
         
-    // all done, exit with 0 only if we never processed any row
+    // all done
     phase = done;
   };
       
+  // exit with 0 only if we never processed any row
   assert(rows.size() <= 1);
   return rows.size();
 };
@@ -683,8 +751,8 @@ Waterfall::Processor::gaussian_elimination(const row_ptr first, row_ptr second) 
 inline coord_t 
 Waterfall::Processor::SparseRow::first_nonzero_column() const 
 {
-  assert(storage.size() > 0);
-  return storage.back().first;
+  assert(0 != leading_term);
+  return starting_column;
 };
 
 inline size_t 
@@ -694,43 +762,10 @@ Waterfall::Processor::SparseRow::size() const
 };
 
 
-inline val_t& 
-Waterfall::Processor::SparseRow::operator[](const coord_t col) 
-{
-#ifndef NDEBUG
-  if (col < starting_column or col > ending_column)
-    throw std::out_of_range("DenseRow::operator[] was passed a column index out of valid range");
-#endif
-  if (col == starting_column) 
-    return leading_term;
-  // else, fast-forward to place where element is/would be stored
-  int jj = storage.size() - 1;
-  while (jj >= 0 and storage[jj].first < col)
-    --jj;
-  if (0 > jj) {
-    // end of list reached, `col` is larger than any index in this row
-    storage.insert(storage.begin(), std::make_pair<size_t,val_t>(col,0));
-    return storage[0].second;
-  }
-  else if (col == storage[jj].first) 
-    return storage[jj].second;
-  else { // storage[jj].first > j > storage[jj+1].first
-    // insert new pair before `jj+1`
-    storage.insert(storage.begin()+jj+1, 
-                   std::make_pair<size_t,val_t>(col,0));
-    return storage[jj+1].second;
-  };
-}; // SparseRow::operator[](...)
-
-
 Waterfall::Processor::sparse_row_ptr 
 Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) 
 {
   assert(this->starting_column == other->starting_column);
-
-  sparse_row_ptr result = new SparseRow(starting_column, ending_column);
-  // XXX: is it worth to compute the exact size here?
-  result->storage.reserve(storage.size() + other->storage.size());
 
   // compute:
   //   `a`: multiplier for `this` row
@@ -739,43 +774,78 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other)
   val_t a = - (other->leading_term / GCD);
   val_t b = leading_term / GCD;
 
-  size_t ix = 0;
-  size_t iy = 0;
-  // loop while one of the two indexes is still valid
-  while(ix < storage.size() or iy < other->storage.size()) {
-    coord_t jx;
-    if (ix < storage.size()) {
-      jx = storage[ix].first;
-      assert (jx > starting_column);
-    }
-    else // ix reached end of vector
-      jx = -1;
+  sparse_row_ptr result = NULL; // XXX: use boost::optional<...> instead?
 
-    coord_t jy;
-    if (iy < other->storage.size()) {
-      jy = other->storage[iy].first;
-      assert (jy > other->starting_column);
+  storage_t::const_iterator this_i = this->storage.begin(); 
+  storage_t::const_iterator other_i = other->storage.begin();
+  // loop while one of the two indexes is still valid
+  while(this_i != this->storage.end() or other_i != other->storage.end()) {
+    coord_t this_col;
+    if (this_i != this->storage.end()) {
+      this_col = this_i->first;
+      assert (this_col > this->starting_column);
+    }
+    else // this_i reached end of vector, use out-of-range value
+      this_col = this->ending_column + 1;
+
+    coord_t other_col;
+    if (other_i != other->storage.end()) {
+      other_col = other_i->first;
+      assert (other_col > other->starting_column);
     }
     else 
-      jy = -1;
+      other_col = other->ending_column + 1;
 
-    if (jy > jx) {
-      result->storage.push_back(std::make_pair(jy, b*other->storage[iy].second));
-      ++iy;
+    bool nonzero_found = false;
+    coord_t coord;
+    val_t entry;
+    if (other_col < this_col) {
+      entry = b * other_i->second;
+      if (0 != entry) {
+        coord = other_col;
+        nonzero_found = true;
+      };
+      ++other_i;
     }
-    else if (jy == jx) {
-      result->storage.push_back(std::make_pair(jx, a*storage[ix].second 
-                                               + b*other->storage[iy].second));
-      ++ix;
-      ++iy;
+    else if (other_col == this_col) {
+      entry = a * this_i->second + b * other_i->second;
+      if (0 != entry) {
+        coord = this_col;
+        nonzero_found = true;
+      };
+      ++this_i;
+      ++other_i;
     }
-    else if (jy < jx) {
-      result->storage.push_back(std::make_pair(jx, a*storage[ix].second));
-      ++ix;
+    else if (other_col > this_col) {
+      entry = a * this_i->second;
+      if (0 != entry) {
+        coord = this_col;
+        nonzero_found = true;
+      };
+      ++this_i;
     };
-  };
+    
+    if (nonzero_found) {
+      // XXX: the following code makes assumptions about how the
+      // storage is organised within `SparseRow`; it duplicates code
+      // from SparseRow::operator[] for efficiency
+      if (NULL == result) {
+        // allocate new SparseRow
+        result = new SparseRow(coord, ending_column);
+        result->leading_term = entry;
+        result->storage.reserve(storage.size() + other->storage.size());
+      }
+      else {
+        // FIXME: change storage order so that this is push_back()!
+        result->storage.insert(result->storage.begin(), std::make_pair(coord, entry));
+      }; 
+    }; 
+  }; // while(this_i < storage.rend() ...)
   delete other; // release old storage
-  return result;
+  if (NULL == result) // row full of zeroes
+    return new SparseRow(ending_column, ending_column);
+  else
+    return result;
 }; // sparse_row_ptr gaussian_elimination(sparse_row_ptr r)
 
 
@@ -791,16 +861,67 @@ Waterfall::Processor::SparseRow::gaussian_elimination(dense_row_ptr other)
 
   for (size_t j = 0; j < other->size(); ++j) 
     other->storage[j] *= b;
-
   for (storage_t::const_iterator it = storage.begin();
        it != storage.end();
        ++it)
     {
-      assert(it->first > starting_column);
+      assert(it->first > starting_column and it->first <= ending_column);
       other->storage[it->first] += a*it->second;
     };
+
+  other->_resize(); // content update done, adjust size and starting column
   return other;
 }; // dense_row_ptr gaussian_elimination(dense_row_ptr other)
+
+
+inline val_t& 
+Waterfall::Processor::SparseRow::operator[](const coord_t col) 
+{
+  assert(col >= starting_column and col <= ending_column);
+  if (col == starting_column) 
+    return leading_term;
+  // else, fast-forward to place where element is/would be stored
+  size_t jj = 0;
+  while (jj < storage.size() and storage[jj].first < col)
+    ++jj;
+  if (storage.size() == jj) {
+    // end of list reached, `col` is larger than any index in this row
+    storage.push_back(std::make_pair<size_t,val_t>(col,0));
+    return storage.back().second;
+  }
+  else if (col == storage[jj].first) 
+    return storage[jj].second;
+  else { // storage[jj].first > j > storage[jj+1].first
+    // insert new pair before `jj+1`
+    storage.insert(storage.begin()+jj+1, 
+                   std::make_pair<size_t,val_t>(col,0));
+    return storage[jj+1].second;
+  };
+}; // SparseRow::operator[](...)
+
+
+inline const val_t
+Waterfall::Processor::SparseRow::operator[](const coord_t col) const
+{
+  assert(col >= starting_column and col <= ending_column);
+  if (col == starting_column) 
+    return leading_term;
+  if (storage.size() == 0)
+    return 0;
+  // else, fast-forward to place where element is/would be stored
+  size_t jj = 0;
+  while (jj < storage.size() and storage[jj].first < col)
+    ++jj;
+  if (storage.size() == jj) {
+    // end of list reached, `col` is larger than any index in this row
+    return 0;
+  }
+  else if (col == storage[jj].first) 
+    return storage[jj].second;
+  else { // storage[jj].first > j > storage[jj+1].first
+    return 0;
+  };
+}; // SparseRow::operator[](...) const 
 
 
 template<class Archive>
@@ -867,32 +988,8 @@ Waterfall::Processor::DenseRow::~DenseRow()
 inline coord_t 
 Waterfall::Processor::DenseRow::first_nonzero_column() const 
 {
-  assert(_size > 0);
-  for (size_t j = 0; j < _size; ++j)
-    if (storage[j] != 0)
-      return starting_column + j;
-  assert(false); // `first_nonzero_column` should not be called on zero rows
-};
-
-
-inline size_t 
-Waterfall::Processor::DenseRow::size() const 
-{ 
-  return _size; 
-};
-
-
-val_t& 
-Waterfall::Processor::DenseRow::operator[](const coord_t col) 
-{
-#ifndef NDEBUG
-  if (col < starting_column or col > ending_column)
-    throw std::out_of_range("DenseRow::operator[] was passed a column index out of valid range");
-#endif
-  if (col == starting_column)
-    return leading_term;
-  else
-    return storage[col];
+  assert (0 != leading_term);
+  return starting_column;
 };
 
 
@@ -918,13 +1015,59 @@ Waterfall::Processor::DenseRow::gaussian_elimination(const dense_row_ptr other)
   const val_t GCD = gcd(leading_term, other->leading_term);
   val_t a = - (other->leading_term / GCD);
   val_t b = leading_term / GCD;
+
   for (size_t j = 0; j < size(); ++j) {
     // XXX: is it faster to allocate new storage and fill it with `a*x+b*y`?
     other->storage[j] *= a;
     other->storage[j] += b * storage[j];
   };
+  other->_resize(); // update done, adjust size and string column
   return other;
 }; // dense_row_ptr gaussian_elimination(dense_row_ptr other)
+
+
+inline val_t& 
+Waterfall::Processor::DenseRow::operator[](const coord_t col) 
+{
+#ifndef NDEBUG
+  if (col < starting_column or col > ending_column)
+    throw std::out_of_range("DenseRow::operator[] was passed a column index out of valid range");
+#endif
+  if (col == starting_column)
+    return leading_term;
+  else
+    return storage[_size - col - 1];
+};
+
+
+inline const val_t
+Waterfall::Processor::DenseRow::operator[](const coord_t col) const
+{
+#ifndef NDEBUG
+  if (col < starting_column or col > ending_column)
+    throw std::out_of_range("DenseRow::operator[] was passed a column index out of valid range");
+#endif
+  if (col == starting_column)
+    return leading_term;
+  else
+    return storage[_size - col - 1];
+};
+
+
+inline size_t
+Waterfall::Processor::DenseRow::_resize()
+{
+  // compute new starting column
+  coord_t new_starting_column = ending_column;
+  assert(_size > 0);
+  for (size_t j = 0; j < _size; ++j)
+    if ((*this)[j] != 0)
+      new_starting_column = starting_column + j;
+
+  _size -= new_starting_column - starting_column;
+  starting_column = new_starting_column;
+  return _size;
+};
 
 
 template<class Archive>
@@ -947,6 +1090,13 @@ Waterfall::Processor::DenseRow::serialize(Archive& ar, const unsigned int versio
 };
 
 
+inline size_t 
+Waterfall::Processor::DenseRow::size() const 
+{ 
+  return _size; 
+};
+
+
 //
 // main
 //
@@ -962,6 +1112,10 @@ main(int argc, char** argv)
       return 1;
     }
 
+  mpi::environment env(argc, argv);
+  mpi::communicator world;
+  int myid = world.rank();
+
   for (int i = 1; i < argc; ++i)
     {
       std::ifstream input(argv[i]);
@@ -971,31 +1125,38 @@ main(int argc, char** argv)
         continue;
       };
 
-      std::cout << argv[0] << " file:"<<argv[i];
+      if (0 == myid)
+        std::cout << argv[0] << " file:"<<argv[i];
 
       // read matrix dimensions
       size_t rows, cols;
       char M;
       input >> std::skipws >> rows >> cols >> M;
       assert ('M' == M);
-      std::cout << " rows:" << rows;
-      std::cout << " cols:" << cols;
-      
+      if (0 == myid) {
+        std::cout << " rows:" << rows;
+        std::cout << " cols:" << cols;
+      };
+
       Waterfall w(rows, cols);
-      w.read_noninterleaved(input);
+      size_t nnz = w.read_noninterleaved(input);
       input.close();
+      if (0 == myid)
+        std::cout << " nonzero:" << nnz;
 
       struct rusage ru;
       getrusage(RUSAGE_SELF, &ru);
       struct timeval t0; memcpy(&t0, &ru.ru_utime, sizeof(struct timeval));
 
-      std::cout << " rank:" << w.rank();
+      if (0 == myid)
+        std::cout << " rank:" << w.rank();
 
       getrusage(RUSAGE_SELF, &ru);
       struct timeval t1; memcpy(&t1, &ru.ru_utime, sizeof(struct timeval));
       struct timeval tdelta; timersub(&t1, &t0, &tdelta);
       double elapsed = tdelta.tv_sec + (tdelta.tv_usec / 1000000.0);
-      std::cout << " time:" << std::fixed << std::setprecision(2) << elapsed << std::endl;
+      if (0 == myid)
+        std::cout << " time:" << std::fixed << std::setprecision(2) << elapsed << std::endl;
     }
 
   return 0;
