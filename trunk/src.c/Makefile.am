@@ -52,7 +52,7 @@ irank_homo_mpi_omp_LDADD = $(irank_homo_mpi_LDADD) $(OPENMP_LIBS)
 ACLOCAL_AMFLAGS = -I$(top_srcdir)/build-aux/m4
 EXTRA_DIST = $(top_srcdir)/build_aux/m4/gnulib-cache.m4
 AM_CFLAGS += -I$(builddir)/gnulib -I$(srcdir)/gnulib
-LDADD += $(srcdir)/gnulib/libgnu.a
+LDADD += $(builddir)/gnulib/libgnu.a
 
 
 # tests

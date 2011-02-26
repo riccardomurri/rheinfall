@@ -28,6 +28,10 @@
  *
  */
 
+#if defined(HAVE_GMPXX) and not defined(WITH_GMPXX)
+# undef HAVE_GMPXX
+#endif
+
 
 #include <rheinfall.hpp>
 
@@ -41,6 +45,7 @@
 #endif
 
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
