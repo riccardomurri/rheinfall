@@ -25,6 +25,9 @@ flavor="${rev}-${compiler}-${mpi}"
 
 for prog in \
     rank-int \
+    rank-int32 \
+    rank-int64 \
+    rank-mod \
     rank-double \
     crank-int \
     crank-double \
