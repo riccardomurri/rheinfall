@@ -8,7 +8,7 @@ AC_CONFIG_SRCDIR([src.c++/rheinfall/rheinfall.hpp])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
 AM_INIT_AUTOMAKE([1.10 no-define])
-AM_CONFIG_HEADER([config.h])
+AM_CONFIG_HEADER(config.h)
 
 
 # Checks for programs.
