@@ -73,6 +73,10 @@ BOOST_TEST([],
         AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])])
 AM_CONDITIONAL([HAVE_BOOST_TEST], [test "_$have_boost_test" = '_yes'])
 if test "_$have_CXX_mpi" = '_yes'; then
+    if test "_$boost_major_version" = "_144"; then
+        # see: http://lists.boost.org/boost-users/2010/11/63980.php
+        AC_MSG_ERROR([There is a known issue with Boost.MPI 1.44, please use 1.43 or a later version.])
+    fi
     BOOST_MPI([], 
         [], 
         [# disable MPI/C++ altogether
@@ -82,8 +86,8 @@ if test "_$have_CXX_mpi" = '_yes'; then
         [$MPI_CXXFLAGS],
         [$MPI_CXXLDFLAGS],
         [$MPI_CXXLDFLAGS])
-    BOOST_STATICASSERT
 fi
+BOOST_STATICASSERT
 
 
 # Check for GMP/GMPXX
