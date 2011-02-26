@@ -155,14 +155,8 @@ vpu_step(vpu_t* self, switchboard_t* sb)
 
 #ifdef WITH_MPI        
     if (outbox_size(self->outbox) > 0) {
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-      omp_set_lock(&mpi_send_lock_);
-# endif
       // wait untill all sent messages have arrived
       comm_wait_all_and_then_free(self->outbox);
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-      omp_unset_lock(&mpi_send_lock_);
-# endif
     };
 #endif
     // all done
