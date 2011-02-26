@@ -177,7 +177,7 @@ case "$exec" in
             | xargs -n1 echo \
             | (c=0; NP=$cpus_per_node; \
                while read file; do \
-                   taskset -c $(expr $c % $NP) $bindir/_exec.sh $exec $opts $file \
+                   taskset -c $(expr $c % $NP) $bindir/_exec.sh $exec $opts $file; \
                    c=$(expr $c + 1); \
                done)
         ;;
