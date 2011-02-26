@@ -117,7 +117,7 @@ coord_t read_sms_file(switchboard_t* sb, FILE* input, coord_t* nrows_p, coord_t*
     const coord_t starting_column = r->starting_column_;
     if (is_local(sb, starting_column))  
       // commit row
-      vpu_recv_row(local_owner(sb, starting_column), r, ROW_SPARSE);
+      vpu_recv_row(vpu_for_column(sb, starting_column), r, ROW_SPARSE);
     else  
       // discard non-local and null rows
       sparse_row_free(rows[n]->data);
@@ -134,7 +134,7 @@ coord_t rank(switchboard_t* sb)
 {
   // kickstart termination signal
   if (is_local(sb, 0))
-    vpu_end_phase(local_owner(sb, 0));
+    vpu_end_phase(vpu_for_column(sb, 0));
 
   // collect (partial) ranks
   coord_t* r = xcalloc(sizeof(coord_t), sb->nvpus);
