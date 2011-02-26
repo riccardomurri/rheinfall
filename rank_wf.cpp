@@ -195,6 +195,9 @@ protected:
       coord_t starting_column_; // would-be `const`: can only be modified by ctor and serialization
       coord_t ending_column_; // would-be `const`: can only be modified by ctor and serialization
       val_t leading_term_; // would-be `const`: can only be modified by ctor and serialization
+      friend class boost::serialization::access;
+      template<class Archive>
+      void serialize(Archive& ar, const unsigned int version);
     }; // class Row
 
     /** Store a matrix row as a vector of (column, entry) pairs. */
@@ -461,7 +464,11 @@ Waterfall::rank()
   
   // wait until all processors have done running
   comm.barrier();
-  
+
+  // free used resources
+  for (size_t n = 0; n < procs.size(); ++n)
+    delete procs[n];
+
   // collect the partial ranks for all processes
   int rank = 0;
   mpi::all_reduce(comm, partial_rank, rank, std::plus<int>());
@@ -511,10 +518,14 @@ Waterfall::Processor::send_row(row_ptr row)
     parent.local_owner(column).recv_row(row);
   else { // ship to remote process
     mpi::request req;
-    if (row->kind == Row::sparse)
-      req = parent.comm.isend(parent.remote_owner(column), TAG_ROW_SPARSE, row);
-    else if (row->kind == Row::dense)
-      req = parent.comm.isend(parent.remote_owner(column), TAG_ROW_DENSE, row);
+    if (row->kind == Row::sparse) {
+      req = parent.comm.isend(parent.remote_owner(column), TAG_ROW_SPARSE, 
+                              static_cast<sparse_row_ptr>(row));
+    }
+    else if (row->kind == Row::dense) {
+      req = parent.comm.isend(parent.remote_owner(column), TAG_ROW_DENSE, 
+                              static_cast<dense_row_ptr>(row));
+    }
     else
       // should not happen!
       throw std::logic_error("Unhandled row type in Processor::send_row()");
@@ -661,6 +672,21 @@ Waterfall::Processor::Row::gaussian_elimination(row_ptr other, const double dens
     // should not happen!
     throw std::logic_error("Unhandled row type combination in Row::gaussian_elimination()");
 };
+
+
+template<class Archive>
+inline void 
+Waterfall::Processor::Row::serialize(Archive& ar, const unsigned int version) 
+{
+  assert(version == 0);
+  // When the class Archive corresponds to an output archive, the
+  // & operator is defined similar to <<.  Likewise, when the class Archive
+  // is a type of input archive the & operator is defined similar to >>.
+  ar & starting_column_ & ending_column_ & leading_term_;
+  assert(starting_column_ >= 0);
+  assert(ending_column_ >= 0);
+  assert(0 != leading_term_);
+}; // Row::serialize(...)
 
 
 
@@ -867,16 +893,14 @@ Waterfall::Processor::SparseRow::operator[](const coord_t col) const
 
 
 template<class Archive>
-void 
+inline void 
 Waterfall::Processor::SparseRow::serialize(Archive& ar, const unsigned int version) 
 {
   assert(version == 0);
   // When the class Archive corresponds to an output archive, the
   // & operator is defined similar to <<.  Likewise, when the class Archive
   // is a type of input archive the & operator is defined similar to >>.
-  ar & starting_column_ & ending_column_ & leading_term_ & storage;
-  assert(starting_column_ >= 0);
-  assert(ending_column_ >= 0);
+  ar & boost::serialization::base_object<Row>(*this) & storage;
 }; // SparseRow::serialize(...)
 
 
@@ -1018,16 +1042,14 @@ Waterfall::Processor::DenseRow::_resize()
 
 
 template<class Archive>
-void 
+inline void 
 Waterfall::Processor::DenseRow::serialize(Archive& ar, const unsigned int version) 
 {
   assert(version == 0);
   // When the class Archive corresponds to an output archive, the
   // & operator is defined similar to <<.  Likewise, when the class Archive
   // is a type of input archive the & operator is defined similar to >>.
-  ar & starting_column_ & ending_column_ & leading_term_ & size_;
-  assert(starting_column_ >= 0);
-  assert(ending_column_ >= 0);
+  ar & boost::serialization::base_object<Row>(*this) & size_;
   assert(size_ >= 0);
   if (NULL == storage)
     storage = new val_t[size_];
@@ -1091,19 +1113,34 @@ main(int argc, char** argv)
       if (0 == myid)
         std::cout << " nonzero:" << nnz;
 
+      // base for computing wall-clock time
+      struct timeval wc_t0;
+      gettimeofday(&wc_t0, NULL);
+
+      // base for computing CPU time
       struct rusage ru;
       getrusage(RUSAGE_SELF, &ru);
-      struct timeval t0; memcpy(&t0, &ru.ru_utime, sizeof(struct timeval));
+      struct timeval cpu_t0; memcpy(&cpu_t0, &ru.ru_utime, sizeof(struct timeval));
 
+      int rank = w.rank();
       if (0 == myid)
-        std::cout << " rank:" << w.rank();
+        std::cout << " rank:" << rank;
 
+      // compute CPU time delta
       getrusage(RUSAGE_SELF, &ru);
-      struct timeval t1; memcpy(&t1, &ru.ru_utime, sizeof(struct timeval));
-      struct timeval tdelta; timersub(&t1, &t0, &tdelta);
+      struct timeval cpu_t1; memcpy(&cpu_t1, &ru.ru_utime, sizeof(struct timeval));
+      struct timeval tdelta; timersub(&cpu_t1, &cpu_t0, &tdelta);
+      double consumed = tdelta.tv_sec + (tdelta.tv_usec / 1000000.0);
+
+      // compute wall-clock time delta
+      struct timeval wc_t1; gettimeofday(&wc_t1, NULL);
+      timersub(&wc_t1, &wc_t0, &tdelta);
       double elapsed = tdelta.tv_sec + (tdelta.tv_usec / 1000000.0);
+
       if (0 == myid)
-        std::cout << " time:" << std::fixed << std::setprecision(2) << elapsed << std::endl;
+        std::cout << " cputime:" << std::fixed << std::setprecision(2) << consumed;
+      if (0 == myid)
+        std::cout << " wctime:" << std::fixed << std::setprecision(2) << elapsed << std::endl;
     }
 
   return 0;
