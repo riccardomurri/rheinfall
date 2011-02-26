@@ -32,4 +32,11 @@
 typedef long long val_t;
 typedef long coord_t;
 
+// use WITH_MPI_SERIALIZED / WITH_MPI_MULTITHREADED to select which
+// threading model to request to the MPI-2 library
+#if (defined(WITH_MPI_SERIALIZED) or defined (WITH_MPI_MULTIPLE)) and not defined(WITH_MPI)
+# define WITH_MPI
+#endif
+
+
 #include "main.cpp"

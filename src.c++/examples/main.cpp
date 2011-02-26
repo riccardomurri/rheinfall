@@ -28,15 +28,11 @@
  *
  */
 
-#include "rheinfall.hpp"
+
+#include <rheinfall.hpp>
 
 #ifdef WITH_MPI
-# include <mpi.h>
 # include <boost/mpi.hpp>
-# include <boost/optional.hpp>
-# include <boost/serialization/access.hpp>
-# include <boost/serialization/utility.hpp>
-# include <boost/serialization/vector.hpp>
   namespace mpi = boost::mpi;
 #endif
 

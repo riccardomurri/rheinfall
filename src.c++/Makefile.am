@@ -9,9 +9,9 @@ if HAVE_OPENMP_CXX
   bin_PROGRAMS +=  irank-omp drank-omp qrank-omp zrank-omp
 endif
 if HAVE_MPICXX
-  bin_PROGRAMS += irank-mpi drank-mpi qrank-mpi zrank-mpi
+  bin_PROGRAMS += irank-mpi drank-mpi #qrank-mpi zrank-mpi
 if HAVE_OPENMP_CXX
-    bin_PROGRAMS += irank-mpi-omp drank-mpi-omp qrank-mpi-omp zrank-mpi-omp
+    bin_PROGRAMS += irank-mpi-omp drank-mpi-omp #qrank-mpi-omp zrank-mpi-omp
 endif
 endif
 
@@ -32,9 +32,9 @@ irank_omp_LDFLAGS = $(irank_LDFLAGS) # openmp?
 irank_omp_LDADD = $(irank_LDADD) # openmp?
 
 irank_mpi_SOURCES = $(irank_SOURCES)
-irank_mpi_CPPFLAGS = $(irank_CPPFLAGS) -DMPI_SERIALIZED
-irank_mpi_CXXFLAGS = $(irank_CXXFLAGS)
-irank_mpi_LDFLAGS = $(irank_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZATION_LDFLAGS)
+irank_mpi_CPPFLAGS = $(irank_CPPFLAGS) -DWITH_MPI_SERIALIZED $(MPI_CXXFLAGS)
+irank_mpi_CXXFLAGS = $(irank_CXXFLAGS) 
+irank_mpi_LDFLAGS = $(irank_LDFLAGS) $(MPI_CXXLDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZATION_LDFLAGS)
 irank_mpi_LDADD = $(irank_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS)
 
 irank_mpi_omp_SOURCES = $(irank_mpi_SOURCES)
@@ -57,9 +57,9 @@ drank_omp_LDFLAGS = $(drank_LDFLAGS) # openmp?
 drank_omp_LDADD = $(drank_LDADD) # openmp?
 
 drank_mpi_SOURCES = $(drank_SOURCES)
-drank_mpi_CPPFLAGS = $(drank_CPPFLAGS) -DMPI_SERIALIZED
+drank_mpi_CPPFLAGS = $(drank_CPPFLAGS) -DWITH_MPI_SERIALIZED $(MPI_CXXFLAGS)
 drank_mpi_CXXFLAGS = $(drank_CXXFLAGS)
-drank_mpi_LDFLAGS = $(drank_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZATION_LDFLAGS)
+drank_mpi_LDFLAGS = $(drank_LDFLAGS) $(MPI_CXXLDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZATION_LDFLAGS)
 drank_mpi_LDADD = $(drank_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS)
 
 drank_mpi_omp_SOURCES = $(drank_mpi_SOURCES)
@@ -82,9 +82,9 @@ qrank_omp_LDFLAGS = $(qrank_LDFLAGS) # openmp?
 qrank_omp_LDADD = $(qrank_LDADD) # openmp?
 
 qrank_mpi_SOURCES = $(qrank_SOURCES)
-qrank_mpi_CPPFLAGS = $(qrank_CPPFLAGS) -DMPI_SERIALIZED
+qrank_mpi_CPPFLAGS = $(qrank_CPPFLAGS) -DWITH_MPI_SERIALIZED $(MPI_CXXFLAGS)
 qrank_mpi_CXXFLAGS = $(qrank_CXXFLAGS)
-qrank_mpi_LDFLAGS = $(qrank_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZATION_LDFLAGS)
+qrank_mpi_LDFLAGS = $(qrank_LDFLAGS) $(MPI_CXXLDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZATION_LDFLAGS)
 qrank_mpi_LDADD = $(qrank_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS)
 
 qrank_mpi_omp_SOURCES = $(qrank_mpi_SOURCES)
@@ -107,9 +107,9 @@ zrank_omp_LDFLAGS = $(zrank_LDFLAGS) # openmp?
 zrank_omp_LDADD = $(zrank_LDADD) # openmp?
 
 zrank_mpi_SOURCES = $(zrank_SOURCES)
-zrank_mpi_CPPFLAGS = $(zrank_CPPFLAGS) -DMPI_SERIALIZED
+zrank_mpi_CPPFLAGS = $(zrank_CPPFLAGS) -DWITH_MPI_SERIALIZED $(MPI_CXXFLAGS)
 zrank_mpi_CXXFLAGS = $(zrank_CXXFLAGS)
-zrank_mpi_LDFLAGS = $(zrank_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZATION_LDFLAGS)
+zrank_mpi_LDFLAGS = $(zrank_LDFLAGS) $(MPI_CXXLDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZATION_LDFLAGS)
 zrank_mpi_LDADD = $(zrank_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS)
 
 zrank_mpi_omp_SOURCES = $(zrank_mpi_SOURCES)

@@ -31,11 +31,14 @@
 
 #ifndef HAVE_GMPXX
 # error This source requires GMP to compile; messed up autoconf settings?
+#else
+#define WITH_GMPXX
 #endif
 
-#include <gmpxx.h>
 
+#include <gmpxx.h>
 typedef mpq_class val_t;
 typedef long coord_t;
+
 
 #include "main.cpp"
