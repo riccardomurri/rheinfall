@@ -98,6 +98,10 @@ usage(std::ostream& out, const int argc, char const* const* argv)
       << "Options:" << std::endl
       << "  -m NUM  Limit memory consumption to NUM GBs;" << std::endl
       << "          if more memory is needed, the program will abort." << std::endl
+#ifdef WITH_MPI
+      << "  -w NUM  Divide matrix in bands of NUM columns each and distribute" << std::endl
+      << "          bands to MPI ranks in a round-robin fashion. (Default: NUM=1)" << std::endl
+#endif
       << "  -v      Verbosely report about rank computation." << std::endl
       << "  -h      Print this help text." << std::endl;
 }
@@ -259,15 +263,18 @@ main(int argc, char** argv)
 
   // parse command-line options
   static struct option long_options[] = {
-    {"help", 0, 0,'h'},
-    {"memory", 1, 0, 'm'},
-    {"verbose", 0, 0,'v'},
+    {"help",    0, 0, 'h'},
+    {"memory",  1, 0, 'm'},
+    {"verbose", 0, 0, 'v'},
+    {"width",   1, 0, 'w'},
     {0, 0, 0, 0}
   };
 
+  coord_t width = 1;
+
   int c;
   while (true) {
-    c = getopt_long(argc, argv, "hm:v",
+    c = getopt_long(argc, argv, "hm:vw:",
                     long_options, NULL);
     if (-1 == c)
       break;
@@ -277,6 +284,15 @@ main(int argc, char** argv)
     }
     else if ('v' == c)
       verbose = 1;
+    else if ('w' == c) {
+      std::istringstream arg(optarg);
+      arg >> width;
+      if (width < 1) {
+        std::cerr << "Argument to option -w/--width must be a positive integer."
+                  << " Aborting." << std::endl;
+        return 1;
+      };
+    }
     else if ('m' == c) {
       rlim_t required_memory;
       std::istringstream arg(optarg);
@@ -314,9 +330,8 @@ main(int argc, char** argv)
       setrlimit(RLIMIT_AS, &limit);
     }
     else {
-      std::cerr << "Unknown option '" << c 
-                << "' - type '" << argv[0] << " --help' to get usage help."
-                << " Aborting." << std::endl;
+      std::cerr << "Unknown option; type '" << argv[0] << " --help' to get usage help."
+                << std::endl;
       return 1;
     };
   };
@@ -378,9 +393,9 @@ main(int argc, char** argv)
       };
 
 #ifdef WITH_MPI
-      rheinfall::Rheinfall<val_t, coord_t> w(cols, world);
+      rheinfall::Rheinfall<val_t, coord_t> w(world, cols, width);
 #else
-      rheinfall::Rheinfall<val_t, coord_t> w(cols);
+      rheinfall::Rheinfall<val_t, coord_t> w(cols, width);
 #endif
       long nnz = w.read(input, rows, cols, true, transpose);
       input.close();
