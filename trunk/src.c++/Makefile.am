@@ -4,7 +4,7 @@
 nobase_include_HEADERS = rheinfall/rheinfall.hpp rheinfall/row.hpp rheinfall/sparserow.hpp rheinfall/denserow.hpp rheinfall/types.hpp
 
 # build example programs
-bin_PROGRAMS = rank-int rank-mod rank-mpq rank-mpz
+bin_PROGRAMS = rank-int rank-double rank-mod rank-mpq rank-mpz
 
 EXTRA_PROGRAMS = rank-int32 rank-int64
 if HAVE_INT32_T
@@ -14,7 +14,7 @@ if HAVE_INT64_T
   bin_PROGRAMS += rank-int64 rank-mod-int64
 endif
 
-EXTRA_PROGRAMS += rank-int-omp rank-mod-omp rank-mpq-omp rank-mpz-omp
+EXTRA_PROGRAMS += rank-int-omp rank-double-omp rank-mod-omp rank-mpq-omp rank-mpz-omp
 EXTRA_PROGRAMS += rank-int32-omp 
 EXTRA_PROGRAMS += rank-int64-omp rank-mod-int64-omp
 if HAVE_OPENMP_CXX
@@ -26,14 +26,14 @@ if HAVE_INT64_T
   bin_PROGRAMS += rank-int64-omp rank-mod-int64-omp
 endif
 endif
-EXTRA_PROGRAMS += rank-int-mpi rank-mod-mpi  rank-mpq-mpi rank-mpz-mpi
+EXTRA_PROGRAMS += rank-int-mpi rank-double rank-mod-mpi rank-mpq-mpi rank-mpz-mpi
 EXTRA_PROGRAMS += rank-int-mpi-omp rank-mod-mpi-omp  rank-mpq-mpi-omp rank-mpz-mpi-omp
 EXTRA_PROGRAMS += rank-int32-mpi rank-int32-mpi-omp
 EXTRA_PROGRAMS += rank-int64-mpi rank-int64-mpi-omp
 if HAVE_MPICXX
-  bin_PROGRAMS += rank-int-mpi #rank-mod-mpi rank-mpq-mpi rank-mpz-mpi
+  bin_PROGRAMS += rank-int-mpi rank-double-mpi #rank-mod-mpi rank-mpq-mpi rank-mpz-mpi
 if HAVE_OPENMP_CXX
-    bin_PROGRAMS += rank-int-mpi-omp #rank-mod-mpi-omp rank-mpq-mpi-omp rank-mpz-mpi-omp
+    bin_PROGRAMS += rank-int-mpi-omp rank-double-mpi-omp #rank-mod-mpi-omp rank-mpq-mpi-omp rank-mpz-mpi-omp
 endif
 if HAVE_INT32_T
   bin_PROGRAMS += rank-int32-mpi
@@ -147,6 +147,31 @@ rank_mod_mpi_omp_CPPFLAGS= $(rank_mod_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPEN
 rank_mod_mpi_omp_CXXFLAGS= $(rank_mod_mpi_CXXFLAGS) $(OPENMP_CXXFLAGS)
 rank_mod_mpi_omp_LDFLAGS= $(rank_mod_mpi_LDFLAGS) # openmp?
 rank_mod_mpi_omp_LDADD = $(rank_mod_mpi_LDADD) # openmp?
+
+# drank - example program using `double`/`long double` values (whichever is wider)
+rank_double_SOURCES = examples/rank.cpp
+rank_double_CPPFLAGS= $(AM_CPPFLAGS) $(GMPXX_CPPFLAGS) -DWITH_DOUBLE_VALUES
+rank_double_CXXFLAGS= $(AM_CXXFLAGS)
+rank_double_LDFLAGS= $(AM_LDFLAGS) $(GMPXX_LDFLAGS)
+rank_double_LDADD= $(AM_LIBS) $(GMPXX_LIBS)
+
+rank_double_omp_SOURCES = $(rank_double_SOURCES)
+rank_double_omp_CPPFLAGS = $(rank_double_CPPFLAGS) $(OPENMP_CPPFLAGS)
+rank_double_omp_CXXFLAGS = $(rank_double_CXXFLAGS) $(OPENMP_CXXFLAGS)
+rank_double_omp_LDFLAGS = $(rank_double_LDFLAGS) # openmp?
+rank_double_omp_LDADD = $(rank_double_LDADD) # openmp?
+
+rank_double_mpi_SOURCES = $(rank_double_SOURCES)
+rank_double_mpi_CPPFLAGS = $(rank_double_CPPFLAGS) -DWITH_MPI $(MPI_CXXFLAGS)
+rank_double_mpi_CXXFLAGS = $(rank_double_CXXFLAGS)
+rank_double_mpi_LDFLAGS = $(rank_double_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZATION_LDFLAGS) $(MPI_CXXLDFLAGS)
+rank_double_mpi_LDADD = $(rank_double_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS) $(MPI_CXXLIBS)
+
+rank_double_mpi_omp_SOURCES = $(rank_double_mpi_SOURCES)
+rank_double_mpi_omp_CPPFLAGS= $(rank_double_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+rank_double_mpi_omp_CXXFLAGS= $(rank_double_mpi_CXXFLAGS) $(OPENMP_CXXFLAGS)
+rank_double_mpi_omp_LDFLAGS= $(rank_double_mpi_LDFLAGS) # openmp?
+rank_double_mpi_omp_LDADD = $(rank_double_mpi_LDADD) # openmp?
 
 # qrank - example program using GMP `mpq` infinite precision rational values
 rank_mpq_SOURCES = examples/rank.cpp

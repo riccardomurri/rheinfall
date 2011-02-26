@@ -153,7 +153,7 @@ namespace rheinfall {
   inline coord_t 
   Row<val_t,coord_t>::first_nonzero_column() const 
   {
-    assert(0 != leading_term_);
+    assert(not is_zero(leading_term_));
     return starting_column_;
   };
 
@@ -215,7 +215,7 @@ namespace rheinfall {
     assert(starting_column_ >= 0);
     assert(ending_column_ >= 0);
     assert (starting_column_ <= ending_column_);
-    assert(0 != leading_term_);
+    assert(not is_zero(leading_term_));
   }; // Row::serialize(...)
 #endif
 
