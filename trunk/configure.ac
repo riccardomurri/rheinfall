@@ -43,15 +43,19 @@ AM_CONDITIONAL([HAVE_OPENMP_CXX], [test "_$OPENMP_CXXFLAGS" != '_'])
 
 # check for MPI
 AC_ARG_WITH([mpi],
-    [AS_HELP_STRING([--with-mpi=yes|no],
+    [AS_HELP_STRING([--with-mpi=no|yes|serialized|multiple],
             [Build MPI-enabled example programs. 
                 If argument is 'yes' (default), the MPI C/C++ compilers must be
                 reachable with the standard executable search path PATH.
+                Argument values 'serialized' and 'multiple' behave as
+                'yes' and additionally force use of MPI with threads,
+                setting the threading level to MPI_THREAD_SERIALIZED
+                or MPI_THREAD_MULTIPLE respectively.
                 If the argument is 'no', then example programs that make 
                 use of MPI will not be built.])],
     [],
     [with_mpi=yes])
-if test "x$with_mpi" = 'xyes'; then :
+if test "_$with_mpi" != '_no'; then :
     AC_LANG_PUSH([C])
     LX_FIND_MPI()
     AC_LANG_POP([C])
@@ -61,6 +65,11 @@ if test "x$with_mpi" = 'xyes'; then :
 fi
 AM_CONDITIONAL([HAVE_MPICC], [test "_$have_C_mpi" = '_yes'])
 AM_CONDITIONAL([HAVE_MPICXX], [test "_$have_CXX_mpi" = '_yes'])
+case "_$with_mpi" in #(
+     _s*) AC_SUBST([RF_MPI_CPPFLAGS], [-DWITH_MPI_SERIALIZED]) ;; #(
+     _m*) AC_SUBST([RF_MPI_CPPFLAGS], [-DWITH_MPI_MULTIPLE]) ;; #(
+     *)   AC_SUBST([RF_MPI_CPPFLAGS], []) ;;
+esac
 
 
 # check for needed Boost libraries 
