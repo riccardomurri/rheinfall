@@ -72,6 +72,12 @@ public:
       default communicator (@c MPI_COMM_WORLD ). */
   Waterfall(const coord_t nrows, const coord_t ncols);
   
+  /** Read a matrix stream into the processors. Does not make any
+      assumption on the order of entries in the input stream,
+      therefore all entries have to be read into memory. Return number
+      of nonzero entries _read_. */
+  size_t read(std::istream& input);
+
   /** Read a matrix stream into the processors. Assumes that entries
       belonging to one row are not interleaved with entries from other
       rows; i.e., that it can consider reading row @i i complete as
@@ -187,23 +193,25 @@ protected:
       /** Constructor. */
       Row(const kind_t kind_, 
           const coord_t starting_column, const coord_t ending_column, 
-          const val_t leading_term)
+          const val_t leading_term,
+          const bool valid)
         : kind(kind_), 
           starting_column_(starting_column), 
           ending_column_(ending_column),
-          leading_term_(leading_term)
+          leading_term_(leading_term),
+          initialized_(valid)
       { };
     public:
       /** Virtual destructor (for actual use in subclasses). */
       virtual ~Row();
+      /** Return a copy of the element stored at column @c col */
+      virtual const val_t get(const coord_t col) const = 0;
       /** Return index of first column that has a nonzero entry. */
       virtual coord_t first_nonzero_column() const;
+      /** Set the element stored at column @c col */
+      virtual void set(const coord_t col, const val_t value) = 0;
       /** Return number of allocated (i.e., non-zero) entries. */
       virtual size_t size() const = 0;
-      /** Return a reference to the element stored at column @c col */
-      virtual val_t& operator[](const coord_t col) = 0;
-      /** Return a copy of the element stored at column @c col */
-      virtual const val_t operator[](const coord_t col) const = 0;
       /** Perform Gaussian elimination: sum a multiple of this row to
           (a multiple of) row @c r so that the combination has its
           first nonzero entry at a column index strictly larger than
@@ -217,30 +225,32 @@ protected:
       friend class boost::serialization::access;
       template<class Archive>
       void serialize(Archive& ar, const unsigned int version);
+      /** Used in two-phase construction idioms, to signal that
+          construction is done and the object can now be used to full power. */
+      bool initialized_;
     }; // class Row
 
     /** Store a matrix row as a vector of (column, entry) pairs. */
     class SparseRow : public Row
     {
     public:
-      friend class Waterfall; // DEBUG -- see read_noninterleaved
       SparseRow(const coord_t starting_column, const coord_t ending_column, const val_t leading_term) 
-        : Row(sparse, starting_column, ending_column, leading_term), storage() 
-      { };
-      /** Constructor initializing an invalid row; should call
-          serialize immediately after!  */
-      SparseRow() 
-        : Row(sparse, -1, -1, 0), storage() 
+        : Row(sparse, starting_column, ending_column, leading_term, true), storage() 
       { };
       /** Return fill-in percentage, that is the number of actual
           nonzero entries divided by the number of potential entries.  */
       double fill_in() const { return 100.0 * size() / (ending_column_ - starting_column_ + 1); };
+      /** Reset starting column and leading term to the first nonzero
+          entry in the row.  Return pointer to this row, or @c NULL if
+          the row consists entirely of null values.  Used for
+          two-phase construction. */
+      SparseRow* adjust();
       /** Return number of allocated (i.e., non-zero) entries. */
       virtual size_t size() const;
-      /** Return a reference to the element stored at column @c col */
-      virtual val_t& operator[](const coord_t col);
+      /** Set the element stored at column @c col */
+      virtual void set(const coord_t col, const val_t value);
       /** Return a copy of the element stored at column @c col */
-      virtual const val_t operator[](const coord_t col) const;
+      virtual const val_t get(const coord_t col) const;
       /** Perform Gaussian elimination: sum a multiple of this row to
           (a multiple of) row @c r so that the combination has its
           first nonzero entry at a column index strictly larger than
@@ -257,10 +267,27 @@ protected:
     protected:
       typedef std::vector< std::pair<coord_t,val_t> > storage_t;
       storage_t storage;
+      friend class Waterfall; // needed by read*()
+      /** Constructor initializing an invalid row; should fill the row
+          with values and then call @c adjust(). */
+      SparseRow(const coord_t ending_column) 
+        : Row(sparse, -1, ending_column, 0, false), storage() 
+      { };
       friend class DenseRow;
+      // serialization support
+      /** Default constructor, needed by boost::serialize.
+          Initializes the row with invalid values; should call
+          serialize immediately after!  */
+      SparseRow() 
+        : Row(sparse, -1, -1, 0, false), storage() 
+      { };
       friend class boost::serialization::access;
       template<class Archive>
       void serialize(Archive& ar, const unsigned int version);
+#ifndef NDEBUG
+    private:
+      bool __ok() const;
+#endif
     }; // class SparseRow
 
     /** Store a matrix row in a linear vector of consecutive entries. */
@@ -273,13 +300,13 @@ protected:
       DenseRow(const coord_t starting_column_, const size_t ending_column_);
       /** Construct an invalid row; exists only for the purpose of
           calling @c serialize immediately after! */
-      DenseRow(); // FIXME: make private?
+      //DenseRow(const coord_t ending_column);
       /** Return number of allocated entries. */
       virtual size_t size() const;
-      /** Return a reference to the element stored at column @c col */
-      virtual val_t& operator[](const coord_t col);
+      /** Set the element stored at column @c col */
+      virtual void set(const coord_t col, const val_t value);
       /** Return a copy of the element stored at column @c col */
-      virtual const val_t operator[](const coord_t col) const;
+      virtual const val_t get(const coord_t col) const;
       dense_row_ptr gaussian_elimination(const sparse_row_ptr other) const;
       dense_row_ptr gaussian_elimination(const dense_row_ptr other) const;
     protected:
@@ -287,11 +314,20 @@ protected:
       std::vector<val_t> storage; 
       friend class SparseRow;
       // serialization support (needed for MPI)
+      /** Default constructor, needed by boost::serialize.
+          Initializes the row with invalid values; should call
+          serialize immediately after!  */
+      DenseRow() 
+        : Row(sparse, -1, -1, 0, false), storage() 
+      { };
+      friend class Waterfall;
       friend class boost::serialization::access;
       template<class Archive> void serialize(Archive& ar, const unsigned int version);
       /** Adjust @c _size and @c starting_column to reflect the actual
-          contents of the stored row. */
-      size_t _resize();
+          contents of the stored row.  Return pointer to adjust row,
+          or NULL if the result is a null row.  May delete @c this as
+          a side-effect. */
+      DenseRow* adjust();
     }; // class DenseRow
 
   public: 
@@ -356,9 +392,9 @@ Waterfall::read_noninterleaved(std::istream& input)
     size_t nnz = 0;
 
     // only read rows whose leading column falls in our domain
-    std::vector< std::pair<coord_t,val_t> > row;
+    Processor::sparse_row_ptr row = new Processor::SparseRow(ncols_ - 1);
 
-    coord_t current_row_index = -1;
+    coord_t last_row_index = -1;
     coord_t i, j;
     val_t value;
     while (not input.eof()) {
@@ -371,49 +407,75 @@ Waterfall::read_noninterleaved(std::istream& input)
       // SMS indices are 1-based
       --i;
       --j;
-      // new row?
-      if (i != current_row_index) { // yes, commit old row
-        // find starting column
-        coord_t starting_column = ncols_;
-        for (std::vector< std::pair<coord_t,val_t> >::const_iterator it = row.begin();
-             it != row.end();
-             ++it)
-          if (it->first < starting_column)
-            starting_column = it->first;
-        // commit row
-        if (starting_column < ncols_ // otherwise, row is empty -- ignore it
-            and is_local(starting_column)) {
-          Processor::SparseRow* r = new Processor::SparseRow(starting_column, ncols_-1, 0);
-          for (std::vector< std::pair<coord_t,val_t> >::const_iterator it = row.begin();
-               it != row.end();
-               ++it)
-            {
-              (*r)[it->first] = it->second;
-            }; 
-#ifndef NDEBUG
-          assert(r->starting_column_ == starting_column);
-          assert(r->starting_column_ < ncols_);
-          assert(r->ending_column_ == ncols_-1);
-          assert(0 != r->leading_term_);
-          // entries in `result` are ordered by increasing column index
-          coord_t s = r->starting_column_;
-          for (Processor::SparseRow::storage_t::const_iterator it = r->storage.begin(); 
-               it < r->storage.end(); ++it) {
-            assert(s < it->first);
-            assert(0 != it->second);
-            s = it->first;
-          };
-#endif
-          local_owner(starting_column).recv_row(r);
-        }; // if is_local(starting_column)
-        row.clear();
-        current_row_index = i;
-      }; // if i != current_row_index
-      if (0 == i and 0 == j and 0 == value)
+      // if row index changes, then a new row is starting, so commit the old one.
+      if (i != last_row_index) {
+        row = row->adjust();
+        if (NULL != row) {
+          const coord_t starting_column = row->first_nonzero_column();
+          if (starting_column < ncols_ and is_local(starting_column))
+            local_owner(starting_column).recv_row(row);
+          else
+            // discard null rows and rows belonging to other MPI ranks
+            delete row;
+        };
+        row = new Processor::SparseRow(ncols_ - 1);
+        last_row_index = i;
+      };
+      if (-1 == i and -1 == j and 0 == value)
         break; // end of matrix stream
       ++nnz;
-      row.push_back(std::make_pair(j, value));
+      row->set(j, value);
     }; // while (! eof)
+    
+    return nnz;
+};
+
+
+size_t
+Waterfall::read(std::istream& input) 
+{
+    // count non-zero items read
+    size_t nnz = 0;
+
+    // need to keep rows in memory until we reach end of file
+    typedef std::map< coord_t,Processor::sparse_row_ptr > rowmap_t;
+    rowmap_t rows;
+
+    coord_t i, j;
+    val_t value;
+    while (not input.eof()) {
+      input >> i >> j >> value;
+      if (0 == i and 0 == j and 0 == value)
+        break; // end of matrix stream
+      // ignore zero entries in matrix -- they shouldn't be there in the first place
+      if (0 == value) 
+        continue; 
+      ++nnz;
+      assert(0 <= i and i <= nrows_);
+      assert(0 <= j and j <= ncols_);
+      // SMS indices are 1-based
+      --i;
+      --j;
+      // new row?
+      if (rows.end() == rows.find(i))
+        rows[i] = new Processor::SparseRow(ncols_-1);
+      rows[i]->set(j, value);
+    }; // while(not eof)
+
+    for (rowmap_t::const_iterator it = rows.begin(); it != rows.end(); ++it) {
+      // set correct starting columns and leading term
+      Processor::SparseRow* row = it->second->adjust();
+      if (NULL != row) {
+        const coord_t starting_column = row->first_nonzero_column();
+        // commit row
+        if (starting_column < ncols_ // row is not null
+            and is_local(starting_column))
+          local_owner(starting_column).recv_row(row);
+        else 
+          // discard non-local and null rows
+          delete row;
+      };
+    }; // for (it = rows.begin(); ...)
     
     return nnz;
 };
@@ -455,8 +517,7 @@ Waterfall::rank()
       };
       case TAG_ROW_DENSE: {
         Processor::dense_row_ptr new_row = new Processor::DenseRow();
-        comm.recv(status->source(), status->tag(), 
-                  *boost::get<Processor::DenseRow*>(new_row));
+        comm.recv(status->source(), status->tag(), new_row);
         assert(is_local(new_row->first_nonzero_column()));
         Processor::row_ptr new_row_ptr(new_row);
         local_owner(new_row->first_nonzero_column()).recv_row(new_row_ptr);
@@ -713,6 +774,7 @@ Waterfall::Processor::Row::serialize(Archive& ar, const unsigned int version)
   ar & starting_column_ & ending_column_ & leading_term_;
   assert(starting_column_ >= 0);
   assert(ending_column_ >= 0);
+  assert (starting_column_ <= ending_column_);
   assert(0 != leading_term_);
 }; // Row::serialize(...)
 
@@ -720,28 +782,56 @@ Waterfall::Processor::Row::serialize(Archive& ar, const unsigned int version)
 
 // ------- SparseRow -------
 
+#ifndef NDEBUG
+inline bool
+Waterfall::Processor::SparseRow::__ok() const
+{
+  if (initialized_) {
+    assert(0 <= starting_column_);
+    assert(starting_column_ <= ending_column_);
+    assert(0 != leading_term_);
+  };
+  // entries in `this->storage` are *always* ordered by increasing column index
+  coord_t s1 = (initialized_? starting_column_ : -1);
+  for (storage_t::const_iterator it = storage.begin(); it < storage.end(); ++it) {
+      assert(s1 < it->first);
+      assert(it->first <= ending_column_);
+      assert(0 != it->second);
+      s1 = it->first;
+    };
+  return true;
+};
+#endif
+
+
+inline Waterfall::Processor::sparse_row_ptr
+Waterfall::Processor::SparseRow::adjust()
+{
+  if (storage.size() > 0) {
+    starting_column_ = storage.front().first;
+    assert(0 <= starting_column_ and starting_column_ < ending_column_);
+    leading_term_ = storage.front().second;
+    assert(0 != leading_term_);
+    storage.erase(storage.begin());
+    initialized_ = true;
+    assert(this->__ok());
+    return this;
+  }
+  else {
+    // nothing in the row
+    delete this;
+    return NULL;
+  };
+  assert(false); // should not happen!
+};
+
+
 Waterfall::Processor::sparse_row_ptr 
 Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) const
 {
+  assert(this->__ok());
+  assert(other->__ok());
   assert(this->starting_column_ == other->starting_column_);
-  assert(0 != this->leading_term_);
-  assert(0 != other->leading_term_);
-#ifndef NDEBUG
-  // entries in `this` are ordered by increasing column index
-  coord_t s1 = this->starting_column_;
-  for (storage_t::const_iterator it = this->storage.begin(); it < this->storage.end(); ++it) {
-    assert(s1 < it->first);
-    assert(0 != it->second);
-    s1 = it->first;
-  };
-  // entries in `other` are ordered by increasing column index
-  coord_t s2 = other->starting_column_;
-  for (storage_t::const_iterator it = other->storage.begin(); it < other->storage.end(); ++it) {
-    assert(s2 < it->first);
-    assert(0 != it->second);
-    s2 = it->first;
-  };
-#endif
 
   // compute:
   //   `a`: multiplier for `this` row
@@ -821,19 +911,11 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) cons
   }; // while(this_i < storage.end() ...)
 #ifndef NDEBUG
   if (NULL != result) {
+    assert(result->__ok());
     assert(result->starting_column_ > this->starting_column_);
     assert(result->starting_column_ > other->starting_column_);
     assert(result->ending_column_ == this->ending_column_);
     assert(result->size() <= this->size() + other->size());
-    assert(0 != this->leading_term_);
-    assert(0 != other->leading_term_);
-    // entries in `result` are ordered by increasing column index
-    coord_t s = result->starting_column_;
-    for (storage_t::const_iterator it = result->storage.begin(); it < result->storage.end(); ++it) {
-      assert(s < it->first);
-      assert(0 != it->second);
-      s = it->first;
-    };
   };
 #endif
   delete other; // release old storage
@@ -845,7 +927,7 @@ Waterfall::Processor::dense_row_ptr
 Waterfall::Processor::SparseRow::gaussian_elimination(dense_row_ptr other) const
 {
   assert(this->starting_column_ == other->starting_column_);
-  assert(0 != this->leading_term_);
+  assert(this->__ok());
   assert(0 != other->leading_term_);
 
   // compute:
@@ -865,41 +947,15 @@ Waterfall::Processor::SparseRow::gaussian_elimination(dense_row_ptr other) const
       other->storage[other->size() - (it->first - other->starting_column_)] += a*it->second;
     };
 
-  other->_resize(); // content update done, adjust size and starting column
-  return other;
+  return other->adjust(); // content update done, adjust size and starting column
 }; // dense_row_ptr gaussian_elimination(dense_row_ptr other)
 
 
-inline val_t& 
-Waterfall::Processor::SparseRow::operator[](const coord_t col) 
-{
-  assert(col >= starting_column_ and col <= ending_column_);
-  if (col == starting_column_) 
-    return leading_term_;
-  // else, fast-forward to place where element is/would be stored
-  size_t jj = 0;
-  while (jj < storage.size() and storage[jj].first < col)
-    ++jj;
-  if (storage.size() == jj) {
-    // end of list reached, `col` is larger than any index in this row
-    storage.push_back(std::make_pair<size_t,val_t>(col,0));
-    return storage.back().second;
-  }
-  else if (col == storage[jj].first) 
-    return storage[jj].second;
-  else { // storage[jj].first > j > storage[jj+1].first
-    // insert new pair before `jj+1`
-    storage.insert(storage.begin()+jj+1, 
-                   std::make_pair<size_t,val_t>(col,0));
-    return storage[jj+1].second;
-  };
-}; // SparseRow::operator[](...)
-
-
 inline const val_t
-Waterfall::Processor::SparseRow::operator[](const coord_t col) const
+Waterfall::Processor::SparseRow::get(const coord_t col) const
 {
-  assert(col >= starting_column_ and col <= ending_column_);
+  assert((not initialized_) or 
+         (col >= starting_column_ and col <= ending_column_));
   if (col == starting_column_) 
     return leading_term_;
   if (storage.size() == 0)
@@ -917,7 +973,7 @@ Waterfall::Processor::SparseRow::operator[](const coord_t col) const
   else { // storage[jj].first > j > storage[jj+1].first
     return 0;
   };
-}; // SparseRow::operator[](...) const 
+}; // SparseRow::get(...) const 
 
 
 template<class Archive>
@@ -929,7 +985,37 @@ Waterfall::Processor::SparseRow::serialize(Archive& ar, const unsigned int versi
   // & operator is defined similar to <<.  Likewise, when the class Archive
   // is a type of input archive the & operator is defined similar to >>.
   ar & boost::serialization::base_object<Row>(*this) & storage;
+  initialized_ = true;
+  assert(this->__ok());
 }; // SparseRow::serialize(...)
+
+
+inline void
+  Waterfall::Processor::SparseRow::set(const coord_t col, const val_t value) 
+{
+  assert((not initialized_) or 
+         (col >= starting_column_ and col <= ending_column_));
+  if (col == starting_column_) {
+    leading_term_ = value;
+    return;
+  };
+  // else, fast-forward to place where element is/would be stored
+  size_t jj = 0;
+  while (jj < storage.size() and storage[jj].first < col)
+    ++jj;
+  // set element accordingly
+  if (storage.size() == jj) {
+    // end of list reached, `col` is larger than any index in this row
+    storage.push_back(std::make_pair<size_t,val_t>(col,value));
+  }
+  else if (col == storage[jj].first) 
+    storage[jj].second = value;
+  else { // storage[jj].first > col, insert new pair before `jj`
+    storage.insert(storage.begin()+jj, 
+                   std::make_pair<size_t,val_t>(col,value));
+  };
+  assert(this->__ok());
+}; // SparseRow::set(...)
 
 
 inline size_t 
@@ -943,7 +1029,7 @@ Waterfall::Processor::SparseRow::size() const
 // ------- DenseRow -------
 
 Waterfall::Processor::DenseRow::DenseRow(const sparse_row_ptr r) 
-  : Row(dense, r->starting_column_, r->ending_column_, r->leading_term_),
+  : Row(dense, r->starting_column_, r->ending_column_, r->leading_term_, true),
     storage(ending_column_ - starting_column_ + 1, 0) 
 { 
   assert(std::distance(r->storage.begin(), r->storage.end()) <= storage.size());
@@ -960,18 +1046,11 @@ Waterfall::Processor::DenseRow::DenseRow(const sparse_row_ptr r)
 inline
 Waterfall::Processor::DenseRow::DenseRow(const coord_t starting_column, 
                                          const size_t ending_column) 
-  : Row(dense, starting_column, ending_column, 0),
+  : Row(dense, starting_column, ending_column, 0, true),
     storage(ending_column_ - starting_column_ + 1, 0)
 { 
   // nothing to do
 };
-
-
-inline
-Waterfall::Processor::DenseRow::DenseRow() 
-  : Row(dense, -1, -1, 0),
-    storage() 
-{ };
 
 
 inline Waterfall::Processor::dense_row_ptr 
@@ -1010,24 +1089,12 @@ Waterfall::Processor::DenseRow::gaussian_elimination(const dense_row_ptr other) 
     other->storage[j] *= a;
     other->storage[j] += b * storage[j];
   };
-  other->_resize(); // update done, adjust size and starting column
-  return other;
+  return other->adjust(); // update done, adjust size and starting column
 }; // dense_row_ptr gaussian_elimination(dense_row_ptr other)
 
 
-inline val_t& 
-Waterfall::Processor::DenseRow::operator[](const coord_t col) 
-{
-  assert(col >= starting_column_ and col <= ending_column_);
-  if (col == starting_column_)
-    return leading_term_;
-  else
-    return storage[size() - col - 1];
-};
-
-
 inline const val_t
-Waterfall::Processor::DenseRow::operator[](const coord_t col) const
+Waterfall::Processor::DenseRow::get(const coord_t col) const
 {
   assert(col >= starting_column_ and col <= ending_column_);
   if (col == starting_column_)
@@ -1037,8 +1104,8 @@ Waterfall::Processor::DenseRow::operator[](const coord_t col) const
 };
 
 
-inline size_t
-Waterfall::Processor::DenseRow::_resize()
+inline Waterfall::Processor::dense_row_ptr
+Waterfall::Processor::DenseRow::adjust()
 {
   // compute new starting column
   for (int j = size()-1; j >= 0; --j)
@@ -1046,14 +1113,12 @@ Waterfall::Processor::DenseRow::_resize()
       leading_term_ = storage[j];
       starting_column_ += (size() - j);
       storage.erase(storage.begin()+j, storage.end());
-      return storage.size();
+      return this;
     };
   // no nonzero element found in storage,
   // this is now a null row
-  storage.clear();
-  leading_term_ = 0;
-  starting_column_ = ending_column_;
-  return 0;
+  delete this;
+  return NULL;
 };
 
 
@@ -1066,6 +1131,18 @@ Waterfall::Processor::DenseRow::serialize(Archive& ar, const unsigned int versio
   // & operator is defined similar to <<.  Likewise, when the class Archive
   // is a type of input archive the & operator is defined similar to >>.
   ar & boost::serialization::base_object<Row>(*this) & storage;
+  initialized_ = true;
+};
+
+
+inline void
+  Waterfall::Processor::DenseRow::set(const coord_t col, const val_t value) 
+{
+  assert(col >= starting_column_ and col <= ending_column_);
+  if (col == starting_column_)
+    leading_term_ = value;
+  else
+    storage[size() - col - 1] = value;
 };
 
 
@@ -1079,6 +1156,7 @@ Waterfall::Processor::DenseRow::size() const
 //
 // main
 //
+
 
 int
 main(int argc, char** argv)
@@ -1123,7 +1201,7 @@ main(int argc, char** argv)
       };
 
       Waterfall w(rows, cols);
-      size_t nnz = w.read_noninterleaved(input);
+      size_t nnz = w.read(input);
       input.close();
       if (0 == myid)
         std::cout << " nonzero:" << nnz;
