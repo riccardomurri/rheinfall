@@ -97,9 +97,45 @@ vpu_step(vpu_t* self, switchboard_t* sb)
       ++n;
     };
     for (; n < size; ++n) {
+      // swap `u` and the new row if the new row is shorter, or has < leading term
+      row_t* row = &(self->workset->storage[n]);
+      if (ROW_SPARSE == row->kind) {
+        sparse_row_t* s = (sparse_row_t*) row->data;
+        if (ROW_SPARSE == self->u.kind) {
+          // if `row` is shorter, it becomes the new pivot row
+          if (sparse_row_size(s) < sparse_row_size(self->u.data)) {
+            // swap `u` and `row`
+            row->data = self->u.data;
+            self->u.data = s;
+          };
+        }
+        else if (ROW_DENSE == self->u.kind) {
+          // `row` is sparse, so it becomes the new pivot
+          row->data = self->u.data;
+          row->kind = ROW_DENSE;
+          self->u.data = s;
+          self->u.kind = ROW_SPARSE;
+        }
+        else 
+          assert(false); // forgot one kind in chained `if`s?
+      }
+      else if (ROW_DENSE == row->kind) {
+        // if `u` is a sparse row, no need to check further
+        if (ROW_DENSE == self->u.kind) {
+          // swap `u` and `row` iff `row`'s leading term is less
+          if (val_abs(((dense_row_t*) row->data)->leading_term_)
+              < val_abs(((dense_row_t*) self->u.data)->leading_term_)) {
+            // swap `u` and `row`
+            dense_row_t* d = (dense_row_t*)row->data;
+            row->data = self->u.data;
+            self->u.data = d;
+          };
+        };
+      }
+      else
+        assert(false); // forgot a row kind in `if` chain?
       // perform elimination -- return NULL in case resulting row is full of zeroes
-      row_t* new_row = gaussian_elimination(&(self->u), &(self->workset->storage[n]), 
-                                            DENSE_THRESHOLD);
+      row_t* new_row = gaussian_elimination(&(self->u), row, DENSE_THRESHOLD);
       // ship reduced rows to other processors
       if (NULL != new_row->data)
         comm_send_row(sb, self->outbox, new_row);
