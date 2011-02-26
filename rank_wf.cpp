@@ -269,18 +269,8 @@ protected:
 
     /** List of rows sent to other processors and the associated MPI request. 
         We need to keep track of these in order to free the resources when we're done. */
-    typedef std::list< std::pair<mpi::request, row_ptr> > outbox_t;
+    typedef std::list< mpi::request > outbox_t;
     outbox_t outbox;
-    /** Adapt the @c outbox iterator to provide the kind of
-        bidirectional iterator over @c mpi::request objects that @c
-        boost::mpi::test_some() requires. */
-    class request_iterator : public outbox_t::iterator {
-    public:
-      request_iterator(outbox_t::iterator& parent_)
-        : outbox_t::iterator(parent_) { };
-      //virtual ~request_iterator();
-      mpi::request& operator->() { return static_cast<outbox_t::iterator>(*this)->first; }
-    };
 
     /** A row will switch its storage to dense format when the percent of
         nonzero entries w.r.t. total length exceeds this value. */
@@ -550,7 +540,7 @@ protected:
     };
 
     /** Send the row data pointed by @c row to the processor owning the
-        block starting at @c col. */
+        block starting at @c col. Frees up @c row */
     void send_row(const coord_t column, row_ptr& row) {
       if (parent.is_local(column))
         parent.local_owner(column).recv_row(row);
@@ -562,13 +552,15 @@ protected:
           do_send(Waterfall& wf_, const coord_t column_) : wf(wf_), column(column_) { };
           mpi::request operator() (sparse_row_ptr& r) {
             return wf.comm.isend(wf.remote_owner(column), TAG_ROW_SPARSE, r);
+            delete r;
           };
           mpi::request operator() (dense_row_ptr& r) {
             return wf.comm.isend(wf.remote_owner(column), TAG_ROW_DENSE, r);
+            delete r;
           };
         };
         mpi::request req = boost::apply_visitor(do_send(parent,column), row);
-        outbox.push_back(std::make_pair<mpi::request,row_ptr>(req, row));
+        outbox.push_back(req);
       };
     };
 
@@ -580,10 +572,10 @@ protected:
       // get row size with boost::variant
       class __row_size : public boost::static_visitor<size_t> {
       public:
-        size_t operator() (sparse_row_ptr& r) const {
+        size_t operator() (const sparse_row_ptr& r) const {
           return r->size();
         };
-        size_t operator() (dense_row_ptr& r) const {
+        size_t operator() (const dense_row_ptr& r) const {
           return r->size();
         };
       }; // class __row_size
@@ -592,7 +584,7 @@ protected:
         size_t operator() (row_ptr& r) {
           return boost::apply_visitor(__row_size(), r);
         };
-      } row_size; 
+      } const row_size; 
 
       // get first nonzero column with boost::variant
       class __first_nonzero_column : public boost::static_visitor<coord_t> {
@@ -639,18 +631,9 @@ protected:
 
       if (running == phase) {
         if (outbox.size() > 0) {
-          // check if some test messages have arrived...
-          request_iterator first(outbox.begin());
-          request_iterator last(outbox.end());
-          request_iterator first_done(mpi::test_some(first, last));
-          
-          // ...and free corresponding resources
-          for (outbox_t::iterator it = first_done.parent();
-               it != outbox.end(); 
-               ++it) {
-            delete it->second;
-            outbox.erase(it);
-          };
+          // check if some test messages have arrived
+          // and free corresponding resources
+          outbox.erase(mpi::test_some(outbox.begin(), outbox.end()), outbox.end());
         };
       }
       else { // `phase == ending`: end message already received
@@ -659,15 +642,7 @@ protected:
         
         if (outbox.size() > 0) {
           // wait untill all sent messages have arrived
-          request_iterator first = outbox.begin();
-          request_iterator last = outbox.end();
-          mpi::wait_all(first, last);
-          
-          // free resources
-          for (outbox_t::iterator it = outbox.begin(); 
-               it != outbox.end(); 
-               ++it)
-            delete it->second;
+          mpi::wait_all(outbox.begin(), outbox.end());
         };
         
         // all done, exit with 0 only if we never processed any row
@@ -687,7 +662,7 @@ protected:
         starting at @c col. */
     void send_end(const coord_t column) {
       if (parent.is_local(column))
-        parent.local_owner(column).recv(TAG_END, NULL);
+        parent.local_owner(column).end_phase();
       else { // ship to remote process
         parent.comm.send(parent.remote_owner(column), TAG_END, column);
       };
@@ -700,8 +675,15 @@ protected:
       class _ge_op
         : public boost::static_visitor<row_ptr>
       {
+        const coord_t starting_column;
+        const coord_t ending_column;
+        const double dense_threshold;
       public:
-        template <>
+        _ge_op(const coord_t starting_column_, const coord_t ending_column_, 
+               const double dense_threshold_)
+          : starting_column(starting_column_), ending_column(ending_column_),
+            dense_threshold(dense_threshold_)
+        { };
         row_ptr operator() (sparse_row_ptr first, sparse_row_ptr second) const {
           // assume that `first` has already been checked for fill-in
           // in the main loop, so we won't attempt to convert it here;
@@ -719,21 +701,18 @@ protected:
           }; // if (fill_in > dense_threshold)
         };
 
-        template <>
         row_ptr operator() (dense_row_ptr first, sparse_row_ptr second) const {
           return first->gaussian_elimination(second);
         };
 
-        template <>
         row_ptr operator() (sparse_row_ptr first, dense_row_ptr second) const {
           return first->gaussian_elimination(second);
         };
 
-        template <>
         row_ptr operator() (dense_row_ptr first, dense_row_ptr second) const {
           return first->gaussian_elimination(second);
         };
-      } ge_op;
+        } ge_op(starting_column, ending_column);
       return boost::apply_visitor(ge_op, first, second);
     }; // gaussian_elimination
   };
