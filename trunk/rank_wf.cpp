@@ -166,8 +166,7 @@ public:
         step() method should be called no more. */
     enum { running, ending, done } phase;
     
-    /** List of incoming messages from other processors; each message
-        consists of a message tag (an int) and (optionally) a rows. */
+    /** List of incoming rows from other processors. */
     typedef std::list< row_ptr > inbox_t;
     inbox_t inbox;
 #ifdef WITH_OPENMP
@@ -328,7 +327,7 @@ public:
           Initializes the row with invalid values; should call
           serialize immediately after!  */
       DenseRow() 
-        : Row(sparse, -1, -1, 0, false), storage() 
+        : Row(dense, -1, -1, 0, false), storage() 
       { };
       /** Print a textual representation of the row to stream @c o. */
       virtual void print_on(std::ostream& o) const;
@@ -524,16 +523,14 @@ Waterfall::rank()
         Processor::sparse_row_ptr new_row = new Processor::SparseRow();
         comm.recv(status->source(), status->tag(), new_row);
         assert(is_local(new_row->first_nonzero_column()));
-        Processor::row_ptr new_row_ptr(new_row);
-        local_owner(new_row->first_nonzero_column()).recv_row(new_row_ptr);
+        local_owner(new_row->first_nonzero_column()).recv_row(new_row);
         break;
       };
       case TAG_ROW_DENSE: {
         Processor::dense_row_ptr new_row = new Processor::DenseRow();
         comm.recv(status->source(), status->tag(), new_row);
         assert(is_local(new_row->first_nonzero_column()));
-        Processor::row_ptr new_row_ptr(new_row);
-        local_owner(new_row->first_nonzero_column()).recv_row(new_row_ptr);
+        local_owner(new_row->first_nonzero_column()).recv_row(new_row);
         break;
       };
       case TAG_END: {
@@ -620,14 +617,12 @@ Waterfall::Processor::send_row(row_ptr row)
     parent.local_owner(column).recv_row(row);
   else { // ship to remote process
     mpi::request req;
-    if (row->kind == Row::sparse) {
+    if (row->kind == Row::sparse)
       req = parent.comm.isend(parent.remote_owner(column), TAG_ROW_SPARSE, 
                               static_cast<sparse_row_ptr>(row));
-    }
-    else if (row->kind == Row::dense) {
+    else if (row->kind == Row::dense)
       req = parent.comm.isend(parent.remote_owner(column), TAG_ROW_DENSE, 
                               static_cast<dense_row_ptr>(row));
-    }
     else
       // should not happen!
       throw std::logic_error("Unhandled row type in Processor::send_row()");
@@ -738,7 +733,7 @@ Waterfall::Processor::Row::first_nonzero_column() const
 inline Waterfall::Processor::row_ptr
 Waterfall::Processor::Row::gaussian_elimination(row_ptr other, const double dense_threshold) const
 {
-  if (sparse == this->kind and sparse == other->kind) {
+  if ((sparse == this->kind) and (sparse == other->kind)) {
     const_sparse_row_ptr s1 = static_cast<const_sparse_row_ptr>(this);
     sparse_row_ptr s2 = static_cast<sparse_row_ptr>(other);
     // assume that `this` has already been checked for fill-in
@@ -754,17 +749,17 @@ Waterfall::Processor::Row::gaussian_elimination(row_ptr other, const double dens
       return s1->gaussian_elimination(s2);
     }; // if (fill_in > ...)
   }
-  else if (sparse == this->kind and dense == other->kind) {
+  else if ((sparse == this->kind) and (dense == other->kind)) {
     const_sparse_row_ptr s = static_cast<const_sparse_row_ptr>(this);
     dense_row_ptr d = static_cast<dense_row_ptr>(other);
     return s->gaussian_elimination(d);
   }
-  else if (dense == this->kind and sparse == other->kind) {
+  else if ((dense == this->kind) and (sparse == other->kind)) {
     const_dense_row_ptr d = static_cast<const_dense_row_ptr>(this);
     sparse_row_ptr s = static_cast<sparse_row_ptr>(other);
     return d->gaussian_elimination(s);
   }
-  else if (dense == this->kind and dense == other->kind) {
+  else if ((dense == this->kind) and (dense == other->kind)) {
     const_dense_row_ptr d1 = static_cast<const_dense_row_ptr>(this);
     dense_row_ptr d2 = static_cast<dense_row_ptr>(other);
     return d1->gaussian_elimination(d2);
