@@ -55,17 +55,18 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ctor_from_iter )
   for(int i = 0; i < 10; ++i)
     entries[i*i] = i+1;
 
-  SparseRow< int,int > s(entries.begin(), entries.end(), 100);
-  BOOST_CHECK_EQUAL( s.first_nonzero_column(), 0 );
+  SparseRow< int,int > *s = 
+    SparseRow< int,int >::new_from_range(entries.begin(), entries.end(), 100);
+  BOOST_CHECK_EQUAL( s->first_nonzero_column(), 0 );
 
   int j = 0;
-  for(int i = 0; i < s.size(); ++i)
+  for(int i = 0; i < s->size(); ++i)
     if (j*j == i) {
-      BOOST_CHECK_EQUAL(s.get(i), j+1);
+      BOOST_CHECK_EQUAL(s->get(i), j+1);
       j++;
     }
     else 
-      BOOST_CHECK_EQUAL(s.get(i), 0);
+      BOOST_CHECK_EQUAL(s->get(i), 0);
 }
 
 
