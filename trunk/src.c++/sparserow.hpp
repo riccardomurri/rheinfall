@@ -229,8 +229,7 @@ namespace rheinfall {
   double 
   SparseRow<val_t,coord_t>::fill_in() const 
   { 
-    return 100.0 * size() / (Row_::ending_column_ 
-                             - Row_::starting_column_ + 1); 
+    return 100.0 * size() / (Row_::ending_column_ - Row_::starting_column_); 
   };
 
 
