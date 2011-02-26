@@ -31,6 +31,8 @@
 #define RF_TYPES_HPP
 
 
+#include <boost/mpl/bool.hpp>
+namespace mpl = boost::mpl;
 #include <boost/static_assert.hpp>
 
 #ifdef HAVE_GMPXX
@@ -39,6 +41,7 @@
 
 #include <cassert>
 #include <cstdlib> // std::abs
+#include <limits>
 
 
 
@@ -194,6 +197,60 @@ namespace rheinfall {
   RF_TYPE_IS_DIVISION_RING(mpq_class)
   RF_TYPE_IS_DIVISION_RING(mpf_class)
 #endif 
+
+
+
+  /** Implementation of the @a is_zero(const val_t&) function. */
+  namespace impl {
+    // for exact number types, we can just compare with 0
+    template<typename val_t> bool is_zero(const val_t& x, mpl::true_,   mpl::true_)  { return static_cast<val_t>(0) == x; }
+    template<typename val_t> bool is_zero(const val_t& x, mpl::true_,  mpl::false_)  { return (x == 0); }
+    
+    // for std floating point types, we can check if number is within a certain tolerance
+    // XXX: it should be possible to choose the tolerance!
+    template<typename val_t> bool is_zero(const val_t& x, mpl::false_,  mpl::true_)  
+    { 
+      const val_t b = std::numeric_limits<val_t>::epsilon() * static_cast<val_t>(2);
+      return (-b < x) and (x < b);
+    }
+    
+    // no default implementation for non-std inexact types
+    template<typename val_t> bool is_zero(const val_t& x, mpl::false_, mpl::false_)  { BOOST_STATIC_ASSERT(sizeof(val_t) == 0); }
+  };
+
+
+  /** Return @c true if @a x is to be considered zero.  
+   * The default implementation does the following:
+   * - for @a exact numeric types, it does a direct comparison with 0;
+   * - for inexact standard types (i.e., primitive floating-point types), 
+   *   @c true is returned if the value @a x falls within range -epsilon .. +epsilon;
+   * - for other inexact types, a compile-time assertion is thrown, 
+   *   so you should specialize this template with the appropriate function 
+   *   for user-defined inexact types.
+   * 
+   */
+  template <typename val_t>
+  static inline
+  bool is_zero(const val_t& x)
+  {
+    return impl::is_zero(x, 
+               mpl::bool_< 
+                   std::numeric_limits<val_t>::is_exact 
+               >(),
+               mpl::bool_<
+                   std::numeric_limits<val_t>::is_specialized 
+               >());
+  };
+
+#define RF_USE_EXACT_IS_ZERO(T) \
+  template<> bool is_zero<T>(const T& x) { return x == 0; }
+
+#ifdef HAVE_GMPXX
+  RF_USE_EXACT_IS_ZERO(mpf_class)
+  RF_USE_EXACT_IS_ZERO(mpq_class)
+  RF_USE_EXACT_IS_ZERO(mpz_class)
+#endif
+
 }; // namespace rheinfall
 
 
