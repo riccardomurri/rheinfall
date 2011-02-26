@@ -43,6 +43,7 @@
 #include <iostream>
 #include <list>
 #include <map>
+#include <numeric>
 #include <vector>
 
 
@@ -221,8 +222,8 @@ protected:
     /** Return index of @c Processor instance processing column @a c
         within local @a vpus array. */
     coord_t    vpu_index_for_column(const coord_t c) const;
-    /** Return @c Processor instance processing column @a c. */
-    Processor& vpu_for_column(const coord_t c) const;
+    /** Return pointer to the @c Processor instance processing column @a c. */
+    Processor* vpu_for_column(const coord_t c) const;
 #ifdef WITH_MPI
     /** Return MPI rank where VPU assigned to column @a c resides. */
     int        owner(const coord_t c) const;
@@ -287,13 +288,16 @@ protected:
   {  
     // setup the array of processors
 #ifdef WITH_MPI
-    vpus.reserve(width * (1 + ((ncols / width) / nprocs_)));
+    const int nmemb = width * (1 + ((ncols / width) / nprocs_));
 #else 
-    vpus.reserve(ncols);
+    const int nmemb = ncols;
 #endif
+    vpus.reserve(nmemb);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
         vpus.push_back(new Processor(*this, c, ncols_-1));
+    // internal check that the size of the data structure is actually correct
+    assert(vpus.size() <= nmemb);
   };
 
 
@@ -374,7 +378,7 @@ protected:
         if (NULL != row) {
           const coord_t starting_column = row->first_nonzero_column();
           if (starting_column < ncols_ and is_local(starting_column))
-            vpu_for_column(starting_column).recv_row(row);
+            vpu_for_column(starting_column)->recv_row(row);
           else
             // discard null rows and rows belonging to other MPI ranks
             delete row;
@@ -447,7 +451,7 @@ protected:
         const coord_t starting_column = row->first_nonzero_column();
         // commit row
         if (is_local(starting_column))
-          vpu_for_column(starting_column).recv_row(row);
+          vpu_for_column(starting_column)->recv_row(row);
         else {
 #ifdef WITH_MPI
           if (not local_only) {
@@ -486,7 +490,7 @@ protected:
 
     // kickstart termination signal
     if (is_local(0)) {
-      vpu_for_column(0).end_phase();
+      vpu_for_column(0)->end_phase();
 #ifdef _OPENMP
       ending_next = 0;
 #endif
@@ -494,16 +498,17 @@ protected:
 
     // collect (partial) ranks
     std::vector<int> r(vpus.size(), 0);
-    size_t n0 = 0;
-    
+  
+    coord_t n0 = 0;
     while(n0 < vpus.size()) {
       // n0 incremented each time a processor goes into `done` state 
       while (n0 < vpus.size() and vpus[n0]->is_done()) {
         delete vpus[n0];
+        vpus[n0] = NULL; // faster SIGSEGV
         ++n0;
       };
       if (n0 >= vpus.size())
-        break; // out of the while(n0 < vpus.size()) loop
+        break; // exit `while(n0 < vpus.size())` loop
 #ifdef _OPENMP
       size_t total_size, chunk_size, bottom, top;
 #     pragma omp parallel private(total_size,chunk_size,bottom,top) default(shared)
@@ -566,14 +571,18 @@ protected:
           SparseRow<val_t,coord_t>* new_row = 
             SparseRow<val_t,coord_t>::new_from_mpi_message(comm_, status->source(), status->tag());
           assert(is_local(new_row->first_nonzero_column()));
-          vpu_for_column(new_row->first_nonzero_column()).recv_row(new_row);
+          Processor* vpu = vpu_for_column(new_row->first_nonzero_column());
+          assert(NULL != vpu);
+          vpu->recv_row(new_row);
           break;
         };
         case TAG_ROW_DENSE: {
           DenseRow<val_t,coord_t>* new_row = 
             DenseRow<val_t,coord_t>::new_from_mpi_message(comm_, status->source(), status->tag());
           assert(is_local(new_row->first_nonzero_column()));
-          vpu_for_column(new_row->first_nonzero_column()).recv_row(new_row);
+          Processor* vpu = vpu_for_column(new_row->first_nonzero_column());
+          assert(NULL != vpu);
+          vpu->recv_row(new_row);
           break;
         };
         case TAG_END: {
@@ -585,7 +594,9 @@ protected:
           coord_t column = -1;
           comm_.recv(status->source(), status->tag(), column);
           assert(column >= 0 and is_local(column));
-          vpu_for_column(column).end_phase();
+          Processor* vpu = vpu_for_column(column);
+          assert(NULL != vpu);
+          vpu->end_phase();
 # ifdef _OPENMP
           ending_next = column;
 # endif
@@ -598,9 +609,7 @@ protected:
 
     // the partial rank is computed as the sum of all ranks computed
     // by local processors
-    coord_t local_rank = 0;
-    for (size_t n = 0; n < r.size(); ++n)
-      local_rank += r[n];
+    coord_t local_rank = std::accumulate(r.begin(), r.end(), 0);
 
 #ifdef WITH_MPI
     // wait until all processors have done running
@@ -639,10 +648,10 @@ protected:
 
 
   template <typename val_t, typename coord_t>
-  inline typename Rheinfall<val_t,coord_t>::Processor& 
+  inline typename Rheinfall<val_t,coord_t>::Processor*
   Rheinfall<val_t,coord_t>::vpu_for_column(const coord_t c) const
   { 
-    return *(vpus[vpu_index_for_column(c)]); 
+    return vpus[vpu_index_for_column(c)]; 
   };
 
 
@@ -663,8 +672,11 @@ protected:
 {
   coord_t column = row->first_nonzero_column();
   assert(column >= 0 and column < ncols_);
-  if (is_local(column))
-    vpu_for_column(column).recv_row(row);
+  if (is_local(column)) {
+    Processor* vpu = vpu_for_column(column);
+    assert(NULL != vpu);
+    vpu->recv_row(row);
+  }
 #ifdef WITH_MPI
   else { // ship to remote process
     mpi::request req;
@@ -696,8 +708,11 @@ Rheinfall<val_t,coord_t>::send_end(Processor const& origin, const coord_t column
   if (column >= ncols_)
     return;
 
-  if (is_local(column))
-    vpu_for_column(column).end_phase();
+  if (is_local(column)) {
+    Processor* vpu = vpu_for_column(column);
+    assert(NULL != vpu);
+    vpu->end_phase();
+  }
 #ifdef WITH_MPI
   else { // ship to remote process
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)

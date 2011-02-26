@@ -138,21 +138,21 @@ coord_t rank(switchboard_t* sb)
   // collect (partial) ranks
   coord_t* r = xcalloc(sizeof(coord_t), sb->nvpus);
 
-  size_t n0 = 0;
-  while(true) {
+  coord_t n0 = 0;
+  while(n0 < sb->nvpus) {
     // n0 incremented each time a processor goes into `done` state 
     while (n0 < sb->nvpus && vpu_is_done(sb->vpu[n0])) {
       vpu_free(sb->vpu[n0]);
       sb->vpu[n0] = NULL;
       ++n0;
     };
-    if (sb->nvpus == n0)
-      break; // exit `while(true)` loop
-    for (size_t n = n0; n < sb->nvpus; ++n) {
+    if (sb->nvpus >= n0)
+      break; // exit `while(n0 < nvpus)` loop
+    for (coord_t n = n0; n < sb->nvpus; ++n) {
       r[n] = vpu_step(sb->vpu[n], sb);
     };
     comm_receive(sb);
-  };
+  }; // end `while(n0 < sb->nvpus)`
 
   // the partial rank is computed as the sum of all ranks computed
   // by local processors
@@ -166,8 +166,7 @@ coord_t rank(switchboard_t* sb)
 
   // collect the partial ranks for all processes
   coord_t rank = 0;
-  // FIXME: MPI_Datatype depends on `val_t`!
-  MPI_Allreduce(&local_rank, &rank, 1, MPI_LONG, MPI_SUM, sb->comm);
+  MPI_Allreduce(&local_rank, &rank, 1, mpitype_val_t, MPI_SUM, sb->comm);
 #else
   coord_t rank = local_rank;
 #endif
