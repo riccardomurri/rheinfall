@@ -93,8 +93,8 @@ private:
   const int mpi_id; /**< MPI rank. */
   const int mpi_nprocs; /**< Total number of ranks in MPI communicator. */
   
-  const coord_t nrows;
-  const coord_t ncols;
+  const coord_t nrows_;
+  const coord_t ncols_;
   
   std::vector<Processor*> procs;   /**< Local processors. */
 
@@ -201,13 +201,14 @@ protected:
     class SparseRow : public Row
     {
     public:
+      friend class Waterfall; // DEBUG -- see read_noninterleaved
       SparseRow(const coord_t starting_column, const coord_t ending_column, const val_t leading_term) 
         : Row(sparse, starting_column, ending_column, leading_term), storage() 
       { };
       /** Constructor initializing an invalid row; should call
           serialize immediately after!  */
       SparseRow() 
-        : Row(sparse, -1 , -1, 0), storage() 
+        : Row(sparse, -1, -1, 0), storage() 
       { };
       /** Return fill-in percentage, that is the number of actual
           nonzero entries divided by the number of potential entries.  */
@@ -319,13 +320,13 @@ val_t gcd(long long const n, long long const m)
 
 Waterfall::Waterfall(const coord_t nrows, const coord_t ncols)
   : comm(mpi::communicator()), mpi_id(comm.rank()), mpi_nprocs(comm.size()),
-    nrows(nrows), ncols(ncols),
+    nrows_(nrows), ncols_(ncols),
     procs()
 {  
   // setup the array of processors
-  procs.reserve(1 + ncols / mpi_nprocs);
-  for (int n = 0; n < 1 + (ncols / mpi_nprocs); ++n)
-    procs.push_back(new Processor(*this, mpi_id + n * mpi_nprocs, ncols-1));
+  procs.reserve(1 + ncols_ / mpi_nprocs);
+  for (int n = 0; n < 1 + (ncols_ / mpi_nprocs); ++n)
+    procs.push_back(new Processor(*this, mpi_id + n * mpi_nprocs, ncols_-1));
 };
 
 
@@ -349,27 +350,43 @@ Waterfall::read_noninterleaved(std::istream& input)
         continue; 
       ++nnz;
       // SMS indices are 1-based
+      assert(i > 0 and i <= nrows_);
+      assert(j > 0 and i <= ncols_);
       --i;
       --j;
       // new row?
       if (i != current_row_index) { // yes, commit old row
         // find starting column
-        coord_t starting_column = ncols;
+        coord_t starting_column = ncols_;
         for (std::vector< std::pair<coord_t,val_t> >::const_iterator it = row.begin();
              it != row.end();
              ++it)
           if (it->first < starting_column)
             starting_column = it->first;
         // commit row
-        if (starting_column < ncols // otherwise, row is empty -- ignore it
+        if (starting_column < ncols_ // otherwise, row is empty -- ignore it
             and is_local(starting_column)) {
-          Processor::SparseRow* r = new Processor::SparseRow(starting_column, ncols-1, 0);
+          Processor::SparseRow* r = new Processor::SparseRow(starting_column, ncols_-1, 0);
           for (std::vector< std::pair<coord_t,val_t> >::const_iterator it = row.begin();
                it != row.end();
                ++it)
             {
               (*r)[it->first] = it->second;
             }; 
+#ifndef NDEBUG
+          assert(r->starting_column_ == starting_column);
+          assert(r->starting_column_ < ncols_);
+          assert(r->ending_column_ == ncols_-1);
+          assert(0 != r->leading_term_);
+          // entries in `result` are ordered by increasing column index
+          coord_t s = r->starting_column_;
+          for (Processor::SparseRow::storage_t::const_iterator it = r->storage.begin(); 
+               it < r->storage.end(); ++it) {
+            assert(s < it->first);
+            assert(0 != it->second);
+            s = it->first;
+          };
+#endif
           local_owner(starting_column).recv_row(r);
         }; // if is_local(starting_column)
         row.clear();
@@ -455,6 +472,7 @@ Waterfall::rank()
 inline bool 
 Waterfall::is_local(const coord_t c) const 
 { 
+  assert(c >= 0 and c < ncols_);
   return (mpi_id == c % mpi_nprocs); 
 };
 
@@ -462,6 +480,7 @@ Waterfall::is_local(const coord_t c) const
 inline Waterfall::Processor& 
 Waterfall::local_owner(const coord_t c)
 { 
+  assert(c >= 0 and c < ncols_);
   return *(procs[c / mpi_nprocs]); 
 };
 
@@ -469,6 +488,7 @@ Waterfall::local_owner(const coord_t c)
 inline int 
 Waterfall::remote_owner(const coord_t c) const
 { 
+  assert(c >= 0 and c < ncols_);
   return (c % mpi_nprocs); 
 };
 
@@ -652,13 +672,30 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) cons
   assert(this->starting_column_ == other->starting_column_);
   assert(0 != this->leading_term_);
   assert(0 != other->leading_term_);
+#ifndef NDEBUG
+  // entries in `this` are ordered by increasing column index
+  coord_t s1 = this->starting_column_;
+  for (storage_t::const_iterator it = this->storage.begin(); it < this->storage.end(); ++it) {
+    assert(s1 < it->first);
+    assert(0 != it->second);
+    s1 = it->first;
+  };
+  // entries in `other` are ordered by increasing column index
+  coord_t s2 = other->starting_column_;
+  for (storage_t::const_iterator it = other->storage.begin(); it < other->storage.end(); ++it) {
+    assert(s2 < it->first);
+    assert(0 != it->second);
+    s2 = it->first;
+  };
+#endif
 
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other` row
   const val_t GCD = gcd(leading_term_, other->leading_term_);
   val_t a = - (other->leading_term_ / GCD);
-  val_t b = leading_term_ / GCD;
+  val_t b = this->leading_term_ / GCD;
+  assert (0 != a and 0 != b);
 
   sparse_row_ptr result = NULL; // XXX: use boost::optional<...> instead?
 
@@ -687,10 +724,9 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) cons
     val_t entry;
     if (other_col < this_col) {
       entry = b * other_i->second;
-      if (0 != entry) {
-        coord = other_col;
-        nonzero_found = true;
-      };
+      assert(0 != entry);
+      coord = other_col;
+      nonzero_found = true;
       ++other_i;
     }
     else if (other_col == this_col) {
@@ -704,10 +740,9 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) cons
     }
     else if (other_col > this_col) {
       entry = a * this_i->second;
-      if (0 != entry) {
-        coord = this_col;
-        nonzero_found = true;
-      };
+      assert(0 != entry);
+      coord = this_col;
+      nonzero_found = true;
       ++this_i;
     }
     else 
@@ -721,14 +756,15 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) cons
       if (NULL == result) {
         // allocate new SparseRow
         result = new SparseRow(coord, ending_column_, entry);
+        assert(storage.size() + other->storage.size() <= result->storage.max_size());
         result->storage.reserve(storage.size() + other->storage.size());
+        assert(0 == result->storage.size());
       }
       else {
-        // FIXME: change storage order so that this is push_back()!
         result->storage.push_back(std::make_pair(coord, entry));
       }; 
     }; 
-  }; // while(this_i < storage.rend() ...)
+  }; // while(this_i < storage.end() ...)
 #ifndef NDEBUG
   if (NULL != result) {
     assert(result->starting_column_ > this->starting_column_);
@@ -741,6 +777,7 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) cons
     coord_t s = result->starting_column_;
     for (storage_t::const_iterator it = result->storage.begin(); it < result->storage.end(); ++it) {
       assert(s < it->first);
+      assert(0 != it->second);
       s = it->first;
     };
   };
@@ -771,7 +808,7 @@ Waterfall::Processor::SparseRow::gaussian_elimination(dense_row_ptr other) const
        ++it)
     {
       assert(it->first > starting_column_ and it->first <= ending_column_);
-      other->storage[it->first] += a*it->second;
+      other->storage[other->size() - (it->first - other->starting_column_)] += a*it->second;
     };
 
   other->_resize(); // content update done, adjust size and starting column
@@ -864,7 +901,8 @@ Waterfall::Processor::DenseRow::DenseRow(const sparse_row_ptr r)
        it != r->storage.end();
        ++it) 
     {
-      storage[it->first] = it->second;
+      assert(it->first > starting_column_ and it->first <= ending_column_);
+      storage[size_ - (it->first - starting_column_)] = it->second;
     };
 };
 
