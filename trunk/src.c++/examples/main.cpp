@@ -360,7 +360,7 @@ main(int argc, char** argv)
 #else
       rheinfall::Rheinfall<val_t, coord_t> w(cols);
 #endif
-      long nnz = w.read(input, rows, cols, transpose);
+      long nnz = w.read(input, rows, cols, true, transpose);
       input.close();
       if (0 == myid)
         std::cout << " nonzero:" << nnz;
