@@ -137,8 +137,8 @@ set_mpi_and_compiler_flavor () {
 
     # enable local sw
     sw="$HOME/sw/${compiler}-${mpi}"
-    PATH=${sw}/bin:$PATH
-    LD_LIBRARY_PATH=${sw}/lib:$LD_LIBRARY_PATH
+    PATH=${sw}/bin:$PATH; export PATH
+    LD_LIBRARY_PATH=${sw}/lib:$LD_LIBRARY_PATH; export LD_LIBRARY_PATH
 }
 
 
@@ -167,6 +167,23 @@ show_build_information () {
 }
 
 
+prepare_openmpi_environment () {
+    require_environment_var PE_HOSTFILE
+    require_environment_var TMPDIR
+    
+    cat $PE_HOSTFILE | \
+        (while read hostname nslots queue rest; 
+            do echo "$hostname slots=$nslots"; done) > $TMPDIR/hostfile
+
+    set -e
+    eval `ssh-agent -s`
+    ssh-add $HOME/.ssh/id_dsa
+    set +e
+   
+    gmca="--gmca plm_rsh_agent $HOME/bin/qrsh.sh"
+    hostfile="--hostfile $TMPDIR/hostfile"
+}
+
 
 ## generic functions
 die () {
@@ -185,6 +202,12 @@ require_command () {
   if ! have_command "$1"; then
     die 1 "Could not find required command '$1' in system PATH. Aborting."
   fi
+}
+
+require_environment_var () {
+    if [ -z "$(eval echo '$'$1)" ]; then
+        die 1 "Require environment variable '$1' is not defined or has empty value. Aborting."
+    fi
 }
 
 is_absolute_path () {
