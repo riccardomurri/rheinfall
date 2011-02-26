@@ -64,7 +64,7 @@ coord_t read_sms_file(switchboard_t* sb, FILE* input, coord_t* nrows_p, coord_t*
   if (0 == *nrows_p) {
     // read SMS header
     char M;
-    int rd = fscanf(input, "%jd %jd %c\n", nrows_p, ncols_p, &M);
+    int rd = fscanf(input, fmtspec_coord_t " " fmtspec_coord_t " %c\n", nrows_p, ncols_p, &M);
     if (rd < 0)
       return -errno;
     else if (rd < 3 || 'M' != M)
@@ -80,7 +80,7 @@ coord_t read_sms_file(switchboard_t* sb, FILE* input, coord_t* nrows_p, coord_t*
   val_t value;
   while (! feof(input)) {
     // FIXME: format string changes with `coord_t` and `val_t`!
-    int rd = fscanf(input, "%jd %jd %jd", &i, &j, &value);
+    int rd = fscanf(input, fmtspec_coord_t " " fmtspec_coord_t " " fmtspec_val_t, &i, &j, &value);
     if (rd < 3)
       return -1; // malformed input
     if (0 == i && 0 == j && 0 == value)

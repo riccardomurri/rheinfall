@@ -86,6 +86,11 @@ _inline void outbox_free(outbox_t *ob) {
   rows_list_free(ob->rows);
   free(ob);
 };
+
+_inline size_t outbox_size(outbox_t* ob) {
+  assert(requests_list_size(ob->requests) == rows_list_size(ob->rows));
+  return rows_list_size(ob->rows);
+};
 #else
 typedef void outbox_t;
 #endif // WITH_MPI
@@ -109,7 +114,7 @@ struct vpu_s {
   /** List of sent rows, of which the receiver has not yet acknowledged receipt. */
   outbox_t* outbox;
 #else
-  int outbox; // placeholder
+  void* outbox; // placeholder
 #endif
 };
 //typedef struct vpu_s vpu_t;

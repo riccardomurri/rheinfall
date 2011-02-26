@@ -48,6 +48,11 @@ vpu_new(const coord_t column)
   new_vpu->workset = rows_list_alloc(0);
   new_vpu->inbox = rows_list_alloc(0);
   new_vpu->u.data = NULL;
+#ifdef WITH_MPI
+  new_vpu->outbox = outbox_new(0);
+#else
+  new_vpu->outbox = NULL;
+#endif
   return new_vpu;
 }
 
@@ -55,6 +60,7 @@ vpu_new(const coord_t column)
 void
 vpu_free(vpu_t* vpu)
 {
+  // outbox is already freed in `comm_wait_all_and_free()`
   rows_list_free(vpu->workset);
   rows_list_free(vpu->inbox);
   if (NULL != vpu->u.data)
@@ -96,7 +102,7 @@ vpu_step(vpu_t* self, switchboard_t* sb)
                                             DENSE_THRESHOLD);
       // ship reduced rows to other processors
       if (NULL != new_row->data)
-        comm_send_row(sb, &(self->outbox), new_row);
+        comm_send_row(sb, self->outbox, new_row);
     };
     // just keep the "first" row
     rows_list_clear(&(self->workset));
@@ -104,7 +110,7 @@ vpu_step(vpu_t* self, switchboard_t* sb)
 
   if (VPU_RUNNING == self->phase) {
 #ifdef WITH_MPI
-    comm_remove_completed(&(self->outbox));
+    self->outbox = comm_remove_completed(self->outbox);
 #endif
   }
   else if (VPU_ENDING == self->phase) {
@@ -112,13 +118,13 @@ vpu_step(vpu_t* self, switchboard_t* sb)
     comm_send_end(sb, self->column + 1);
 
 #ifdef WITH_MPI        
-    if (outbox_size(&(self->outbox)) > 0) {
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+    if (outbox_size(self->outbox) > 0) {
+# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
       omp_set_lock(&mpi_send_lock_);
 # endif
       // wait untill all sent messages have arrived
-      comm_wait_all_and_then_free(&(self->outbox));
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+      comm_wait_all_and_then_free(self->outbox);
+# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
       omp_unset_lock(&mpi_send_lock_);
 # endif
     };

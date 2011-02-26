@@ -37,12 +37,17 @@
 
 
 typedef long coord_t;
-typedef intmax_t val_t;
+#define mpitype_coord_t MPI_LONG
+#define fmtspec_coord_t "%ld"
+
+typedef long long val_t;
+#define mpitype_val_t MPI_LONG_LONG
+#define fmtspec_val_t "%lld"
 #define val_abs(x) imaxabs(x)
 
 #define DENSE_THRESHOLD 40.0
 
-#if defined(WITH_MPI_SERIALIZED) || defined(WITH_MPI_MULTIPLE)
+#if (defined(WITH_MPI_SERIALIZED) || defined(WITH_MPI_MULTIPLE)) && ! defined(WITH_MPI)
 # define WITH_MPI
 #endif
 

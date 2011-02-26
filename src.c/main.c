@@ -195,7 +195,7 @@ main(int argc, char** argv)
   MPI_Comm_rank(MPI_COMM_WORLD, &me);
   if (required > provided) {
     fprintf(stderr, "WARNING: MPI rank %d requested %s but MPI library provided %s.\n"
-            me, _mpi_threading_model_name(required), _mpi_threading_model_name(provided));
+            me, mpi_threading_model_name(required), mpi_threading_model_name(provided));
   }
 # else
   // no OpenMP, use non-threaded MPI
