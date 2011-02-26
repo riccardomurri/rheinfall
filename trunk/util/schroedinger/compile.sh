@@ -52,8 +52,13 @@ show_build_information
 # figure out which source revision to check out
 revno=$(echo $rev | cut -d+ -f1 | cut -c2-)
 extra=$(echo $rev | cut -d+ -f2)
+# if there's no field-separator, `cut` outputs the same string
+# regardless of `-f`, so delete $extra here if it's the case
+if [ "_r$revno" = "_$extra" ]; then
+    extra=''
+fi
 if [ -n "$extra" -a "$revno" -ne "$(bzr revno)" ]; then
-    die 1 "Asked to tag revision '$rev' but sources are at BZR revno $(bzr revno)"
+    die 1 "Cannot tag non-current revision: request for '$rev' but sources are at BZR revno $(bzr revno)"
 fi
 
 echo === Compiling Rheinfall r$revno ... ===
