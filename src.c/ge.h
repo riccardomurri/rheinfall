@@ -29,22 +29,62 @@
 #define GE_H
 
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include "row.h"
+/** Perform Gaussian elimination. @see gaussian_elimination */
+extern sparse_row_t* gaussian_elimination_sparse_with_sparse_pivot(sparse_row_t* const pivot_row, 
+                                                                   sparse_row_t* other);
+/** Perform Gaussian elimination. @see gaussian_elimination */
+extern dense_row_t* gaussian_elimination_dense_with_sparse_pivot(sparse_row_t* const pivot_row,
+                                                                 dense_row_t* other);
+/** Perform Gaussian elimination. @see gaussian_elimination */
+extern dense_row_t* gaussian_elimination_sparse_with_dense_pivot(dense_row_t* const pivot_row,
+                                                                 sparse_row_t* other);
+/** Perform Gaussian elimination. @see gaussian_elimination */
+extern dense_row_t* gaussian_elimination_dense_with_dense_pivot(dense_row_t* const pivot_row,
+                                                                dense_row_t* other);
 
 
 /** Perform Gaussian elimination: sum a multiple of the pivot row to
     (a multiple of) row @a other so that the combination has its first
     nonzero entry at a column index strictly larger than the one of
-    both rows. Update @a other_row in place and return pointer to it.
-    In the process, the kind of @a other_row may change from @c
-    ROW_SPARSE to @c ROW_DENSE.  In any event, the @c data pointer in
-    @a other_row is a pointer to newly-allocated row data; the old one
-    is freed using @c sparse_row_free or @c dense_row_free. */
-extern row_t* gaussian_elimination(row_t* const pivot_row, row_t* other_row,
-                                   const double dense_threshold);
+    both rows. Return pointer to the combined row. Frees the pointer
+    to row @a other, unless it was updated in-place. */
+inline void*
+gaussian_elimination(void* const pivot_row, void* other, 
+                     row_kind_t pivot_row_kind, row_kind_t other_row_kind,
+                     const double dense_threshold)
+{
+  
+  if ((ROW_SPARSE == pivot_row_kind) && (ROW_SPARSE == other_row_kind)) {
+    sparse_row_t* s1 = (sparse_row_t*)pivot_row;
+    sparse_row_t* s2 = (sparse_row_t*)other_row;
+    if (sparse_row_filln_in(s2) > dense_threshold) {
+      // FIXME: could merge ctor+elimination in one funcall
+      dense_row_t* dense_other = dense_row_new_from_sparse_row(s2);
+      dense_row_free(other);
+      return gaussian_elimination_dense_with_sparse_pivot(s1, dense_other);
+    }
+    else { // `other` kept sparse
+      return gaussian_elimination_sparse_with_sparse_pivot(s1, s2);
+    }; // if (fill_in > ...)
+  }
+  else if ((ROW_SPARSE == pivot_row_kind) && (ROW_DENSE == other_row_kind)) {
+    sparse_row_t* s = (sparse_row_t*)pivot_row;
+    dense_row_t* d = (dense_row_t*)other;
+    return gaussian_elimination_dense_with_sparse_pivot(s, d);
+  }
+  else if ((ROW_DENSE == pivot_row_kind) && (ROW_SPARSE == other_row_kind)) {
+    dense_row_t* d = (dense_row_t*)pivot_row;
+    sparse_row_t* s = (sparse_row_t*)other;
+    return gaussian_elimination_sparse_with_dense_pivot(d, s);
+  }
+  else if ((ROW_DENSE == pivot_row_kind) && (ROW_DENSE == other_row_kind)) {
+    dense_row_t* d1 = (dense_row_t*)pivot_row;
+    dense_row_t* d2 = (dense_row_t*)other;
+    return gaussian_elimination_dense_with_dense_pivot(d1, d2);
+  }
+  else
+    assert(0); // should not happen!
+};
+
 
 #endif // GE_H

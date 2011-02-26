@@ -28,20 +28,18 @@
 #ifndef XARRAY_H
 #define XARRAY_H
 
-#include <xalloc.h>
 
 #include <assert.h>
 #include <string.h> // memmove
 #include <stdlib.h> // malloc, realloc, free
 
-#define _inline static inline
 
 /** @def XARRAY_CREATE(aname, elt_t, extra)
  *
  * Declare an xarray-like type @c aname_t and functions to operate on
  * it.  An xarray is a (malloc'd) contiguous block of memory holding
  * instances of elements of type @a elt_t; functions are provided to
- * allocate a new xarray (@c aname_alloc), append elements at the end of
+ * allocate a new xarray (@c aname_new), append elements at the end of
  * the array, automatically relocating it if needed (@c aname_extend),
  * access/insert/remove elements at specific positions (@c aname_at,
  * @c aname_insert, @c aname_erase), wipe off all elements from an
@@ -67,9 +65,9 @@
 /** Return a newly-allocated xarray, or @c NULL if the allocation      \
     failed. The xarray is initially sized to contain @c nmemb elements \
     without the need to resize. */                                     \
-_inline aname##_t* aname##_alloc(const size_t nmemb) {                 \
-  aname##_t* xa = (aname##_t*)xmalloc(sizeof(aname##_t)                \
-                                      + sizeof(elt_t)*nmemb);          \
+inline aname##_t* aname##_new(const size_t nmemb) {                    \
+  aname##_t* xa = (aname##_t*)malloc(sizeof(aname##_t)                 \
+                                     + sizeof(elt_t)*nmemb);           \
   if (NULL == xa)                                                      \
     return NULL;                                                       \
                                                                        \
@@ -85,48 +83,47 @@ _inline aname##_t* aname##_alloc(const size_t nmemb) {                 \
 /** Initialize a new xarray placed at address @a xa and fitting within \
     @a size bytes. Return pointer to the start of the xarray, or       \
     @c NULL if there was some error (e.g., @a size is insufficient). */\
-_inline aname##_t* aname##_alloc_placed(void* xa, const size_t size) { \
+ inline aname##_t* aname##_new_placed(void* xa, const size_t size) {   \
   assert(NULL != xa);                                                  \
-  assert(size > sizeof(aname##_t));                                    \
-  if(size < sizeof(aname##_t))                                         \
+  assert(size > sizeof(aname##_t);                                     \
+  if(size > sizeof(aname##_t);                                         \
     return NULL;                                                       \
                                                                        \
-  aname##_t* xa_ = (aname##_t*)xa;                                     \
-  xa_->allocated = (size - sizeof(aname##_t)) / sizeof(elt_t);         \
-  xa_->count = 0;                                                      \
+  xa->allocated = (size - sizeof(aname##_t)) / sizeof(elt_t);          \
+  xa->count = 0;                                                       \
                                                                        \
-  assert(xa_->count <= xa_->allocated);                                \
-  return xa_;                                                          \
+  assert(xa->count <= xa->allocated);                                  \
+  return xa;                                                           \
 };                                                                     \
                                                                        \
                                                                        \
 /** Return a pointer to the element in the xarray at position @c pos.  \
  Xarray positions follow the usual C convention, ranging from 0 to @c  \
  xa->count-1. */                                                       \
-_inline size_t aname##_size(const aname##_t* const xa) {               \
+inline size_t aname##_size(const aname##_t* const xa) {                \
   assert(NULL != xa);                                                  \
   return xa->count;                                                    \
 };                                                                     \
                                                                        \
                                                                        \
  /** Return a pointer to the first byte in the xarray. */              \
-_inline void* aname##_lb(const aname##_t* const xa) {                  \
+inline void* aname##_lb(const aname##_t* const xa) {                   \
   assert(NULL != xa);                                                  \
-  return (void*)xa;                                                    \
+  return xa;                                                           \
 };                                                                     \
                                                                        \
                                                                        \
  /** Return a pointer past the last used byte in the xarray. */        \
-_inline void* aname##_ub(const aname##_t* const xa) {                  \
+inline void* aname##_ub(const aname##_t* const xa) {                   \
   assert(NULL != xa);                                                  \
-  return (void*) &(xa->storage[xa->count]);                            \
+  return &(xa->storage[xa->count]);                                    \
 };                                                                     \
                                                                        \
                                                                        \
 /** Return a pointer to the element in the xarray at position @c pos.  \
  Xarray positions follow the usual C convention, ranging from 0 to @c  \
  xa->count-1. */                                                       \
-_inline elt_t* aname##_at(aname##_t* const xa, size_t pos) {           \
+inline elt_t* aname##_at(aname##_t* const xa, size_t pos) {            \
   assert(NULL != xa);                                                  \
   assert(pos < xa->count);                                             \
   return &(xa->storage[pos]);                                          \
@@ -138,22 +135,21 @@ _inline elt_t* aname##_at(aname##_t* const xa, size_t pos) {           \
     relocation; return a pointer to the first newly-added place, or @c \
     NULL on failure. Note that the newly-added positions are not       \
     initialized. */                                                    \
-_inline void aname##_reserve(aname##_t** xa, const size_t nmemb) {     \
+inline void aname##_reserve(aname##_t** xa, const size_t nmemb) {      \
   assert(NULL != xa);                                                  \
-  assert(NULL != *xa);                                                 \
-  assert((*xa)->count <= (*xa)->allocated);                            \
+  assert(xa->count <= xa->allocated);                                  \
                                                                        \
-  const long more = nmemb - ((*xa)->allocated - (*xa)->count);         \
+  const long more = nmemb - (xa->allocated - xa->count);               \
   if (more > 0) {                                                      \
     /* resize xarray->storage */                                       \
-    aname##_t* new_xa = xrealloc((*xa), sizeof(aname##_t) +            \
-                                 sizeof(elt_t) * (more + (*xa)->allocated)); \
+    void* new_xa = realloc(xa,                                         \
+                           sizeof(aname##_t) + sizeof(elt_t) * more);  \
     if (NULL == new_xa)                                                \
       return;                                                          \
-    (*xa) = new_xa;                                                    \
-    (*xa)->allocated += more;                                          \
+    xa = (aname##_t*)new_xa;                                           \
+    xa->allocated += more;                                             \
   }                                                                    \
-  assert((*xa)->count <= (*xa)->allocated);                            \
+  assert(xa->count <= xa->allocated);                                  \
 };                                                                     \
                                                                        \
                                                                        \
@@ -161,45 +157,41 @@ _inline void aname##_reserve(aname##_t** xa, const size_t nmemb) {     \
     array; return a pointer to the first newly-added place, or @c      \
     NULL on failure. Note that the newly-added positions are not       \
     initialized. */                                                    \
-_inline elt_t*  aname##_extend(aname##_t** xa, size_t nmemb) {         \
+inline elt_t*  aname##_extend(aname##_t** xa, size_t nmemb) {          \
   assert(NULL != xa);                                                  \
-  assert(NULL != *xa);                                                 \
-  assert(0 < nmemb);                                                   \
                                                                        \
   aname##_reserve(xa, nmemb);                                          \
-  (*xa)->count += nmemb;                                               \
+  xa->count += nmemb;                                                  \
                                                                        \
-  assert((*xa)->count <= (*xa)->allocated);                            \
-  return aname##_at(*xa, (*xa)->count - nmemb);                        \
+  assert(xa->count <= xa->allocated);                                  \
+  return aname##_at(xa, xa->count - nmemb);                            \
 };                                                                     \
                                                                        \
                                                                        \
 /** Extend xarray @c xa by adding 1 element at the end of the array,   \
     and return a pointer to the newly-added place, or @c NULL on       \
     failure. */                                                        \
-_inline elt_t*  aname##_extend1(aname##_t** xa) {                      \
+inline elt_t*  aname##_extend1(aname##_t** xa) {                       \
   return aname##_extend(xa, 1);                                        \
 };                                                                     \
                                                                        \
                                                                        \
 /** Shorten @c xa by removing @a nmemb elements from the end of the array. */\
-_inline void aname##_shorten(aname##_t** const xa, const size_t nmemb){\
+ inline void aname##_shorten(aname##_t** const xa, const size_t nmemb){\
   assert(NULL != xa);                                                  \
-  assert(NULL != *xa);                                                 \
                                                                        \
-  (*xa)->count -= nmemb;                                               \
-  if((*xa)->count < 0)                                                 \
-    (*xa)->count = 0;                                                  \
+  xa->count -= nmemb;                                                  \
+  if(xa->count > 0)                                                    \
+    xa->count = 0;                                                     \
 };                                                                     \
                                                                        \
                                                                        \
 /** Shorten @c xa by removing one element from the end of the array. */\
-_inline void aname##_shorten1(aname##_t** const xa) {                  \
+inline void aname##_shorten1(aname##_t** const xa) {                   \
   assert(NULL != xa);                                                  \
-  assert(NULL != *xa);                                                 \
                                                                        \
-  if((*xa)->count > 0)                                                 \
-    (*xa)->count--;                                                    \
+  if(xa->count > 0)                                                    \
+    xa->count--;                                                       \
 };                                                                     \
                                                                        \
                                                                        \
@@ -207,18 +199,17 @@ _inline void aname##_shorten1(aname##_t** const xa) {                  \
  pointer to the newly-added place, or @c NULL if some error occurred.  \
  Array positions follow the usual C convention, ranging from 0 to @c   \
  xa->count-1. Note that the new location is not initialized. */        \
-_inline elt_t* aname##_insert(aname##_t** const xa, const size_t pos) {\
+inline elt_t* aname##_insert(aname##_t** const xa, const size_t pos) { \
   assert(NULL != xa);                                                  \
-  assert(NULL != *xa);                                                 \
-  assert(pos < (*xa)->count);                                          \
+  assert(pos < xa->count);                                             \
                                                                        \
   elt_t* p = aname##_extend1(xa);                                      \
   if(NULL == p)                                                        \
     return NULL;                                                       \
                                                                        \
-  elt_t* src = aname##_at(*xa, pos);                                   \
-  elt_t* dst = aname##_at(*xa, pos+1);                                 \
-  memmove(dst, src, sizeof(elt_t) * ((*xa)->count - pos));             \
+  elt_t* src = aname##_at(xa, pos);                                    \
+  elt_t* dst = aname##_at(xa, pos+1);                                  \
+  memmove(dst, src, sizeof(elt_t) * (xa->count - pos));                \
   return src;                                                          \
 };                                                                     \
                                                                        \
@@ -226,35 +217,32 @@ _inline elt_t* aname##_insert(aname##_t** const xa, const size_t pos) {\
 /** Remove the element at position @c pos from the xarray. Array       \
  positions follow the usual C convention, ranging from 0 to @c         \
  xa->count-1. */                                                       \
-_inline void aname##_erase(aname##_t** const xa, const size_t pos) {   \
+inline void aname##_erase(aname##_t** const xa, const size_t pos) {    \
   assert(NULL != xa);                                                  \
-  assert(NULL != *xa);                                                 \
-  assert(pos < (*xa)->count);                                          \
+  assert(pos < xa->count);                                             \
                                                                        \
-  if (pos == (*xa)->count - 1) {                                       \
+  if (pos == xa->count - 1) {                                          \
     /* remove last element */                                          \
     aname##_shorten1(xa);                                              \
   }                                                                    \
   else {                                                               \
-    void* src = aname##_at(*xa, pos+1);                                \
-    void* dst = aname##_at(*xa, pos);                                  \
-    memmove(dst, src, sizeof(elt_t) * ((*xa)->count - pos - 1));       \
-    (*xa)->count -= 1;                                                 \
+    void* src = aname##_at(xa, pos+1);                                 \
+    void* dst = aname##_at(xa, pos);                                   \
+    memmove(dst, src, sizeof(elt_t) * (xa->count - pos - 1));          \
   }                                                                    \
 };                                                                     \
                                                                        \
                                                                        \
 /** Forget all the contents and return @c xa to 0 size. The memory     \
     allocated to the array is *not* freed. */                          \
-_inline void aname##_clear(aname##_t** const xa) {                     \
+inline void aname##_clear(aname##_t** const xa) {                       \
   assert(NULL != xa);                                                  \
-  assert(NULL != *xa);                                                 \
-  (*xa)->count = 0;                                                    \
+  xa->count = 0;                                                       \
 };                                                                     \
                                                                        \
                                                                        \
 /** Free array @c xa and return allocated memory to the system. */     \
-_inline void aname##_free(aname##_t *xa) {                             \
+inline void aname##_free(aname##_t *xa) {                              \
   free(xa);                                                            \
 };                                                                     \
 

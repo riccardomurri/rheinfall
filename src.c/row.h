@@ -29,14 +29,10 @@
 #define ROW_H
 
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include "common.h"
+#include "config.h"
 #include "xarray.h"
 
-#include <assert.h>
+#include <stdbool.h>
 
 
 typedef enum {
@@ -54,7 +50,7 @@ typedef struct {
 } row_t;
 
 /** An extensible set of rows. */
-XARRAY_DECLARE(rows_list, row_t, /* no extra data */);
+XARRAY_DECLARE(rows_list, row_t*, /* no extra data */);
 
 
 /********************** sparse row definition **************************/
@@ -65,39 +61,28 @@ typedef struct {
 } entry_t;
 XARRAY_DECLARE(sparse_row, entry_t,      \
                /* extra fields, the same for sparse and dense matrices */ \
+               row_kind_t kind_;         \
                coord_t starting_column_; \
                coord_t ending_column_;   \
                val_t leading_term_;      \
                );
 
-/** Allocate and initialize new @c sparse_row_t object. */
-_inline sparse_row_t* sparse_row_new(const coord_t starting_column, 
-                                     const coord_t ending_column,
-                                     const val_t leading_term) {
-  sparse_row_t* row = sparse_row_alloc(0);
-  row->starting_column_ = starting_column;
-  row->ending_column_ = ending_column;
-  row->leading_term_ = leading_term;
-  return row;
-};
-
 /** Return fill-in percentage, that is the number of actual
     nonzero entries divided by the number of potential entries.  */
-_inline double sparse_row_fill_in(const sparse_row_t const* row) {
+inline double sparse_row_fill_in(const sparse_row_t const* row) {
   return 100.0 * sparse_row_size(row) / (row->ending_column_ - row->starting_column_ + 1);
 };
 /** Reset starting column and leading term to the first nonzero
     entry in the row.  Return pointer to this row, or @c NULL if
     the row consists entirely of null values.  Used for
     two-phase construction. */
-extern sparse_row_t* sparse_row_adjust(sparse_row_t* row);
+extern sparse_row_t* sparse_row_adjust(sparse_row_t const* row);
 /** Return a copy of the element stored at column @a col */
-extern val_t sparse_row_get(const sparse_row_t* const row, const coord_t col);
+extern val_t sparse_row_get(const sparse_row_t const* row, const coord_t col);
 /** Set the element stored at column @a col */
-extern void sparse_row_set(sparse_row_t** rowp, const coord_t col, const val_t value);
+extern void sparse_row_set(sparse_row_t const* row, const coord_t col, const val_t value);
 
 #ifndef NDEBUG
-# include <stdbool.h>
 extern bool sparse_row_ok(sparse_row_t *row);
 #endif
 
@@ -107,6 +92,7 @@ extern bool sparse_row_ok(sparse_row_t *row);
 
 XARRAY_DECLARE(dense_row, val_t,         \
                /* extra fields, the same for sparse and dense matrices */ \
+               row_kind_t kind_;         \
                coord_t starting_column_; \
                coord_t ending_column_;   \
                val_t leading_term_;      \
@@ -120,7 +106,7 @@ extern dense_row_t* dense_row_new_from_sparse_row(sparse_row_t* const row);
     If @a row is a null row, then free @a row and return NULL. */
 extern dense_row_t* dense_row_adjust(dense_row_t* const row);
 /** Return a copy of the element stored at column @a col */
-_inline val_t dense_row_get(dense_row_t* const row, const coord_t col) {
+inline val_t dense_row_get(dense_row_t* const row, const coord_t col) {
   assert(col >= row->starting_column_ && col <= row->ending_column_);
   if (col == row->starting_column_)
     return row->leading_term_;
@@ -128,7 +114,7 @@ _inline val_t dense_row_get(dense_row_t* const row, const coord_t col) {
     return row->storage[dense_row_size(row) - col - 1];
 };
 /** Set the element stored at column @a col */
-extern void dense_row_set(dense_row_t** const rowp, const coord_t col, const val_t value);
+extern void dense_row_set(dense_row_t* const row, const coord_t col, const val_t value);
 
 
 
