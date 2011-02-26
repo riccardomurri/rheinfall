@@ -166,8 +166,13 @@ protected:
       typedef enum { sparse, dense } kind_t;
       const kind_t kind;
       /** Constructor. */
-      Row(const kind_t kind_, const coord_t starting_column, const coord_t ending_column)
-        : kind(kind_), starting_column_(starting_column), ending_column_(ending_column)
+      Row(const kind_t kind_, 
+          const coord_t starting_column, const coord_t ending_column, 
+          const val_t leading_term)
+        : kind(kind_), 
+          starting_column_(starting_column), 
+          ending_column_(ending_column),
+          leading_term_(leading_term)
       { };
     public:
       /** Virtual destructor (for actual use in subclasses). */
@@ -196,13 +201,13 @@ protected:
     class SparseRow : public Row
     {
     public:
-      SparseRow(const coord_t starting_column, const coord_t ending_column) 
-        : Row(sparse, starting_column, ending_column), storage() 
+      SparseRow(const coord_t starting_column, const coord_t ending_column, const val_t leading_term) 
+        : Row(sparse, starting_column, ending_column, leading_term), storage() 
       { };
       /** Constructor initializing an invalid row; should call
           serialize immediately after!  */
       SparseRow() 
-        : Row(sparse, -1 , -1), storage() 
+        : Row(sparse, -1 , -1, 0), storage() 
       { };
       /** Return fill-in percentage, that is the number of actual
           nonzero entries divided by the number of potential entries.  */
@@ -340,6 +345,8 @@ Waterfall::read_noninterleaved(std::istream& input)
       input >> i >> j >> value;
       if (0 == i and 0 == j and 0 == value)
         break; // end of matrix stream
+      if (0 == value)
+        continue; 
       ++nnz;
       // SMS indices are 1-based
       --i;
@@ -356,7 +363,7 @@ Waterfall::read_noninterleaved(std::istream& input)
         // commit row
         if (starting_column < ncols // otherwise, row is empty -- ignore it
             and is_local(starting_column)) {
-          Processor::SparseRow* r = new Processor::SparseRow(starting_column, ncols-1);
+          Processor::SparseRow* r = new Processor::SparseRow(starting_column, ncols-1, 0);
           for (std::vector< std::pair<coord_t,val_t> >::const_iterator it = row.begin();
                it != row.end();
                ++it)
@@ -473,13 +480,6 @@ Waterfall::Processor::recv_row(row_ptr new_row)
 {
   // FIXME: requires locking for MT operation
   inbox.push_back(new_row);
-  // DEBUG
-  std::cerr << "DEBUG: Processor " <<this 
-            << " received row"
-            << " of size " << new_row->size()
-            << " starting at column " << new_row->first_nonzero_column()
-            << " (row_ptr " <<new_row<< ")"
-            << std::endl;
 };
 
 
@@ -508,7 +508,6 @@ int
 Waterfall::Processor::step() 
 {
   assert(not is_done()); // cannot be called once finished
-  std::cerr << "DEBUG: stepping Processor " << this << std::endl;
 
   // receive new rows
   for (inbox_t::iterator it = inbox.begin(); it != inbox.end(); ++it) {
@@ -523,11 +522,10 @@ Waterfall::Processor::step()
   if (rows.size() > 0) {
     row_ptr first = rows.front();
     for (block::iterator second = rows.begin()+1; second < rows.end(); ++second) {
-      // perform elimination
+      // perform elimination -- return NULL in case resulting row is full of zeroes
       row_ptr new_row = first->gaussian_elimination(*second, dense_threshold);
-          
       // ship reduced rows to other processors
-      if (new_row->size() > 0) {
+      if (NULL != new_row and new_row->size() > 0) {
         send_row(new_row);
       }
     };
@@ -652,6 +650,8 @@ Waterfall::Processor::sparse_row_ptr
 Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) const
 {
   assert(this->starting_column_ == other->starting_column_);
+  assert(0 != this->leading_term_);
+  assert(0 != other->leading_term_);
 
   // compute:
   //   `a`: multiplier for `this` row
@@ -709,7 +709,10 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) cons
         nonzero_found = true;
       };
       ++this_i;
-    };
+    }
+    else 
+      // should not happen!
+      throw std::logic_error("Unhandled case in SparseRow::gaussian_elimination(SparseRow*)");
     
     if (nonzero_found) {
       // XXX: the following code makes assumptions about how the
@@ -717,13 +720,12 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) cons
       // from SparseRow::operator[] for efficiency
       if (NULL == result) {
         // allocate new SparseRow
-        result = new SparseRow(coord, ending_column_);
-        result->leading_term_ = entry;
+        result = new SparseRow(coord, ending_column_, entry);
         result->storage.reserve(storage.size() + other->storage.size());
       }
       else {
         // FIXME: change storage order so that this is push_back()!
-        result->storage.insert(result->storage.begin(), std::make_pair(coord, entry));
+        result->storage.push_back(std::make_pair(coord, entry));
       }; 
     }; 
   }; // while(this_i < storage.rend() ...)
@@ -733,19 +735,28 @@ Waterfall::Processor::SparseRow::gaussian_elimination(sparse_row_ptr other) cons
     assert(result->starting_column_ > other->starting_column_);
     assert(result->ending_column_ == this->ending_column_);
     assert(result->size() <= this->size() + other->size());
+    assert(0 != this->leading_term_);
+    assert(0 != other->leading_term_);
+    // entries in `result` are ordered by increasing column index
+    coord_t s = result->starting_column_;
+    for (storage_t::const_iterator it = result->storage.begin(); it < result->storage.end(); ++it) {
+      assert(s < it->first);
+      s = it->first;
+    };
   };
 #endif
   delete other; // release old storage
-  if (NULL == result) // row full of zeroes
-    return new SparseRow(ending_column_, ending_column_);
-  else 
-    return result;
+  return result;
 }; // sparse_row_ptr gaussian_elimination(sparse_row_ptr r)
 
 
 Waterfall::Processor::dense_row_ptr 
 Waterfall::Processor::SparseRow::gaussian_elimination(dense_row_ptr other) const
 {
+  assert(this->starting_column_ == other->starting_column_);
+  assert(0 != this->leading_term_);
+  assert(0 != other->leading_term_);
+
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other` row
@@ -843,7 +854,7 @@ Waterfall::Processor::SparseRow::size() const
 // ------- DenseRow -------
 
 Waterfall::Processor::DenseRow::DenseRow(const sparse_row_ptr r) 
-  : Row(dense, r->starting_column_, r->ending_column_),
+  : Row(dense, r->starting_column_, r->ending_column_, r->leading_term_),
     size_(ending_column_ - starting_column_ + 1),
     storage(new val_t[size_]) 
 { 
@@ -861,7 +872,7 @@ Waterfall::Processor::DenseRow::DenseRow(const sparse_row_ptr r)
 inline
 Waterfall::Processor::DenseRow::DenseRow(const coord_t starting_column, 
                                          const size_t ending_column) 
-  : Row(dense, starting_column, ending_column),
+  : Row(dense, starting_column, ending_column, 0),
     size_(ending_column_ - starting_column_ + 1),
     storage(new val_t[size_]) 
 { 
@@ -871,7 +882,7 @@ Waterfall::Processor::DenseRow::DenseRow(const coord_t starting_column,
 
 inline
 Waterfall::Processor::DenseRow::DenseRow() 
-  : Row(dense, -1, -1),
+  : Row(dense, -1, -1, 0),
     size_(0),
     storage(NULL) 
 { };
@@ -886,6 +897,10 @@ Waterfall::Processor::DenseRow::~DenseRow()
 inline Waterfall::Processor::dense_row_ptr 
 Waterfall::Processor::DenseRow::gaussian_elimination(const sparse_row_ptr other) const
 {
+  assert(this->starting_column_ == other->starting_column_);
+  assert(0 != this->leading_term_);
+  assert(0 != other->leading_term_);
+
   // convert `other` to dense storage upfront: adding the
   // non-zero entries from `this` would made it pretty dense
   // anyway
@@ -898,7 +913,11 @@ Waterfall::Processor::DenseRow::gaussian_elimination(const sparse_row_ptr other)
 inline Waterfall::Processor::dense_row_ptr 
 Waterfall::Processor::DenseRow::gaussian_elimination(const dense_row_ptr other) const
 {
+  assert(this->starting_column_ == other->starting_column_);
+  assert(0 != this->leading_term_);
+  assert(0 != other->leading_term_);
   assert(this->size() == other->size());
+
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other` row
@@ -911,7 +930,7 @@ Waterfall::Processor::DenseRow::gaussian_elimination(const dense_row_ptr other) 
     other->storage[j] *= a;
     other->storage[j] += b * storage[j];
   };
-  other->_resize(); // update done, adjust size and string column
+  other->_resize(); // update done, adjust size and starting column
   return other;
 }; // dense_row_ptr gaussian_elimination(dense_row_ptr other)
 
@@ -941,15 +960,21 @@ Waterfall::Processor::DenseRow::operator[](const coord_t col) const
 inline size_t
 Waterfall::Processor::DenseRow::_resize()
 {
-  // compute new starting column
-  coord_t new_starting_column = ending_column_;
   assert(size_ > 0);
-  for (size_t j = 0; j < size_; ++j)
-    if ((*this)[j] != 0)
-      new_starting_column = starting_column_ + j;
 
-  size_ -= new_starting_column - starting_column_;
-  starting_column_ = new_starting_column;
+  // compute new starting column
+  for (int j = size_-1; j >= 0; --j)
+    if (storage[j] != 0) {
+      leading_term_ = storage[j];
+      starting_column_ += (size_ - j);
+      size_ = j;
+      return size_;
+    };
+  // no nonzero element found in storage,
+  // this is now a null row
+  size_ = 0;
+  leading_term_ = 0;
+  starting_column_ = ending_column_;
   return size_;
 };
 
