@@ -44,6 +44,17 @@
 
 namespace rheinfall {
 
+  /** Return @c true if term @a lead_x is a better pivot for Gaussian
+      Elimination than @a lead_y. Default implementation returns @c
+      false so that rows are not exchanged; see `Processor::step()`. */
+  template <typename val_t>
+  static inline
+  bool first_is_better_pivot(val_t const& lead_x, val_t const& lead_y)
+  {
+    return false;
+  }
+
+
   /** Given the leading entries of two rows X and Y, set @a a and @a b
       so that a*X+b*Y is a row whose first non-zero entry is strictly
       to the right of the leading entries of X and Y. The generic
@@ -66,7 +77,7 @@ namespace rheinfall {
    * that computes the GCD of @c p @c q and stores it into @c{a};
    * it must also guarantee that @c{a >= 0}..
    */
-#define RF_TYPE_IS_GCD_RING(T, gcd)                 \
+#define RF_TYPE_IS_GCD_RING(T, GCD)                 \
   template <>                                       \
   void get_row_multipliers(T const& lead_x,         \
                            T const& lead_y,         \
@@ -74,10 +85,33 @@ namespace rheinfall {
   {                                                 \
     assert(lead_x != 0);                            \
     T c;                                            \
-    gcd(c, lead_x, lead_y);                         \
+    GCD(c, lead_x, lead_y);                         \
     assert(c >= 0);                                 \
     a = - lead_y / c;                               \
     b = lead_x / c;                                 \
+  };                                                \
+                                                    \
+  template <>                                       \
+  bool first_is_better_pivot(T const& lead_x,       \
+                             T const& lead_y)       \
+  {                                                 \
+     /* Keep absolute value low, */                 \
+     /* so GCD is quicker to find. */               \
+     /* This implementation is convoluted for:      \
+      * 1. Avoid calling `abs` on `mpz_t` & others  \
+      * 2. In POD types, we can always take the     \
+      *    negative of a positive number, but the   \
+      *    converse is not necessarily true.        \
+      */                                            \
+  return                                            \
+    ((lead_x > 0) ?                                 \
+     ((lead_y > 0) ?                                \
+      (lead_x < lead_y)     /* x,y > 0  */          \
+      : (-lead_x > lead_y)) /* x>0, y<0 */          \
+     :                                              \
+     ((lead_y > 0) ?                                \
+      (lead_x > -lead_y)    /* x<0, y>0 */          \
+      : (lead_x > lead_y)));  /* x,y < 0  */        \
   };                                                \
 
   // the GCD function for POD integral types
@@ -117,7 +151,7 @@ namespace rheinfall {
    *  supported, @c operator/ is inverse to @operator* but @c
    *  operator* is not necessarily commutative).
    */
-#define RF_TYPE_IS_DIVISION_RING(T) \
+#define RF_TYPE_IS_DIVISION_RING(T)                 \
   template <>                                       \
   void get_row_multipliers<T>(T const& lead_x,      \
                               T const& lead_y,      \
@@ -126,6 +160,26 @@ namespace rheinfall {
     assert(lead_x != 0);                            \
     a = - lead_y / lead_x;                          \
     b = 1;                                          \
+  };                                                \
+                                                    \
+  template <>                                       \
+  bool first_is_better_pivot(T const& lead_x,       \
+                             T const& lead_y)       \
+  {                                                 \
+     /* Keep absolute value as high as possible, */ \
+     /*to reduce numeric error. */                  \
+     /* This implementation is convoluted to:       \
+      * avoid calling `abs` on `mpz_f` & others.    \
+      */                                            \
+  return                                            \
+    ((lead_x > 0) ?                                 \
+     ((lead_y > 0) ?                                \
+      (lead_x > lead_y)     /* x,y > 0  */          \
+      : (-lead_x < lead_y)) /* x>0, y<0 */          \
+     :                                              \
+     ((lead_y > 0) ?                                \
+      (lead_x < -lead_y)    /* x<0, y>0 */          \
+      : (lead_x < lead_y)));  /* x,y < 0  */        \
   };                                                \
 
   RF_TYPE_IS_DIVISION_RING(float)

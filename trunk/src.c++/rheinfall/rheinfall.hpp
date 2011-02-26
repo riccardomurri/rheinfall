@@ -710,8 +710,9 @@ Rheinfall<val_t,coord_t>::Processor::step()
       else if (Row<val_t,coord_t>::dense == (*it)->kind) {
         if (Row<val_t,coord_t>::dense == u->kind) {
           // swap `u` and `row` iff `row`'s leading term is less
-          if (std::abs(static_cast<DenseRow<val_t,coord_t>*>(*it)->leading_term_)
-              < std::abs(static_cast<DenseRow<val_t,coord_t>*>(u)->leading_term_))
+          if (first_is_better_pivot<val_t>
+              (static_cast<DenseRow<val_t,coord_t>*>(*it)->leading_term_,
+               static_cast<DenseRow<val_t,coord_t>*>(u)->leading_term_))
             // swap `u` and `row`
             std::swap(u, *it);
         };
