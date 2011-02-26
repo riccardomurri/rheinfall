@@ -41,7 +41,7 @@ do
         -cwd \
         -S /bin/bash \
         -N "mpi-n${np}-w${w}.${prog}.${flavor}" \
-        -l s_cpu=$(( 24 * 3600 )) \
+        -l s_rt=$(( 24 * 3600 )) \
         -pe openmpi2 $np \
         -j y \
         run.sh "${bindir}/${prog}" \
