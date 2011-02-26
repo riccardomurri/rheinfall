@@ -286,7 +286,11 @@ protected:
 #endif
   {  
     // setup the array of processors
-    vpus.reserve(1 + ncols_ / nprocs_);
+#ifdef WITH_MPI
+    vpus.reserve(width * (1 + ((ncols / width) / nprocs_)));
+#else 
+    vpus.reserve(ncols);
+#endif
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
         vpus.push_back(new Processor(*this, c, ncols_-1));

@@ -209,16 +209,19 @@ main(int argc, char** argv)
 #endif // WITH_MPI
 
   // parse command-line options
+  int w = 1;
+
   static struct option long_options[] = {
-    {"help", 0, 0,'h'},
-    {"memory", 1, 0, 'm'},
-    {"verbose", 0, 0,'v'},
+    {"help",    0, 0, 'h'},
+    {"memory",  1, 0, 'm'},
+    {"verbose", 0, 0, 'v'},
+    {"width",   1, 0, 'w'},
     {0, 0, 0, 0}
   };
 
   int c;
   while (true) {
-    c = getopt_long(argc, argv, "hm:v",
+    c = getopt_long(argc, argv, "hm:vw:",
                     long_options, NULL);
     if (-1 == c)
       break;
@@ -226,8 +229,6 @@ main(int argc, char** argv)
       usage(stdout, argc, argv);
       return 0;
     }
-    else if ('v' == c)
-      verbose = 2;
     else if ('m' == c) {
       rlim_t required_memory = atoi(optarg);
       if (required_memory < 1) {
@@ -255,6 +256,11 @@ main(int argc, char** argv)
       limit.rlim_cur = required_memory;
       limit.rlim_max = required_memory;
       setrlimit(RLIMIT_AS, &limit);
+    }
+    else if ('v' == c)
+      verbose = 2;
+    else if ('w' == c) {
+      w = atoi(optarg);
     }
     else {
       fprintf(stderr, "Unknown option '%c': type '%s --help' to get usage help.\n",
@@ -319,7 +325,7 @@ main(int argc, char** argv)
       };
 
 #ifdef WITH_MPI
-      switchboard_t* rf = switchboard_new(cols, MPI_COMM_WORLD);
+      switchboard_t* rf = switchboard_new(cols, w, MPI_COMM_WORLD);
 #else
       switchboard_t* rf = switchboard_new(cols);
 #endif

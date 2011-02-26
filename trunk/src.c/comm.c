@@ -66,7 +66,7 @@ int comm_send_end(const switchboard_t* sb, coord_t dest)
   if (sb->ncols == dest)
     return 0;
   if (is_local(sb, dest)) {
-    vpu_end_phase(local_owner(sb, dest));
+    vpu_end_phase(vpu_for_column(sb, dest));
     return 0;
   }
 #ifdef WITH_MPI
@@ -75,7 +75,7 @@ int comm_send_end(const switchboard_t* sb, coord_t dest)
     omp_set_lock(&mpi_send_lock_);
 # endif
     const int rc = MPI_Send((void*)&dest, 1, mpitype_coord_t, 
-                            remote_owner(sb, dest), TAG_END, sb->comm);
+                            owner(sb, dest), TAG_END, sb->comm);
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(&mpi_send_lock_);
 # endif
@@ -104,7 +104,7 @@ int comm_send_sparse_row(const switchboard_t* sb, outbox_t* outbox, sparse_row_t
 {
   coord_t column = row->starting_column_;
   if (is_local(sb, column)) {
-    vpu_recv_row(local_owner(sb, column), row, ROW_SPARSE);
+    vpu_recv_row(vpu_for_column(sb, column), row, ROW_SPARSE);
     return 0;
   }
 #ifdef WITH_MPI
@@ -118,7 +118,7 @@ int comm_send_sparse_row(const switchboard_t* sb, outbox_t* outbox, sparse_row_t
 # endif
     /* XXX: send row as a byte string - assume homogeneous arch here */
     const int rc = MPI_Isend(row, sparse_row_ub(row) - sparse_row_lb(row), MPI_BYTE,
-                             remote_owner(sb, column), TAG_ROW_SPARSE, MPI_COMM_WORLD,
+                             owner(sb, column), TAG_ROW_SPARSE, MPI_COMM_WORLD,
                              req_p);
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(&mpi_send_lock_);
@@ -135,7 +135,7 @@ int comm_send_dense_row(const switchboard_t* sb, outbox_t* outbox, dense_row_t* 
 {
   coord_t column = row->starting_column_;
   if (is_local(sb, column)) {
-    vpu_recv_row(local_owner(sb, column), row, ROW_DENSE);
+    vpu_recv_row(vpu_for_column(sb, column), row, ROW_DENSE);
     return 0;
   }
 #ifdef WITH_MPI
@@ -149,7 +149,7 @@ int comm_send_dense_row(const switchboard_t* sb, outbox_t* outbox, dense_row_t* 
 # endif
     /* XXX: send row as a byte string - assume homogeneoys arch here */
     const int rc = MPI_Isend(row, dense_row_ub(row) - dense_row_lb(row), MPI_BYTE,
-                             remote_owner(sb, column), TAG_ROW_DENSE, MPI_COMM_WORLD,
+                             owner(sb, column), TAG_ROW_DENSE, MPI_COMM_WORLD,
                              req_p);
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(&mpi_send_lock_);
@@ -280,7 +280,7 @@ comm_receive(const switchboard_t* sb)
       if (status.MPI_ERROR != MPI_SUCCESS)
         mpi_fatal(sb, &status, "Got error while receiving sparse row");
       assert(is_local(sb, new_row->starting_column_));
-      vpu_recv_row(local_owner(sb, new_row->starting_column_), new_row, ROW_SPARSE);
+      vpu_recv_row(vpu_for_column(sb, new_row->starting_column_), new_row, ROW_SPARSE);
       break;
     };
     case TAG_ROW_DENSE: {
@@ -292,7 +292,7 @@ comm_receive(const switchboard_t* sb)
       if (status.MPI_ERROR != MPI_SUCCESS)
         mpi_fatal(sb, &status, "Got error while receiving dense row");
       assert(is_local(sb, new_row->starting_column_));
-      vpu_recv_row(local_owner(sb, new_row->starting_column_), new_row, ROW_DENSE);
+      vpu_recv_row(vpu_for_column(sb, new_row->starting_column_), new_row, ROW_DENSE);
       break;
     };
     case TAG_END: {
@@ -308,7 +308,7 @@ comm_receive(const switchboard_t* sb)
       if (status.MPI_ERROR != MPI_SUCCESS)
         mpi_fatal(sb, &status, "Got error while receiving sparse END tag");
       assert(column >= 0 && is_local(sb, column));
-      vpu_end_phase(local_owner(sb, column));
+      vpu_end_phase(vpu_for_column(sb, column));
       break;
     };
     }; // switch(status.MPI_TAG)

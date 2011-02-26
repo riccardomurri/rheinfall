@@ -38,6 +38,7 @@
 switchboard_t* 
 switchboard_new(const int ncols
 #ifdef WITH_MPI
+                , const int w
                 , MPI_Comm comm
 #endif
                 ) {
@@ -46,18 +47,28 @@ switchboard_new(const int ncols
   sb->comm = comm;
   MPI_Comm_rank(sb->comm, &(sb->me));
   MPI_Comm_size(sb->comm, &(sb->comm_size));
+  sb->w = w;
 #else
   // simulate running with just 1 MPI rank
   sb->me = 0;
   sb->comm_size = 1;
+  sb->w = 1;
 #endif
   sb->ncols = ncols;
   sb->nvpus = 0;
-  sb->vpu = xmalloc(sizeof(vpu_t*) * (1 + ncols / sb->comm_size));
-  for (int n = 0; (sb->me + n*sb->comm_size) < ncols; ++n) {
-    sb->vpu[n] = vpu_new(sb->me + n*sb->comm_size);
-    sb->nvpus += 1;
-  };
+#ifdef WITH_MPI
+  sb->vpu = xcalloc(sb->w * (1 + ((ncols / sb->w) / sb->comm_size)),
+                    sizeof(vpu_t*));
+#else
+  sb->vpu = xcalloc(ncols, sizeof(vpu_t*));
+#endif
+  int n = 0;
+  for (int c = 0; c < ncols; ++c)
+    if (is_local(sb, c)) {
+      sb->vpu[n] = vpu_new(c);
+      sb->nvpus += 1;
+      ++n;
+    };
   return sb;
 };
 

@@ -102,7 +102,6 @@ typedef void outbox_t;
 struct vpu_s {
   coord_t column;
   vpu_phase_t phase;
-  struct switchboard_s* sb;
   /** Chosen row for performing elimination. */
   row_t u;
 #ifdef _OPENMP
