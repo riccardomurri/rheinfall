@@ -29,7 +29,7 @@
 
 #include <config.h>
 
-typedef long long val_t;
+typedef double val_t;
 typedef long coord_t;
 
 // use WITH_MPI_SERIALIZED / WITH_MPI_MULTITHREADED to select which
