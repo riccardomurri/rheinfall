@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,15 +78,23 @@ public:
 
     /** Read a matrix stream into the processors. Does not make any
         assumption on the order of entries in the input stream,
-        therefore all entries have to be read into memory. Return number
-        of nonzero entries _read_.  
+        therefore all entries have to be read into memory. Return
+        number of nonzero entries read.
+
+        The @c input stream should be in SMS format, see
+        http://www-ljk.imag.fr/membres/Jean-Guillaume.Dumas/simc.html
+        for details.  However, this function allows matrix entries to
+        appear in any order in the input stream (contrary to the SMS
+        specification, which states that entries should be
+        lexicographically sorted).
         
-        If arguments @a nrows and @a ncols are null, then the first line
-        read from stream @a input is assumed to be a header line, from
-        which the number of rows and columns is extracted (and returned
-        in @a nrows and @a ncols); otherwise, if @a nrows is not zero,
-        no header line is read and @a nrows, @a ncols must contain the
-        exact number of rows and columns in the matrix.
+        If arguments @a nrows and @a ncols are null, then the first
+        line read from stream @a input is assumed to be the header
+        line, from which the number of rows and columns is extracted
+        (and returned in @a nrows and @a ncols); otherwise, if @a
+        nrows is not zero, no header line is read and @a nrows, @a
+        ncols must contain the exact number of rows and columns in the
+        matrix.
         
         If @c local_only is @c true (default), only rows assigned to the
         local MPI rank are retained and other are discarded.  If @c
@@ -104,18 +112,23 @@ public:
     coord_t read(std::istream& input, coord_t& nrows, coord_t& ncols, 
                  const bool local_only=true, const bool transpose=false);
     
-    /** Read a matrix stream into the processors. Assumes that entries
-        belonging to one row are not interleaved with entries from other
-        rows; i.e., that it can consider reading row @i i complete as
-        soon as it finds a row index @i j != i. Return number of nonzero
-        entries _read_. 
+    /** Read a matrix stream into the
+        processors. Assumes that entries belonging to one row are not
+        interleaved with entries from other rows; i.e., that it can
+        consider reading row @a i complete as soon as it finds a row
+        index @a j!=i. Return number of nonzero entries read.
         
-        If arguments @a nrows and @a ncols are null, then the first line
-        read from stream @a input is assumed to be a header line, from
-        which the number of rows and columns is extracted (and returned
-        in @a nrows and @a ncols); otherwise, if @a nrows is not zero,
-        no header line is read and @a nrows, @a ncols must contain the
-        exact number of rows and columns in the matrix.
+        The @c input stream should be in SMS format, see
+        http://www-ljk.imag.fr/membres/Jean-Guillaume.Dumas/simc.html
+        for details.
+        
+        If arguments @a nrows and @a ncols are null, then the first
+        line read from stream @a input is assumed to be the SMS header
+        line, from which the number of rows and columns is extracted
+        (and returned in @a nrows and @a ncols); otherwise, if @a
+        nrows is not zero, no header line is read and @a nrows, @a
+        ncols must contain the exact number of rows and columns in the
+        matrix.
         
         If @c transpose is @c true, then row and column values read from
         the stream are exchanged, i.e., the transpose of the matrix is
@@ -137,26 +150,29 @@ public:
     class Processor {
       
     public:
+      /** Constructor, taking parent instance and index of the columns
+          to process. */
       Processor(Rheinfall& parent,
                 const coord_t column);
       /** Destructor. Releases OpenMP lock and frees up remaining memory. */
       ~Processor();
       
     protected:     
-      Rheinfall<val_t,coord_t>& parent_;
-      const coord_t column_;
+      Rheinfall<val_t,coord_t>& parent_; /**< Parent instance. */
+      const coord_t column_;             /**< Index of matrix column to process. */
       friend class Rheinfall<val_t,coord_t>; // XXX: see rank()
       
       /** Row used for elimination */
       Row<val_t,coord_t>* u;
       
-      /** Processor state: it is `running` when Gaussian elimination
+      /** Processor state: it is @c running when Gaussian elimination
           operations are being carried out regularly; it turns @c ending
           when a @c TAG_END message is received; it is @c done when the
           final contribution to the rank has been computed and the @c
           step() method should be called no more. */
       enum { running, ending, done } phase;
       
+      /** A block of rows. */
       typedef std::list< Row<val_t,coord_t>* > row_list;
       /** The block of rows that will be eliminated next time @c step() is called. */
       row_list rows;
@@ -168,9 +184,11 @@ public:
 #endif
 
 #ifdef WITH_MPI
+      /** Type used for storing the list of rows sent to other
+          processors and the associated MPI request. */
+      typedef std::list< std::pair< mpi::request,Row<val_t,coord_t>* > > outbox_t;
       /** List of rows sent to other processors and the associated MPI request. 
           We need to keep track of these in order to free the resources when we're done. */
-      typedef std::list< std::pair< mpi::request,Row<val_t,coord_t>* > > outbox_t;
       outbox_t outbox;
 #endif
 
@@ -203,13 +221,13 @@ public:
     };
 
 
-    const coord_t ncols_;
-    std::vector<Processor*> vpus;   /**< Local processors. */
+    const coord_t ncols_;         /**< Number of matrix columns. */
+    std::vector<Processor*> vpus; /**< Local processors. */
 
 #ifdef WITH_MPI
-    mpi::communicator comm_;
-    const int me_;     /**< MPI rank. */
-    const int nprocs_; /**< Total number of ranks in MPI communicator. */
+    mpi::communicator comm_; /**< MPI communicator. */
+    const int me_;           /**< MPI rank. */
+    const int nprocs_;       /**< Total number of ranks in MPI communicator. */
 #else
     // simulate running MPI on 1 rank only
     static const int me_ = 0;
@@ -225,7 +243,7 @@ public:
 
     /** Return @c true if the VPU processing column @a c is in the local @c vpus array. */
     bool       is_local(const coord_t c) const; 
-    /** Return index of @c Processor instance processing column @a c
+    /** Return index of the @c Processor instance processing column @a c
         within local @a vpus array. */
     coord_t    vpu_index_for_column(const coord_t c) const;
     /** Return pointer to the @c Processor instance processing column @a c. */
@@ -255,17 +273,13 @@ public:
     void do_receive(); 
 
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-    /// Lock used to to serialize all outgoing MPI calls
-    /// (receives are already done by the master thread only)
+    /** Lock used to to serialize all outgoing MPI calls
+        (receives are already done by the master thread only) */
     // XXX: being an instance variable, this won't serialize
     // MPI calls if there are two concurrent `Rheinfall` operating...
     mutable omp_lock_t mpi_send_lock_;
 # endif
 #endif // WITH_MPI
-
-#ifdef _OPENMP
-    mutable omp_lock_t stderr_lock_;
-#endif
 
   private:
     /// only used inside `read` to keep rows in memory until the whole file has been loaded

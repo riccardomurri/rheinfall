@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -128,9 +128,14 @@ namespace rheinfall {
 
   protected:
 
-    typedef Row<val_t,coord_t> Row_; //< Nickname for base class; used to shorten templatized expressions
+    /** Nickname for base class; used to shorten templatized expressions. */
+    typedef Row<val_t,coord_t> Row_; 
 
+    /** Type used for storing the (coordinate, value) pairs that make up a sparse row. */
     typedef std::vector< std::pair<coord_t,val_t> > storage_t;
+    /** Actual storage of the (coordinate, value) pairs that make up a
+        sparse row.  The initial nonzero term is stored separately
+        (see @ref Row::leading_term_). */
     storage_t storage;
 
     /** Print a textual representation of the row to stream @c o. */
@@ -145,14 +150,16 @@ namespace rheinfall {
     SparseRow();
 
 #ifdef WITH_MPI
-    // serialization support
     friend class boost::serialization::access;
+    /// boost::serialization support
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version);
 #endif
 
 #ifndef NDEBUG
   private:
+    /// Check that the internal data structure are consistent; only
+    /// used in assert() calls for debugging.
     bool __ok() const;
 #endif
   }; // class SparseRow

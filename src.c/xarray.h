@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@
 
 #define _inline static inline
 
-/** @def XARRAY_CREATE(aname, elt_t, extra)
+/** @def XARRAY_DECLARE(aname, elt_t, extra)
  *
  * Declare an xarray-like type @c aname_t and functions to operate on
  * it.  An xarray is a (malloc'd) contiguous block of memory holding

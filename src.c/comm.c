@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,6 +49,7 @@
 
 #ifdef WITH_MPI
 # include <mpi.h>
+/** MPI tags for different message types. */
 enum mpi_tags {
   TAG_END        = 0,
   TAG_ROW_SPARSE = 1,

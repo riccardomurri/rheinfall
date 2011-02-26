@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -68,11 +68,11 @@ typedef enum {
 
 
 #ifdef WITH_MPI
+XARRAY_DECLARE(requests_list, MPI_Request, /* no extra data */);
 /** An `outbox` is a list of pending MPI requests and associated row
     pointers (the payload of such requests). These lists are kept in
     separate xarrays in order to be able to use the xarray's storage
     directly to MPI_{Test,Wait} calls. */
-XARRAY_DECLARE(requests_list, MPI_Request, /* no extra data */);
 typedef struct {
   requests_list_t* requests;
   rows_list_t*     rows;

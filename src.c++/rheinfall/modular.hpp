@@ -39,6 +39,10 @@
 
 namespace modular {
 
+  /** Wrapper around any integer type, providing modular arithmetic
+      semantics. The modulus is stored as a class-wide member
+      variable, therefore it is not possible to perform operations
+      with different moduli concurrently. */
   template<typename val_t>
   class Modular 
   {

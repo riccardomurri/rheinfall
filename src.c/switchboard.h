@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,8 @@
 #endif
 
 
+/** A "switchboard" holds the local VPU array, together with information 
+    on how to locate VPUs running in remote MPI processes. */
 struct switchboard_s {
 #ifdef WITH_MPI
   MPI_Comm comm;     /**< MPI communicator to use */
@@ -56,7 +58,7 @@ struct switchboard_s {
   size_t nvpus;      /**< Number of local VPUs */
   struct vpu_s** vpu;/**< Array of local VPUs */
 };
-//typedef struct switchboard_s switchboard_t;
+/** @def switchboard_t Read: @c {typedef struct switchboard_s switchboard_t;} */
 #define switchboard_t struct switchboard_s
 
 

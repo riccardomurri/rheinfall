@@ -8,7 +8,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,11 +78,13 @@ namespace rheinfall {
   };
 
 
-  /** Declare template specializations for instances of a type @c T
+  /** @def RF_TYPE_IS_GCD_RING
+   *
+   * Declare template specializations for instances of a type @c T
    * modeling a ring with a GCD (greatest common divisor) function.
-   * Second argument @c gcd is a function @c{void gcd(T& a, T& p, T& q)}
-   * that computes the GCD of @c p @c q and stores it into @c{a};
-   * it must also guarantee that @c{a >= 0}..
+   * Second argument @c gcd is a function @c {void gcd(T& a, T& p, T& q)}
+   * that computes the GCD of @c p @c q and stores it into @c a;
+   * it must also guarantee that @c a >= 0.
    */
 #define RF_TYPE_IS_GCD_RING(T, GCD)                 \
   template <>                                       \
@@ -121,8 +123,10 @@ namespace rheinfall {
       : (lead_x > lead_y)));  /* x,y < 0  */        \
   };                                                \
 
-  // the GCD function for POD integral types
+  /// The GCD function for integral types.
   //
+
+  /** GCD implementation for basic integral types. */
   template <typename val_t>
   static inline
   val_t _gcd(val_t const n, val_t const m)
@@ -155,10 +159,12 @@ namespace rheinfall {
 #endif 
 
 
-  /** Declare template specializations for instances of a type
-   *  modeling a division ring (i.e., all four algebraic operations
-   *  supported, @c operator/ is inverse to @operator* but @c
-   *  operator* is not necessarily commutative).
+  /** @def RF_TYPE_IS_DIVISION_RING
+   * 
+   * Declare template specializations for instances of a type
+   * modeling a division ring (i.e., all four algebraic operations
+   * supported, @c operator/ is inverse to @c operator* but @c
+   * operator* is not necessarily commutative).
    */
 #define RF_TYPE_IS_DIVISION_RING(T)                 \
   template <>                                       \
@@ -202,11 +208,13 @@ namespace rheinfall {
   RF_TYPE_IS_DIVISION_RING(mpf_class)
 #endif 
 
-  /** Declare template specializations for instances of a type
-   *  modeling an unordered division ring (i.e., like @ref
-   *  RF_TYPE_IS_DIVISION_RING but no relational operators are
-   *  defined, so fall back to the generic implementation of @ref
-   *  first_is_better_pivot).
+  /** @def RF_TYPE_IS_UNORDERED_DIVISION_RING
+   * 
+   * Declare template specializations for instances of a type
+   * modeling an unordered division ring: i.e., like @ref
+   * RF_TYPE_IS_DIVISION_RING but no relational operators are
+   * defined, so fall back to the generic implementation of @ref
+   * first_is_better_pivot<val_t>().
    */
 #define RF_TYPE_IS_UNORDERED_DIVISION_RING(T)       \
   template <>                                       \
@@ -219,9 +227,11 @@ namespace rheinfall {
     b = 1;                                          \
   };                                                \
 
-  /** Declare template specializations for instances of a type
-   *  modeling a modular ring, i.e., take advantage of the fact that
-   *  multiplication is cheaper than division and never overflows.
+  /** @def RF_TYPE_IS_MODULAR_RING
+   * 
+   * Declare template specializations for instances of a type
+   * modeling a modular ring, i.e., take advantage of the fact that
+   * multiplication is cheaper than division and never overflows.
    */
 #define RF_TYPE_IS_MODULAR_RING(T)                  \
   template <>                                       \
@@ -241,7 +251,10 @@ namespace rheinfall {
 #endif
 
 
-  // by default, do NOT use in-place update within DenseRow::gaussian_elimination
+  /** Tag class to determine whether to update DenseRow storage
+      in-place in the DenseRow::gaussian_elimination() methods. By
+      default, Rheinfall does @a not use in-place update. Specialize
+      to an instance of @c boost::mpl::true_ to enable in-place update. */
   template<typename T> class use_inplace_update : public mpl::bool_<false> { };
 
 #ifdef HAVE_GMPXX
@@ -256,16 +269,22 @@ namespace rheinfall {
   template <typename T> 
   bool is_zero (const T& value) { return (0 == value); };
 
+  /** Traits class for defining the tolerance for zero equality of an
+      inexact type. */
   template <typename T>
   struct is_zero_traits 
   {
+    /** Maximum positive value that will be be considered equal to zero. */
     static T tolerance;
   };
   template<typename T> T is_zero_traits<T>::tolerance;
 
-  /** Specialize the @c is_zero template for inexact arithmetic
-      types. Consider an inexact value to be zero iff its absolute
-      value is within a certain distance from the exact zero. */
+  /** @def INEXACT_IS_ZERO
+   *
+   *  Specialize the @c is_zero template for inexact arithmetic
+   *  types. Consider an inexact value to be zero iff its absolute
+   *  value is within a certain distance from the exact zero. 
+   */
 #define INEXACT_IS_ZERO(T)                                     \
   template<>                                                   \
   bool is_zero<T>(const T& value) {                            \
