@@ -460,106 +460,51 @@ protected:
     std::vector<int> r(vpus.size(), 0);
     size_t n0 = 0;
     
-    int iter = 0;
-    
-#ifdef _OPENMP
-    const size_t M = omp_get_max_threads();
-    // initial chunk_size
-    size_t w = vpus.size() / M;
-    size_t n;
-    // the `while` loop below will be executed by a team of threads
-# pragma omp parallel default(shared) private(n)
-#endif
     while(n0 < vpus.size()) {
-#ifdef _OPENMP
-      // only the master thread can update `n0` and do console I/O
-# pragma omp master
-#endif
-      {
-        // n0 incremented each time a processor goes into `done` state 
-        while (n0 < vpus.size() and vpus[n0]->is_done()) {
-          delete vpus[n0];
-          ++n0;
-        };
+      // n0 incremented each time a processor goes into `done` state 
+      while (n0 < vpus.size() and vpus[n0]->is_done()) {
+        delete vpus[n0];
+        ++n0;
       };
+      if (n0 >= vpus.size())
+        break; // out of the while(n0 < vpus.size()) loop
 #ifdef _OPENMP
-      // all threads wait for the master to update `n0`
-# pragma omp barrier
-#endif
-      if (n0 < vpus.size()) {
-#ifdef _OPENMP
-        double times[M];
-        for (size_t m = 0; m < M; ++m)
-          times[m] = 0;
-        n = n0 + w * omp_get_thread_num();
-        while (n < vpus.size()) {
-          for (size_t m = 0; m < w and n+m < vpus.size(); ++m) {
-            double t0 = vpus[n+m]->runtime;
-            r[n+m] = vpus[n+m]->step();
-            times[omp_get_thread_num()] += (vpus[n+m]->runtime - t0);
-          };
-          n += w * omp_get_num_threads();
-        };
-# pragma omp barrier
-# pragma omp master
-        {
-          // compute avg & max running time
-          double avg = 0;
-          double max = 0;
-          for (size_t m = 0; m < M; ++m) {
-            avg += times[m];
-            max = std::max(max, times[m]);
-          }
-          avg /= M;
-          // adapt chunk size according to the ratio (max/avg)
-          if (max/avg < 1.5)
-            w *= 2;
-          else
-            w /= (max/avg);
-          if (w > vpus.size() / M)
-            w = vpus.size() / M;
-          if (w < 1)
-            w = 1;
-        }; // #pragma omp master
-#else
-        for (size_t n = n0; n < vpus.size(); ++n) {
-          r[n] = vpus[n]->step();
-        };
-#endif // ifdef _OPENMP
+# pragma omp parallel for schedule(guided)        
+#endif // _OPENMP
+      for (size_t n = n0; n < vpus.size(); ++n)
+        r[n] = vpus[n]->step();
 #ifdef WITH_MPI
-        while (boost::optional<mpi::status> status = comm_.iprobe()) { 
-          switch(status->tag()) {
-          case TAG_ROW_SPARSE: {
-            SparseRow<val_t,coord_t>* new_row = 
-              SparseRow<val_t,coord_t>::new_from_mpi_message(comm_, status->source(), status->tag());
-            assert(is_local(new_row->first_nonzero_column()));
-            local_owner(new_row->first_nonzero_column()).recv_row(new_row);
-            break;
-          };
-          case TAG_ROW_DENSE: {
-            DenseRow<val_t,coord_t>* new_row = 
-              DenseRow<val_t,coord_t>::new_from_mpi_message(comm_, status->source(), status->tag());
-            assert(is_local(new_row->first_nonzero_column()));
-            local_owner(new_row->first_nonzero_column()).recv_row(new_row);
-            break;
-          };
-          case TAG_END: {
-            // "end" message received; no new rows will be coming.
-            // But some other rows could have arrived or could
-            // already be in the `inbox`, so we need to make another
-            // pass anyway.  All this boils down to: set a flag,
-            // make another iteration, and end the loop next time.
-            coord_t column = -1;
-            comm_.recv(status->source(), status->tag(), column);
-            assert(column >= 0 and is_local(column));
-            local_owner(column).end_phase();
-            break;
-          };
-          }; // switch(status->tag())
-        }; // while(iprobe)
-#endif
-      }; // if (n0 < vpus.size())
-      iter++;
+      while (boost::optional<mpi::status> status = comm_.iprobe()) { 
+        switch(status->tag()) {
+        case TAG_ROW_SPARSE: {
+          SparseRow<val_t,coord_t>* new_row = 
+            SparseRow<val_t,coord_t>::new_from_mpi_message(comm_, status->source(), status->tag());
+          assert(is_local(new_row->first_nonzero_column()));
+          local_owner(new_row->first_nonzero_column()).recv_row(new_row);
+          break;
+        };
+        case TAG_ROW_DENSE: {
+          DenseRow<val_t,coord_t>* new_row = 
+            DenseRow<val_t,coord_t>::new_from_mpi_message(comm_, status->source(), status->tag());
+          assert(is_local(new_row->first_nonzero_column()));
+          local_owner(new_row->first_nonzero_column()).recv_row(new_row);
+          break;
+        };
+        case TAG_END: {
+          // "end" message received; no new rows will be coming.
+          // But some other rows could have arrived or could
+          // already be in the `inbox`, so we need to make another
+          // pass anyway.  All this boils down to: set a flag,
+          // make another iteration, and end the loop next time.
+          coord_t column = -1;
+          comm_.recv(status->source(), status->tag(), column);
+          assert(column >= 0 and is_local(column));
+          local_owner(column).end_phase();
+          break;
+        };
+        }; // switch(status->tag())
+      }; // while(iprobe)
+#endif // WITH_MPI
     }; // while(n0 < vpus.size())
 
     // the partial rank is computed as the sum of all ranks computed
@@ -731,10 +676,6 @@ Rheinfall<val_t,coord_t>::Processor::step()
 {
   assert(not is_done()); // cannot be called once finished
 
-#ifdef _OPENMP
-  double t0 = omp_get_wtime();
-#endif
-
   // receive new rows
 #ifdef _OPENMP
   omp_set_lock(&inbox_lock_);
@@ -760,7 +701,7 @@ Rheinfall<val_t,coord_t>::Processor::step()
       // perform elimination -- return NULL in case resulting row is full of zeroes
       Row<val_t,coord_t>* new_row = u->gaussian_elimination(*it, dense_threshold_);
       // ship reduced rows to other processors
-      if (NULL != new_row)
+       if (NULL != new_row)
         parent_.send_row(*this, new_row);
     };
     rows.clear();
@@ -801,11 +742,6 @@ Rheinfall<val_t,coord_t>::Processor::step()
     // all done
     phase = done;
   };
-
-#ifdef _OPENMP
-  // accumulate VPU running time
-  runtime += omp_get_wtime() - t0;
-#endif
 
   // exit with 0 only if we never processed any row
   return (NULL == u? 0 : 1);
