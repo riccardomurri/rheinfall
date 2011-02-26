@@ -81,9 +81,11 @@ vpu_step(vpu_t* self, switchboard_t* sb)
 #endif
   // swap `workset` and `inbox`, so to perform elimination
   // on the rows that have arrived since last call
-  rows_list_t* swp = self->inbox;
-  self->inbox = self->workset;
-  self->workset = swp;
+  {
+    rows_list_t* swp = self->inbox;
+    self->inbox = self->workset;
+    self->workset = swp;
+  }
 #ifdef _OPENMP
   omp_unset_lock(& self->inbox_lock);
 #endif
@@ -123,6 +125,8 @@ vpu_step(vpu_t* self, switchboard_t* sb)
         // if `u` is a sparse row, no need to check further
         if (ROW_DENSE == self->u.kind) {
           // swap `u` and `row` iff `row`'s leading term is less
+          // XXX: this might be correct for integer-elimination, 
+          // but we shoud do the opposite for floating-point...
           if (val_abs(((dense_row_t*) row->data)->leading_term_)
               < val_abs(((dense_row_t*) self->u.data)->leading_term_)) {
             // swap `u` and `row`
@@ -150,20 +154,21 @@ vpu_step(vpu_t* self, switchboard_t* sb)
 #endif
   }
   else if (VPU_ENDING == self->phase) {
-    // pass end message along
-    comm_send_end(sb, self->column + 1);
-
 #ifdef WITH_MPI        
     if (outbox_size(self->outbox) > 0) {
       // wait untill all sent messages have arrived
       comm_wait_all_and_then_free(self->outbox);
     };
 #endif
+
+    // pass end message along
+    comm_send_end(sb, self->column + 1);
+
     // all done
     self->phase = VPU_DONE;
   };
 
-  // exit with 0 only if we never processed any row
+  // return 0 iff we never processed any row
   return (NULL == self->u.data) ? 0 : 1;
 }
 
