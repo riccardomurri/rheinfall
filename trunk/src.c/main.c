@@ -209,7 +209,7 @@ main(int argc, char** argv)
 #endif // WITH_MPI
 
   // parse command-line options
-  int w = 1;
+  int width = 1;
 
   static struct option long_options[] = {
     {"help",    0, 0, 'h'},
@@ -260,7 +260,7 @@ main(int argc, char** argv)
     else if ('v' == c)
       verbose = 2;
     else if ('w' == c) {
-      w = atoi(optarg);
+      width = atoi(optarg);
     }
     else {
       fprintf(stderr, "Unknown option '%c': type '%s --help' to get usage help.\n",
@@ -294,7 +294,7 @@ main(int argc, char** argv)
 #ifdef WITH_MPI
         int mpi_comm_size;
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_comm_size);
-        printf(" mpi:%d", mpi_comm_size);
+        printf(" mpi:%d w:%d", mpi_comm_size, width);
 #endif
 #ifdef _OPENMP
         printf(" omp:%d", omp_get_max_threads());
@@ -325,7 +325,7 @@ main(int argc, char** argv)
       };
 
 #ifdef WITH_MPI
-      switchboard_t* rf = switchboard_new(cols, w, MPI_COMM_WORLD);
+      switchboard_t* rf = switchboard_new(cols, width, MPI_COMM_WORLD);
 #else
       switchboard_t* rf = switchboard_new(cols);
 #endif
