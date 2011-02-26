@@ -526,11 +526,19 @@ protected:
             chunk_size = total_size / std::max(1, omp_get_num_threads()-1);
             bottom = n0 + chunk_size * (omp_get_thread_num() - 1);
             top = std::min(bottom + chunk_size, vpus.size());
-            for (coord_t n = top-1; n >= bottom; --n)
-              if (not vpus[n]->inbox.empty()) {
+            for (coord_t n = top-1; n >= bottom; --n) {
+              // XXX: all this locking is definitely slowing us down,
+              // but neither OpenMP nor Boost (as of 1.43) provide any
+              // way to do concurrent-access data structures...
+              omp_set_lock(&(vpus[n]->inbox_lock_));
+              // FIXME: could gcc optimize this out of the lock/unlock pair?
+              bool data_in_vpu_inbox = not (vpus[n]->inbox.empty());
+              omp_unset_lock(&(vpus[n]->inbox_lock_));
+              if (data_in_vpu_inbox) {
 #               pragma omp task untied firstprivate(n)
                 r[n] = vpus[n]->step();
-              }
+              };
+            };
 #           pragma omp taskwait
             { /* no-op for taskwait */ };
           };
@@ -622,7 +630,7 @@ protected:
   Rheinfall<val_t,coord_t>::vpu_index_for_column(const coord_t c) const
   { 
     assert(c >= 0 and c < ncols_);
-    return (w_ * ((c/w_) / nprocs_) + (c % w_)); 
+    return (w_ * ((c/w_) / nprocs_) + (c % w_));
   };
 
 
@@ -650,6 +658,7 @@ protected:
   Rheinfall<val_t,coord_t>::send_row(Processor& source, Row<val_t,coord_t>* row) 
 {
   coord_t column = row->first_nonzero_column();
+  assert(column >= 0 and column < ncols_);
   if (is_local(column))
     vpu_for_column(column).recv_row(row);
 #ifdef WITH_MPI
