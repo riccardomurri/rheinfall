@@ -94,7 +94,7 @@ public:
   int rank();
 
   // forward declarations
-protected:
+public:
   class Processor;
   
 
@@ -114,6 +114,7 @@ protected:
   Processor& local_owner(const coord_t c);
   int remote_owner(const coord_t c) const;
 
+public:
   /** A single processing element. */
   class Processor {
 
@@ -218,10 +219,17 @@ protected:
           the one of both rows. Return pointer to the combined row, which
           could possibly be this row if in-place update took place. */
       row_ptr gaussian_elimination(row_ptr other, const double dense_threshold = 40.0) const;
+      friend std::ostream& operator<< (std::ostream& o, Row const& row);
     protected:
       coord_t starting_column_; // would-be `const`: can only be modified by ctor and serialization
       coord_t ending_column_; // would-be `const`: can only be modified by ctor and serialization
       val_t leading_term_; // would-be `const`: can only be modified by ctor and serialization
+      /** Print a textual representation of the row to stream @c o.
+          Provided to actually implement @c operator<< in derived
+          classes; see
+          http://www.parashift.com/c++-faq-lite/input-output.html#faq-15.11 */
+      virtual void print_on(std::ostream& o) const = 0;
+      // boost::serialization support
       friend class boost::serialization::access;
       template<class Archive>
       void serialize(Archive& ar, const unsigned int version);
@@ -267,6 +275,8 @@ protected:
     protected:
       typedef std::vector< std::pair<coord_t,val_t> > storage_t;
       storage_t storage;
+      /** Print a textual representation of the row to stream @c o. */
+      virtual void print_on(std::ostream& o) const;
       friend class Waterfall; // needed by read*()
       /** Constructor initializing an invalid row; should fill the row
           with values and then call @c adjust(). */
@@ -320,6 +330,8 @@ protected:
       DenseRow() 
         : Row(sparse, -1, -1, 0, false), storage() 
       { };
+      /** Print a textual representation of the row to stream @c o. */
+      virtual void print_on(std::ostream& o) const;
       friend class Waterfall;
       friend class boost::serialization::access;
       template<class Archive> void serialize(Archive& ar, const unsigned int version);
@@ -468,12 +480,13 @@ Waterfall::read(std::istream& input)
       if (NULL != row) {
         const coord_t starting_column = row->first_nonzero_column();
         // commit row
-        if (starting_column < ncols_ // row is not null
-            and is_local(starting_column))
+        if (is_local(starting_column)) {
           local_owner(starting_column).recv_row(row);
-        else 
+        }
+        else { 
           // discard non-local and null rows
           delete row;
+        };
       };
     }; // for (it = rows.begin(); ...)
     
@@ -645,9 +658,8 @@ Waterfall::Processor::step()
       // perform elimination -- return NULL in case resulting row is full of zeroes
       row_ptr new_row = first->gaussian_elimination(*second, dense_threshold);
       // ship reduced rows to other processors
-      if (NULL != new_row and new_row->size() > 0) {
+      if (NULL != new_row)
         send_row(new_row);
-      }
     };
     // just keep the "first" row
     rows.clear();
@@ -739,7 +751,7 @@ Waterfall::Processor::Row::gaussian_elimination(row_ptr other, const double dens
       return s1->gaussian_elimination(dense_other);
     }
     else { // `other` kept sparse
-    return s1->gaussian_elimination(s2);
+      return s1->gaussian_elimination(s2);
     }; // if (fill_in > ...)
   }
   else if (sparse == this->kind and dense == other->kind) {
@@ -760,6 +772,14 @@ Waterfall::Processor::Row::gaussian_elimination(row_ptr other, const double dens
   else
     // should not happen!
     throw std::logic_error("Unhandled row type combination in Row::gaussian_elimination()");
+};
+
+
+inline std::ostream&
+operator<<(std::ostream& out, Waterfall::Processor::Row const& row)
+{
+  row.print_on(out);
+  return out;
 };
 
 
@@ -976,6 +996,17 @@ Waterfall::Processor::SparseRow::get(const coord_t col) const
 }; // SparseRow::get(...) const 
 
 
+ inline void
+   Waterfall::Processor::SparseRow::print_on(std::ostream& out) const 
+{
+  out << "{ "
+      << starting_column_ <<":"<< leading_term_;
+  for (storage_t::const_iterator it = storage.begin(); it != storage.end(); ++it)
+    out <<" "<< it->first <<":"<< it->second;
+  out << " }";
+};
+
+
 template<class Archive>
 inline void 
 Waterfall::Processor::SparseRow::serialize(Archive& ar, const unsigned int version) 
@@ -1119,6 +1150,17 @@ Waterfall::Processor::DenseRow::adjust()
   // this is now a null row
   delete this;
   return NULL;
+};
+
+
+ inline void
+   Waterfall::Processor::DenseRow::print_on(std::ostream& out) const 
+ {
+  out << "["
+      << starting_column_ <<":"<< leading_term_;
+  for (int j = storage.size()-1; j >= 0; --j)
+    out <<","<< storage[j];
+  out << "]";
 };
 
 
