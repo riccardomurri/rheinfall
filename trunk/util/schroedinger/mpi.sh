@@ -14,6 +14,7 @@ fi
 source $HOME/rheinfall/util/schroedinger/functions.sh \
     || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
 set_mpi_and_compiler_flavor "$flavor"
+
 flavor="${rev}-${compiler}-${mpi}"
 
 nps='16 32 64' # 128 256 512'
