@@ -1,7 +1,5 @@
-Solo in boost_1_45_0: bin.v2
-Solo in boost_1_45_0: bjam
-diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//boost/mpi/communicator.hpp boost_1_45_0/boost/mpi/communicator.hpp
---- boost_1_45_0.orig//boost/mpi/communicator.hpp	2008-06-26 21:25:44.000000000 +0200
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/boost/mpi/communicator.hpp boost_1_45_0/boost/mpi/communicator.hpp
+--- boost_1_45_0.orig/boost/mpi/communicator.hpp	2008-06-26 21:25:44.000000000 +0200
 +++ boost_1_45_0/boost/mpi/communicator.hpp	2010-11-29 01:03:11.000000000 +0100
 @@ -266,9 +266,14 @@
     *  @param value The value that will be transmitted to the
@@ -594,8 +592,8 @@ diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//boost/mpi/commu
  
  /**
   * INTERNAL ONLY
-diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//boost/mpi/detail/communicator_sc.hpp boost_1_45_0/boost/mpi/detail/communicator_sc.hpp
---- boost_1_45_0.orig//boost/mpi/detail/communicator_sc.hpp	2007-11-25 19:07:19.000000000 +0100
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/boost/mpi/detail/communicator_sc.hpp boost_1_45_0/boost/mpi/detail/communicator_sc.hpp
+--- boost_1_45_0.orig/boost/mpi/detail/communicator_sc.hpp	2007-11-25 19:07:19.000000000 +0100
 +++ boost_1_45_0/boost/mpi/detail/communicator_sc.hpp	2010-11-29 01:01:12.000000000 +0100
 @@ -15,11 +15,12 @@
  
@@ -629,8 +627,8 @@ diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//boost/mpi/detai
    result.m_data = archive;
    return result;
  }
-diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//boost/mpi/detail/point_to_point.hpp boost_1_45_0/boost/mpi/detail/point_to_point.hpp
---- boost_1_45_0.orig//boost/mpi/detail/point_to_point.hpp	2007-11-25 19:07:19.000000000 +0100
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/boost/mpi/detail/point_to_point.hpp boost_1_45_0/boost/mpi/detail/point_to_point.hpp
+--- boost_1_45_0.orig/boost/mpi/detail/point_to_point.hpp	2007-11-25 19:07:19.000000000 +0100
 +++ boost_1_45_0/boost/mpi/detail/point_to_point.hpp	2010-11-29 01:01:11.000000000 +0100
 @@ -15,12 +15,13 @@
  
@@ -669,9 +667,8 @@ diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//boost/mpi/detai
  
  /** Receives a packed archive using MPI_Recv. */
  BOOST_MPI_DECL void
-Solo in boost_1_45_0: bootstrap.log
-diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/src/broadcast.cpp boost_1_45_0/libs/mpi/src/broadcast.cpp
---- boost_1_45_0.orig//libs/mpi/src/broadcast.cpp	2007-11-25 19:38:02.000000000 +0100
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/libs/mpi/src/broadcast.cpp boost_1_45_0/libs/mpi/src/broadcast.cpp
+--- boost_1_45_0.orig/libs/mpi/src/broadcast.cpp	2007-11-25 19:38:02.000000000 +0100
 +++ boost_1_45_0/libs/mpi/src/broadcast.cpp	2010-11-29 00:27:21.000000000 +0100
 @@ -35,7 +35,7 @@
      if (dest != root) {
@@ -691,8 +688,8 @@ diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/src/br
        }
      }
  
-diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/src/communicator.cpp boost_1_45_0/libs/mpi/src/communicator.cpp
---- boost_1_45_0.orig//libs/mpi/src/communicator.cpp	2007-11-25 19:38:02.000000000 +0100
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/libs/mpi/src/communicator.cpp boost_1_45_0/libs/mpi/src/communicator.cpp
+--- boost_1_45_0.orig/libs/mpi/src/communicator.cpp	2007-11-25 19:38:02.000000000 +0100
 +++ boost_1_45_0/libs/mpi/src/communicator.cpp	2010-11-29 00:27:19.000000000 +0100
 @@ -87,11 +87,17 @@
    return boost::mpi::group(gr, /*adopt=*/true);
@@ -812,8 +809,8 @@ diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/src/co
    return req;
  }
  
-diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/src/point_to_point.cpp boost_1_45_0/libs/mpi/src/point_to_point.cpp
---- boost_1_45_0.orig//libs/mpi/src/point_to_point.cpp	2008-06-26 21:25:44.000000000 +0200
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/libs/mpi/src/point_to_point.cpp boost_1_45_0/libs/mpi/src/point_to_point.cpp
+--- boost_1_45_0.orig/libs/mpi/src/point_to_point.cpp	2008-06-26 21:25:44.000000000 +0200
 +++ boost_1_45_0/libs/mpi/src/point_to_point.cpp	2010-11-29 00:27:19.000000000 +0100
 @@ -26,34 +26,58 @@
  
@@ -909,9 +906,9 @@ diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/src/po
  
    return 2;
  }
-diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/test/nonblocking_test.cpp boost_1_45_0/libs/mpi/test/nonblocking_test.cpp
---- boost_1_45_0.orig//libs/mpi/test/nonblocking_test.cpp	2007-11-25 19:38:02.000000000 +0100
-+++ boost_1_45_0/libs/mpi/test/nonblocking_test.cpp	2010-11-29 00:41:16.000000000 +0100
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/libs/mpi/test/nonblocking_test.cpp boost_1_45_0/libs/mpi/test/nonblocking_test.cpp
+--- boost_1_45_0.orig/libs/mpi/test/nonblocking_test.cpp	2007-11-25 19:38:02.000000000 +0100
++++ boost_1_45_0/libs/mpi/test/nonblocking_test.cpp	2010-11-29 23:27:11.000000000 +0100
 @@ -41,11 +41,14 @@
    "test_some (keep results)"
  };
@@ -924,28 +921,45 @@ diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/test/n
  nonblocking_test(const communicator& comm, const T* values, int num_values, 
 -                 const char* kind, method_kind method = mk_all)
 +                 const char* kind, method_kind method = mk_all, 
-+                 synch_behavior sb = synch_both)
++                 synch_behavior synch = synch_both)
  {
    using boost::mpi::wait_any;
    using boost::mpi::test_any;
-@@ -54,6 +57,12 @@
+@@ -54,23 +57,33 @@
    using boost::mpi::wait_some;
    using boost::mpi::test_some;
  
-+  if (sb == synch_both) {
++  if (synch == synch_both) {
 +    nonblocking_test(comm, values, num_values, kind, method, synch_no);
 +    nonblocking_test(comm, values, num_values, kind, method, synch_yes);
 +    return;
 +  };
++  const bool synchronous = (synch == synch_yes);
 +
    if (method == mk_all || method == mk_all_except_test_all) {
-     nonblocking_test(comm, values, num_values, kind, mk_wait_any);
-     nonblocking_test(comm, values, num_values, kind, mk_test_any);
-@@ -68,9 +77,13 @@
-     nonblocking_test(comm, values, num_values, kind, mk_test_some);
-     nonblocking_test(comm, values, num_values, kind, mk_test_some_keep);
+-    nonblocking_test(comm, values, num_values, kind, mk_wait_any);
+-    nonblocking_test(comm, values, num_values, kind, mk_test_any);
+-    nonblocking_test(comm, values, num_values, kind, mk_wait_all);
+-    nonblocking_test(comm, values, num_values, kind, mk_wait_all_keep);
++    nonblocking_test(comm, values, num_values, kind, mk_wait_any, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_test_any, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_wait_all, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_wait_all_keep, synch);
+     if (method == mk_all) {
+-      nonblocking_test(comm, values, num_values, kind, mk_test_all);
+-      nonblocking_test(comm, values, num_values, kind, mk_test_all_keep);
++      nonblocking_test(comm, values, num_values, kind, mk_test_all, synch);
++      nonblocking_test(comm, values, num_values, kind, mk_test_all_keep, synch);
+     }
+-    nonblocking_test(comm, values, num_values, kind, mk_wait_some);
+-    nonblocking_test(comm, values, num_values, kind, mk_wait_some_keep);
+-    nonblocking_test(comm, values, num_values, kind, mk_test_some);
+-    nonblocking_test(comm, values, num_values, kind, mk_test_some_keep);
++    nonblocking_test(comm, values, num_values, kind, mk_wait_some, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_wait_some_keep, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_test_some, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_test_some_keep, synch);
    } else {
-+    const bool synchronous = (sb == synch_yes);
 +
      if (comm.rank() == 0) {
        std::cout << "Testing " << method_kind_names[method] 
@@ -956,16 +970,22 @@ diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/test/n
        std::cout.flush();
      }
  
-@@ -82,7 +95,7 @@
+@@ -82,9 +95,13 @@
  
      std::vector<request> reqs;
      // Send/receive the first value
 -    reqs.push_back(comm.isend((comm.rank() + 1) % comm.size(), 0, values[0]));
-+    reqs.push_back(comm.isend((comm.rank() + 1) % comm.size(), 0, values[0], synchronous));
      reqs.push_back(comm.irecv((comm.rank() + comm.size() - 1) % comm.size(),
                                0, incoming_value));
++    if (synchronous)
++      reqs.push_back(comm.issend((comm.rank() + 1) % comm.size(), 0, values[0]));
++    else
++      reqs.push_back(comm.isend((comm.rank() + 1) % comm.size(), 0, values[0]));
++
  
-@@ -94,14 +107,14 @@
+     if (method != mk_wait_any && method != mk_test_any) {
+ #ifndef LAM_MPI
+@@ -94,12 +111,16 @@
        // when using shared memory, not TCP.
  
        // Send/receive an empty message
@@ -976,14 +996,30 @@ diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/test/n
  #endif
  
        // Send/receive an array
++      if (synchronous)
++        reqs.push_back(comm.issend((comm.rank() + 1) % comm.size(), 2, values,
++                                  num_values));
++      else
        reqs.push_back(comm.isend((comm.rank() + 1) % comm.size(), 2, values,
--                                num_values));
-+                                num_values, synchronous));
+                                 num_values));
        reqs.push_back(comm.irecv((comm.rank() + comm.size() - 1) % comm.size(),
-                                 2, &incoming_values.front(), num_values));
-     }
-diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/test/skeleton_content_test.cpp boost_1_45_0/libs/mpi/test/skeleton_content_test.cpp
---- boost_1_45_0.orig//libs/mpi/test/skeleton_content_test.cpp	2007-11-25 19:38:02.000000000 +0100
+@@ -121,11 +142,11 @@
+           result = test_any(reqs.begin(), reqs.end());
+         } while (!result);
+         if (result->second == reqs.begin())
+-          reqs[1].wait();
++          reqs[1].wait(); // wait for the isend()
+         else
+-          reqs[0].wait();
+-        break;
++          reqs[0].wait(); // wait for the irecv()
+       }
++      break;
+ 
+     case mk_wait_all:
+       wait_all(reqs.begin(), reqs.end());
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/libs/mpi/test/skeleton_content_test.cpp boost_1_45_0/libs/mpi/test/skeleton_content_test.cpp
+--- boost_1_45_0.orig/libs/mpi/test/skeleton_content_test.cpp	2007-11-25 19:38:02.000000000 +0100
 +++ boost_1_45_0/libs/mpi/test/skeleton_content_test.cpp	2010-11-29 01:20:07.000000000 +0100
 @@ -23,7 +23,7 @@
  
@@ -1121,7 +1157,3 @@ diff -x '*~' -x '*.o' -x '*.a' -x '*.so' -wur boost_1_45_0.orig//libs/mpi/test/s
  
    return 0;
  }
-Solo in boost_1_45_0: project-config.jam
-Solo in boost_1_45_0: stage
-Solo in boost_1_45_0/tools/build/v2/engine/src: bin.linuxx86_64
-Solo in boost_1_45_0/tools/build/v2/engine/src: bootstrap
