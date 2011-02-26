@@ -79,7 +79,6 @@ coord_t read_sms_file(switchboard_t* sb, FILE* input, coord_t* nrows_p, coord_t*
   coord_t i, j;
   val_t value;
   while (! feof(input)) {
-    // FIXME: format string changes with `coord_t` and `val_t`!
     int rd = fscanf(input, fmtspec_coord_t " " fmtspec_coord_t " " fmtspec_val_t, &i, &j, &value);
     if (rd < 3)
       return -1; // malformed input

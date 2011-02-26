@@ -39,6 +39,26 @@ typedef long coord_t;
 #define fmtspec_coord_t "%ld"
 
 
+// use the widest integer type available
+#ifdef WITH_INT_VALUES
+# if defined(HAVE_INTMAX_T)
+#  define WITH_INTMAX_VALUES
+# elif defined(HAVE_LONG_LONG_INT)
+#  define WITH_LONG_LONG_VALUES
+# else
+#  define WITH_LONG_VALUES
+# endif
+#endif
+
+// use the widest floating-point type available
+#ifdef WITH_DOUBLE_VALUES
+# if defined(HAVE_LONG_DOUBLE)
+#  undef  WITH_DOUBLE_VALUES
+#  define WITH_LONG_DOUBLE_VALUES
+# endif
+#endif
+
+
 #if defined(WITH_INTMAX_VALUES)
 
 # include <inttypes.h>
@@ -48,6 +68,34 @@ typedef intmax_t val_t;
 # define mpitype_val_t MPI_LONG_LONG
 # define fmtspec_val_t "%lld"
 # define val_abs(x) imaxabs(x)
+# define val_max(x,y) ((x) > (y)? (x) : (y))
+
+#elif defined(WITH_LONG_LONG_VALUES)
+
+# include <inttypes.h>
+typedef long long val_t;
+# define mpitype_val_t MPI_LONG_LONG
+# define fmtspec_val_t "%lld"
+# define val_abs(x) llabs(x)
+# define val_max(x,y) ((x) > (y)? (x) : (y))
+
+#elif defined(WITH_LONG_VALUES)
+
+# include <inttypes.h>
+typedef long val_t;
+# define mpitype_val_t MPI_LONG
+# define fmtspec_val_t "%ld"
+# define val_abs(x) labs(x)
+# define val_max(x,y) ((x) > (y)? (x) : (y))
+
+#elif defined(WITH_LONG_DOUBLE_VALUES)
+
+# include <math.h>
+typedef long double val_t;
+# define mpitype_val_t MPI_LONG_DOUBLE
+# define fmtspec_val_t "%Lf"
+# define val_abs(x) fabsl(x)
+# define val_max(x,y) fmaxl(x,y)
 
 #elif defined(WITH_DOUBLE_VALUES)
 
@@ -56,16 +104,9 @@ typedef double val_t;
 # define mpitype_val_t MPI_DOUBLE
 # define fmtspec_val_t "%f"
 # define val_abs(x) fabs(x)
+# define val_max(x,y) fmax(x,y)
 
-#elif defined(WITH_LONG_DOUBLE_VALUES)
-
-# include <math.h>
-typedef double val_t;
-# define mpitype_val_t MPI_LONG_DOUBLE
-# define fmtspec_val_t "%Lf"
-# define val_abs(x) fabsl(x)
-
-#endif // WITH_...
+#endif // WITH_..._VALUES
 
 
 #define DENSE_THRESHOLD 40.0
