@@ -3,7 +3,7 @@
 ##
 
 AC_PREREQ([2.63])
-AC_INIT([rheinfall], [0.10.15], [riccardo.murri@gmail.com])
+AC_INIT([rheinfall], [0.11.26], [riccardo.murri@gmail.com])
 AC_CONFIG_SRCDIR([src.c++/rheinfall/rheinfall.hpp])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
@@ -113,8 +113,14 @@ AC_ARG_WITH([gmp],
 AM_CONDITIONAL([HAVE_GMPXX], [test "_$have_gmpxx" = '_yes'])
 
 
-# check for OpenMP
-AC_OPENMP
+# Check for Grid Engine (Sun/Oracle)
+AC_ARG_WITH([ge],
+    [AS_HELP_STRING([--with-ge=yes|no],
+            [Print abort message and exit upon receiving "kill" notification from GE.])],
+    [],
+    [with_ge=yes])
+AM_CONDITIONAL([WITH_GE], [test "_$with_ge" = '_yes'])
+
 
 # Checks for header files.
 AC_CHECK_HEADERS([inttypes.h stdlib.h string.h])

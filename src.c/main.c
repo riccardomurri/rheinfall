@@ -165,6 +165,16 @@ sigsegv(int signum, siginfo_t* siginfo, void* ucp)
 }
 
 
+#ifdef WITH_GE
+void 
+sigusr2(int signum)
+{
+  fprintf(stderr, "*** Terminated upon user request (SIGINT) ***\n");
+  exit(signum);
+}
+#endif // WITH_GE
+
+
 int
 main(int argc, char** argv)
 {
@@ -303,6 +313,16 @@ main(int argc, char** argv)
   sigaddset(&sa.sa_mask, SIGSEGV);
   sigaction (SIGSEGV, &sa, NULL);
 #endif // WITH_MPI
+
+#ifdef WITH_GE
+  // SIGUSR2 is used by GE to notify of a SIGKILL coming shortly,
+  // catch it and exit gracefully.
+  sa.sa_sigaction = sigsegv;
+  sa.sa_flags = SA_SIGINFO|SA_ONSTACK;
+  sigemptyset(&sa.sa_mask);
+  sigaddset(&sa.sa_mask, SIGSEGV);
+  sigaction (SIGSEGV, &sa, NULL);
+#endif
 
   // start processing
   for (int i = optind; i < argc; ++i)

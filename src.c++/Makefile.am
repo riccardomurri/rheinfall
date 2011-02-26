@@ -30,6 +30,9 @@ endif
 
 
 AM_CPPFLAGS = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/src.c++/rheinfall $(BOOST_CPPFLAGS)
+if WITH_GE
+  AM_CPPFLAGS += -DWITH_GE
+endif
 AM_CXXFLAGS = 
 
 # irank - example program using `intmax_t`/`long long` integer values
