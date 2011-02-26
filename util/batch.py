@@ -97,7 +97,9 @@ def process_input_file(input_file_name):
         line = garbage_re.sub('', line)
         words = line.split(' ')[1:]
         outcome = dict(w.split(':',1) for w in words)
-        if not outcome.has_key('rank'):
+        if not (outcome.has_key('time') 
+                or outcome.has_key('cputime') 
+                or outcome.has_key('wctime')):
             # computation failed, go to next line
             continue
         if outcome.has_key('wctime'):
@@ -116,7 +118,22 @@ def process_input_file(input_file_name):
 data = [ ]
 for filename in args:
     data.extend(list(process_input_file(filename)))
-        
+
+
+## group data according to program, then keep only max wctime for
+## each filename
+D = { }
+for program, filename, wctime in data:
+    if not D.has_key(program):
+        D[program] = { }
+    m = D[program]
+    if m.has_key(filename):
+        # keep largest running time
+        if wctime > m[filename]:
+            m[filename] = wctime
+    else:
+        m[filename] = wctime
+
 
 ## bin processed files according to duration
 
@@ -129,43 +146,53 @@ class Bag(set):
     def __init__(self, duration):
         pass
     def add(self, item):
-        if item[2] + self.current_duration < self.max_duration:
-            self.current_duration += item[2]
+        if item[1] + self.current_duration < self.max_duration:
+            self.current_duration += item[1]
             set.add(self, item)
         else:
             raise ValueError("Adding item '%s' would exceed maximum duration %ds" 
                              % (item, self.max_duration))
-Bag(1800)
-bags = [ Bag(dur) for dur in sorted(durations) ]
-
-
-def cmp_by_wctime(a, b):
-    return cmp(a[2], b[2])
 
 # Browse items in decreasing duration order; bags are sorted in
 # increasing capacity order; this should allow us to just add an item
 # to the first bag that accepts it.  Definitely not efficient, but it
 # should work.
-for item in sorted(data, cmp=cmp_by_wctime, reverse=True):
-    added = False
-    for bag in bags:
-        try: 
+batches = { }
+for program, data in D.items():
+    if not batches.has_key(program):
+        batches[program] = list()
+    bags = batches[program]
+    def cmp_by_wctime(a, b):
+        return cmp(a[1], b[1])
+    for item in sorted(data.items(), cmp=cmp_by_wctime, reverse=True):
+        logger.log(3, "Processing file '%s', duration '%d'" % (item[0], item[1]))
+        added = False
+        for bag in bags:
+            try: 
+                bag.add(item)
+                added = True
+                break
+            except ValueError:
+                continue
+        if not added:
+            try:
+                q = min([ d for d in durations if d > item[1] ])
+            except ValueError:
+                logger.log(0, "Computation of matrix '%s' by program '%s' does not fit in any specified duration"
+                           " (needs: %ds).  Ignoring." % (os.path.basename(item[0]), program, item[1]))
+                continue
+            logger.log(1, "Adding one more bag of size %ds" % q)
+            bag = Bag(q)
             bag.add(item)
-            added = True
-            break
-        except ValueError:
-            continue
-    if not added:
-        q = min([ dur for dur in durations if dur > item[2] ])
-        logger.log(1, "Need one more bag of size %ds" % q)
-        bag = Bag(q)
-        bag.add(item)
-        inserted = False
-        for n in range(len(bags)):
-            if q < bags[n].max_duration:
-                bags.insert(n, bag)
-        if not inserted:
-            bags.append(bag)
+            inserted = False
+            for n in range(len(bags)):
+                if q < bags[n].max_duration:
+                    bags.insert(n, bag)
+                    inserted = True
+                    break
+            if not inserted:
+                bags.append(bag)
+
 
 ## create output files
 
@@ -174,19 +201,19 @@ if not os.path.exists(options.output_dir):
 
 n = 1 + int(math.log10(len(bags)))
 fmt = os.path.join(options.output_dir, 
-                   str.join('', ['batch%' , str(n), 'd', ',s_rt=%d']))
+                   str.join('', ['%s.b%0' , str(n), 'd', ':s_rt=%d']))
 
-for n, bag in enumerate(bags):
-    if len(bag) == 0:
-        continue
-    # the bag may be half-full, so recompute the needed duration here
-    q = min([ dur for dur in durations if dur > bag.current_duration ])
-    name = fmt % (n, int(1.05 * q)-1)
-    logger.log(1, "Creating output file '%s' with %d items (duration: %ds)..." 
-               % (name, len(bag), bag.current_duration))
-    output = open(name, 'w+')
-    for item in bag:
-        output.write("%s\n" % item[1])
-    output.close()
-
-    
+for program, batch in batches.items():
+    logger.log(1, "Outputting %d batches for program '%s' ..." % (len(batch), program))
+    for n, bag in enumerate(batch):
+        if len(bag) == 0:
+            continue
+        # the bag may be half-full, so recompute the needed duration here
+        q = min([ dur for dur in durations if dur > bag.current_duration ])
+        name = fmt % (program, n, int(1.05 * q)-1)
+        logger.log(1, "Creating output file '%s' with %d items (duration: %ds)" 
+                   % (name, len(bag), bag.current_duration))
+        output = open(name, 'w+')
+        for item in bag:
+            output.write("%s\n" % item[0])
+        output.close()
