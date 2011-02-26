@@ -1,6 +1,9 @@
 #! /bin/bash
 
 flavor="$1"; shift
+if expr match "$flavor" 'run/' >/dev/null; then
+    flavor=$(echo $flavor | cut -c5-)
+fi
 
 rev="$(echo $flavor | cut -d/ -f1)"
 compiler_and_mpilib="$(echo $flavor | cut -d/ -f2)"
@@ -28,10 +31,11 @@ flavor="${rev}-${compiler}-${mpi}"
 
 for prog in \
     rank-int \
-    rank-int-omp \
     rank-mod \
-    rank-mod-omp \
+    crank-int \
     ; 
+    #rank-int-omp \
+    #rank-mod-omp \
 do
     if test ! -x "${bindir}/${prog}"; then
         echo 1>&2 "Skipping executable '$prog': not found in '$bindir'"
