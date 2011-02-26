@@ -17,7 +17,7 @@
 #ATLAS=3.8.3
 #LINBOX=1.1.7rc0
 BOOST=1.45.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.45.0/boost_1_45_0.tar.gz
-#TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
+TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
 
 
 ## No customization should be necessary further down here
@@ -272,13 +272,19 @@ if [ -n "$BOOST" ]; then
     # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
     #sed -e 's|^//#define BOOST_MPI_HOMOGENEOUS|#define BOOST_MPI_HOMOGENEOUS|' \
     #    -i boost/mpi/config.hpp
-    ./bootstrap.sh --prefix=${sw} --with-libraries=mpi,serialization,test \
-        toolset=${toolset} variant=release threading=multi
-    cat >> project-config.jam <<EOF
+    if [ "_$mpi" != '_none' ]; then
+        ./bootstrap.sh --prefix=${sw} --with-libraries=mpi,serialization,test \
+            toolset=${toolset} variant=release threading=multi
+        cat >> project-config.jam <<EOF
 # Boost will not build Boost.MPI unless it is explicitly 
 # told to by the following line:
 using mpi : mpicxx ;
 EOF
+    else
+        # no MPI support
+        ./bootstrap.sh --prefix=${sw} --with-libraries=serialization,test \
+            toolset=${toolset} variant=release threading=multi
+    fi        
     # build Boost with the new `bjam`
     PATH=$(pwd)/tools/jam/src/bin.$(uname -s | tr A-Z a-z)$(uname -m):$PATH
     export PATH

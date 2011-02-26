@@ -1,29 +1,19 @@
 #! /bin/bash
 
 flavor="$1"; shift
-
-rev="$(echo $flavor | cut -d/ -f1)"
-compiler_and_mpilib="$(echo $flavor | cut -d/ -f2)"
-if [ -z "$compiler_and_mpilib" ]; then
-    compiler_and_mpilib="$rev"
-    rev="$( cat .bzr/branch/last-revision | (read revno rest; echo r$revno) )"
+if expr match "$flavor" 'run/' >/dev/null; then
+    flavor=$(echo $flavor | cut -c5-)
 fi
 
-compiler=$(echo $compiler_and_mpilib | cut -d- -f1)
-if [ -z "$compiler" ]; then
-    compiler=gcc443
-fi
-mpi="$(echo $compiler_and_mpilib | cut -d- -f2)"
-if [ -z "$mpi" ]; then
-    mpi=ompi
-fi
-
-bindir="run/${flavor}"
+bindir="run/$flavor"
 if test ! -d "$bindir"; then
     echo 1>&2 "Cannot read directory: '$bindir'"
     exit 1
 fi
 
+source $HOME/rheinfall/util/schroedinger/functions.sh \
+    || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
+set_mpi_and_compiler_flavor "$flavor"
 flavor="${rev}-${compiler}-${mpi}"
 
 nps='16 32 64' # 128 256 512'
@@ -47,7 +37,7 @@ do
         -S /bin/bash \
         -N "mpi-n${np}-w${w}.${prog}.${flavor}" \
         -l s_rt=$(( 24 * 3600 )) \
-        -pe openmpi2 $np \
+        -pe $pe $np \
         -j y \
         run.sh "${bindir}/${prog}" \
         -w $w \
