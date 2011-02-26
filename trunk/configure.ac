@@ -29,15 +29,15 @@ AC_LANG([C])
 gl_INIT
 
 
-# check for OpenMP
-AC_LANG_PUSH([C])
-AC_OPENMP
-AC_LANG_POP([C])
+# DON'T check for OpenMP -- the code won't run... (to be fixed someday).
+#AC_LANG_PUSH([C])
+#AC_OPENMP
+#AC_LANG_POP([C])
 AM_CONDITIONAL([HAVE_OPENMP_CC], [test "_$OPENMP_CFLAGS" != '_'])
 
-AC_LANG_PUSH([C++])
-AC_OPENMP
-AC_LANG_POP([C++])
+#AC_LANG_PUSH([C++])
+#AC_OPENMP
+#AC_LANG_POP([C++])
 AM_CONDITIONAL([HAVE_OPENMP_CXX], [test "_$OPENMP_CXXFLAGS" != '_'])
 
 
