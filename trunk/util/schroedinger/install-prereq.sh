@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /bin/bash
 #$ -l h_cpu=40000 
 #$ -cwd 
 #$ -S /bin/bash
@@ -12,13 +12,10 @@
 # the required version (or a newer one) installed in the
 # standard PATH/LD_LIBRARY_PATH
 #
-#CYTHON=0.11.1
-#PYTHON=2.5.4
-#SWIG=1.3.35
-LINBOX=1.1.7rc0
 GMP=5.0.1
 GIVARO=3.3.2
 ATLAS=3.8.3
+LINBOX=1.1.7rc0
 BOOST=1.43.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.43.0/boost_1_43_0.tar.gz
 TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
 
@@ -40,171 +37,28 @@ mvapich, intel, or none).
 
 EOF
 }
+case `hostname` in
+        login*) usage; exit 1 ;;
+        *) : ;;
+esac
 
-
-## helper functions
-die () {
-  rc="$1"
-  shift
-  (echo -n "$PROG: ERROR: ";
-      if [ $# -gt 0 ]; then echo "$@"; else cat; fi) 1>&2
-  exit $rc
-}
-
-have_command () {
-  type "$1" >/dev/null 2>/dev/null
-}
-
-require_command () {
-  if ! have_command "$1"; then
-    die 1 "Could not find required command '$1' in system PATH. Aborting."
-  fi
-}
-
-_ () {
-    echo
-    echo ==== "$@" ...;
-}
+source $HOME/rheinfall/util/schroedinger/functions.sh \
+    || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
 
 
 ## parse command-line 
-flavor="$1"; shift
-compiler="$(echo $flavor | cut -d- -f1)"
-if [ -z "$compiler" ]; then
-    compiler=gcc443
-fi
-mpi="$(echo $flavor | cut -d- -f2)"
-if [ -z "$mpi" ]; then
-    mpi=ompi
-fi
+set_mpi_and_compiler_flavor "$@"; shift
 
-src_home="${3:-$HOME/sw/src}"
+src_home="${2:-$HOME/sw/src}"
 case "${src_home}" in
     /*) : ;;
     *) src_home="`pwd`/$src_home" ;;
 esac
 
 
-# load modules
-source /panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/Modules/default/init/sh
+## run compilation
 
-supported_compilers='gcc412 gcc441 gcc443 gcc450 icc'
-supported_mpilibs='openmpi mvapich intel none'
-
-# load MPI - must match what the binary was compiled with!
-case "$mpi" in
-    ompi|openmpi) 
-        case "$compiler" in
-            gcc450)    module load mpi/openmpi/gcc-4.5.0 ;;
-            gcc*)      module load mpi/openmpi/gcc ;;
-            icc|intel) module load mpi/openmpi/intel ;;
-        esac
-        ;;
-    mvapich) # MVAPICH is not supported by modules, apparently
-        case "$compiler" in
-            gcc412)
-                export PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc/mvapich2-1.4rc2/bin:$PATH
-                export LD_LIBRARY_PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc/mvapich2-1.4rc2/lib:$LD_LIBRARY_PATH
-                export LD_RUN_PATH=$LD_LIBRARY_PATH
-                ;;
-            gcc*)
-                export PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc-4.4.1/mvapich2-1.4rc2/bin:$PATH
-                export LD_LIBRARY_PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc-4.4.1/mvapich2-1.4rc2/lib:$LD_LIBRARY_PATH
-                export LD_RUN_PATH=$LD_LIBRARY_PATH
-                ;;
-        esac
-        ;;
-    impi|intel) # Intel MPI is not supported by modules, apparently
-        export PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/intel_mpi/3.2.1.009/bin64:$PATH
-        export LD_LIBRARY_PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/intel_mpi/3.2.1.009/lib64:$LD_LIBRARY_PATH
-        export LD_RUN_PATH=$LD_LIBRARY_PATH
-        ;;
-    none) # no MPI
-        while type -a mpicc >/dev/null 2>&1; do
-            p=$(dirname $(which mpicc) )
-            echo 1>&2 "MPI compiler 'mpicc' found in PATH at '$p'; removing since no MPI was requested ..."
-            export PATH=$(echo $PATH | sed -e "s|:${p}||;s|${p}:||;")
-        done
-        ;;
-    *) 
-        die 1 "Unknown MPI library '${mpi}' - please choose one of: $supported_mpilibs"
-        ;;
-esac
-
-# load the compiler and libs
-module load binutils/2.20.1
-case "$compiler" in
-    gcc412)
-        module load gcc/4.1.2
-        export CC=gcc
-        export CXX=g++
-        export OMPI_CC=`which gcc`
-        export OMPI_CXX=`which g++`
-        cflags='-O3 -march=nocona'
-        toolset=gcc
-        ;;
-    gcc441)
-        module load gcc/4.4.1
-        export CC=gcc
-        export CXX=g++
-        export OMPI_CC=`which gcc`
-        export OMPI_CXX=`which g++`
-        cflags='-O3 -march=nocona'
-        toolset=gcc
-        ;;
-    gcc443)
-        module load gcc/4.4.3
-        export CC=gcc
-        export CXX=g++
-        export OMPI_CC=`which gcc`
-        export OMPI_CXX=`which g++`
-        cflags='-O3 -march=native'
-        toolset=gcc
-        ;;
-    gcc450)
-        module load gcc/4.5.0
-        export CC=gcc
-        export CXX=g++
-        export OMPI_CC=`which gcc`
-        export OMPI_CXX=`which g++`
-        cflags='-O3 -march=native'
-        toolset=gcc
-        ;;
-    icc|intel)
-        module load intel/comp/11.1.064
-        export CC=icc
-        export CXX=icpc
-        cflags='-O3 -xHOST'
-        toolset=intel
-        ;;
-    *) 
-        die 1 "Unknown compiler flavor '${compiler}' - please choose one of: $supported_compilers"
-        ;;
-esac
-
-
-echo === running info ===
-echo flavor: $flavor
-echo compiler: $compiler
-echo mpi: $mpi
-echo node: $(hostname)
-echo === compiler information ===
-
-which ${CXX}
-set -e # exit on error here, in case the compiler does not have enough licences
-${CXX} --version
-set +e
-
-if [ "x${mpi}" != 'xnone' ]; then
-    which mpicxx
-    mpicxx --version
-    echo
-fi
-
-which as
-as --version
-echo
-
+show_build_information
 
 echo === compile log ===
 
@@ -218,13 +72,10 @@ require_command tar
 
 set -e
 
-sw="$HOME/sw/${compiler}-${mpi}"
+# paths
 mkdir -p "$sw"
 cd "$sw"
 mkdir -p build
-
-
-# paths
 PATH=${sw}/bin:$PATH
 LD_LIBRARY_PATH=${sw}/lib:$LD_LIBRARY_PATH
 PYTHONPATH=${sw}/lib/python
@@ -254,7 +105,7 @@ if [ -n "${PYTHON}" ]; then
     mkdir -p Python-${PYTHON}
     cd Python-${PYTHON}
     ${src_home}/Python-${PYTHON}/configure --prefix=${sw} \
-        CC=${CC} CXX=${CXX} CFLAGS="${cflags}"
+        CC=${CC} CXX=${CXX} CFLAGS="${cflags} ${std_cflags}"
     $concurrent_make
     make install
     set +x
@@ -288,7 +139,7 @@ if [ -n "${SWIG}" ]; then
         --without-ruby \
         --without-rxspencer \
         --without-tcl \
-         CC=${CC} CXX=${CXX} CFLAGS="${cflags}";
+         CC=${CC} CXX=${CXX} CFLAGS="${cflags} ${std_cflags}";
     $concurrent_make
     make install
     set +x
@@ -314,15 +165,17 @@ fi # CYTHON
 if [ -n "$GMP" ]; then
     _ Installing GMP ${GMP}
     cd ${sw}/build
-    #wget -N ftp://sunsite.cnlab-switch.ch/mirror/gnu/gmp/gmp-${GMP}.tar.bz2
+    rm -rf gmp-${GMP}
+    #wget -N ftp://sunsite.cnlab-switch.ch/mirror/gnu/gmp/gmp-${GMP}.tar.bz2    
     set -x
     mkdir -p gmp-${GMP}
     cd gmp-${GMP}
     ${src_home}/gmp-${GMP}/configure --prefix=${sw} \
         --enable-cxx \
-        CC=${CC} CXX=${CXX} CFLAGS="${cflags}"
+        CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
+        CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}"
     rm -rf ${sw}/include/gmp* ${sw}/lib/libgmp* # avoid `libtool` errors
-    $concurrent_make clean all
+    $concurrent_make
     make install
     set +x
 fi # GMP
@@ -330,12 +183,13 @@ fi # GMP
 # GIVARO (cfr. http://groups.google.com/group/linbox-use/browse_thread/thread/82673844f6921271)
 if [ -n "$GIVARO" ]; then
     _ Installing Givaro ${GIVARO}
+    givaro_vers=${GIVARO%%rc[0-9]}
     cd ${sw}/build
+    rm -rf givaro-${givaro_vers}
     #wget -N http://www-lmc.imag.fr/CASYS/LOGICIELS/givaro/Downloads/givaro-${GIVARO}.tar.gz
     tar -xzf ${src_home}/givaro-${GIVARO}.tar.gz
-    givaro_vers=${GIVARO%%rc[0-9]}
     set -x
-    #mkdir -p givaro-$givaro_vers
+    mkdir -p givaro-$givaro_vers
     cd givaro-$givaro_vers
     # work around bug in ./configure: the test for GMP cannot find it
     # unless it's in the LD_LIBRARY_PATH
@@ -344,9 +198,10 @@ if [ -n "$GIVARO" ]; then
     #${src_home}/givaro-${givaro_vers}/configure --prefix=${sw} \
     ./configure --prefix=${sw} \
         --enable-shared ${GMP:+"--with-gmp=${sw}"} \
-        CC=${CC} CXX=${CXX} CFLAGS="${cflags}"
+        CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
+        CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}"
     rm -rf ${sw}/include/givaro* ${sw}/lib/libgivaro* # avoid `libtool` errors
-    $concurrent_make clean all
+    $concurrent_make
     make install
     set +x
 fi # GIVARO
@@ -357,7 +212,7 @@ if [ -n "$ATLAS" ]; then
     #wget "http://switch.dl.sourceforge.net/sourceforge/math-atlas/atlas${ATLAS}.tar.bz2" \
     #     -O atlas${ATLAS}.tar.bz2
     set -x
-    tar -xjf ${src_home}/atlas${ATLAS}.tar.bz2
+    tar -xjf ${src_home}/atlas${ATLAS}.tar.bz2 --keep-newer-files
     cd ATLAS
     mkdir -p BLDdir
     cd BLDdir
@@ -382,19 +237,21 @@ fi # ATLAS
 if [ -n "$LINBOX" ]; then
     _ Installing LinBox ${LINBOX}
     cd ${sw}/build
+    rm -rf linbox-${LINBOX}
     #wget -N http://linalg.org/linbox-${LINBOX}.tar.gz
     set -x
     # heck, neither LinBox is not capable of out-of-srcdir compilation...
-    #mkdir -p linbox-${LINBOX}
     tar -xzf ${src_home}/linbox-${LINBOX}.tar.gz
+    mkdir -p linbox-${LINBOX}
     cd linbox-${LINBOX}
     ./configure --prefix=${sw} \
-        ${ATLAS:+"--with-blas=${sw}"} \
-        ${GMP:+"--with-gmp=${sw}"} \
-        ${GIVARO:+"--with-givaro=${sw}"} \
-        CC=${CC} CXX=${CXX} CFLAGS="${cflags}";
+        --with-blas=${sw} \
+        --with-gmp=${sw} \
+        --with-givaro=${sw} \
+        CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
+        CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}";
     rm -rf ${sw}/include/linbox* ${sw}/lib/liblinbox* # avoid `libtool` errors
-    $concurrent_make clean all
+    $concurrent_make
     make install
     set +x
 fi # LINBOX
@@ -446,10 +303,12 @@ if [ -n "$TCMALLOC" ]; then
           export CC=gcc
           export CXX=g++
           cflags='-O3 -march=nocona'
+          cxxflags='-O3 -march=nocona'
       fi
       ${src_home}/google-perftools-${TCMALLOC}/configure --prefix=${sw} \
           --enable-frame-pointers \
-          CC=${CC} CXX=${CXX} CFLAGS="${cflags}" CXXFLAGS="${cflags}"
+          CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
+          CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}"
     )
     $concurrent_make clean all
     $concurrent_make install
