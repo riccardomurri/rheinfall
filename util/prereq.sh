@@ -28,10 +28,14 @@ PROG="$(basename $0)"
 
 usage () {
 cat <<EOF
-Usage: $PROG
+Usage: $PROG [DIR [CFLAGS ...]]
 
-Download and install all required software for 'mgn.sh' to
-work into the "`pwd`/sw" directory.
+Download and install all required software for 'rheinfall' into
+directory DIR.  If omitted, DIR defaults to '`pwd`/sw'.
+
+Any additional arguments are placed directly on the 'configure'
+command line of every package, so it can be used to set CFLAGS,
+CXXFLAGS etc.
 
 EOF
 }
@@ -64,10 +68,13 @@ _ () {
 
 ## parse command-line 
 
-if [ $# -ne 0 ]; then
-  usage
-  exit 0
-fi
+case "$1" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    *)
+esac
 
 
 ## main
@@ -80,17 +87,20 @@ require_command wget
 
 set -e
 
-mkdir -p sw/src
-cd sw
+# target directory
+sw="${1:-`pwd`/sw}"; shift
+mkdir -p "${sw}"
+mkdir -p "${sw}/src"
+cd "${sw}"
 
 # paths
-sw=`pwd`
 PATH=${sw}/bin:$PATH
 LD_LIBRARY_PATH=${sw}/lib:$LD_LIBRARY_PATH
 PYTHONPATH=${sw}/lib/python
 
 # misc
-concurrent_make="make -j $(grep -c '^processor' /proc/cpuinfo)"
+ncpus="$(grep -c '^processor' /proc/cpuinfo)"
+concurrent_make="make -j $ncpus"
 
 if grep -q '^cpu MHz' /proc/cpuinfo; then
     mhz=`grep '^cpu MHz' /proc/cpuinfo | head -1 | cut -d: -f2 | cut -d. -f1 | tr -d ' '`
@@ -105,6 +115,7 @@ case `uname -m` in
         *) die 1 "Unknown architecture `uname -m`: is it 32-bit or 64-bit?" ;;
 esac
 
+
 # Python
 if [ -n "${PYTHON}" ]; then
     _ Installing Python ${PYTHON}
@@ -113,11 +124,12 @@ if [ -n "${PYTHON}" ]; then
     set -x
     tar -xjf Python-${PYTHON}.tar.bz2
     cd Python-${PYTHON}
-    ./configure --prefix=${sw}
+    ./configure --prefix=${sw} "$@"
     $concurrent_make
     make install
     set +x
 fi # PYTHON
+
 
 # SWIG
 if [ -n "${SWIG}" ]; then
@@ -147,11 +159,12 @@ if [ -n "${SWIG}" ]; then
         --without-ruby \
         --without-rxspencer \
         --without-tcl \
-        ;
+        "$@";
     $concurrent_make
     make install
     set +x
 fi # SWIG
+
 
 # Cython
 if [ -n "$CYTHON" ]; then
@@ -169,6 +182,7 @@ if [ -n "$CYTHON" ]; then
     set +x
 fi # CYTHON
 
+
 # GMP
 if [ -n "$GMP" ]; then
     _ Installing GMP ${GMP}
@@ -177,11 +191,12 @@ if [ -n "$GMP" ]; then
     set -x
     tar -xjf gmp-${GMP}.tar.bz2
     cd gmp-${GMP}
-    ./configure --prefix=${sw} --enable-cxx
+    ./configure --prefix=${sw} --enable-cxx "$@"
     $concurrent_make
     make install
     set +x
 fi # GMP
+
 
 # GIVARO (cfr. http://groups.google.com/group/linbox-use/browse_thread/thread/82673844f6921271)
 if [ -n "$GIVARO" ]; then
@@ -194,11 +209,12 @@ if [ -n "$GIVARO" ]; then
     # work around bug in ./configure: the test for GMP cannot find it
     # unless it's in the LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=${sw}/lib:$LD_LIBRARY_PATH
-    ./configure  --prefix=${sw} --enable-shared ${GMP:+"--with-gmp=${sw}"}
+    ./configure  --prefix=${sw} --enable-shared ${GMP:+"--with-gmp=${sw}"} "$@"
     $concurrent_make
     make install
     set +x
 fi # GIVARO
+
 
 # ATLAS
 if [ -n "$ATLAS" ]; then
@@ -210,7 +226,13 @@ if [ -n "$ATLAS" ]; then
     cd ATLAS
     mkdir -p BLDdir
     cd BLDdir
-    ../configure -v 2 -b ${bits} -m ${mhz} -D c -DPentiumCPS=${mhz} -Si cputhrchk 0 --prefix=${sw}
+    ../configure -v 2 \
+        -b ${bits} \
+        -m ${mhz} \
+        -D c -DPentiumCPS=${mhz} \
+        -Si cputhrchk 0 \
+        -Ss pmake "$concurrent_make" \
+        --prefix=${sw}
     make build
     (cd lib; make cshared cptshared && cp -a *.so ${sw}/lib)
     #make check
@@ -218,6 +240,7 @@ if [ -n "$ATLAS" ]; then
     make install
     set +x
 fi # ATLAS
+
 
 # LinBox
 if [ -n "$LINBOX" ]; then
@@ -231,11 +254,12 @@ if [ -n "$LINBOX" ]; then
         ${ATLAS:+"--with-blas=${sw}/lib"} \
         ${GMP:+"--with-gmp=${sw}"} \
         ${GIVARO:+"--with-givaro=${sw}"} \
-        ;
+        "$@";
     $concurrent_make
     make install
     set +x
 fi # LINBOX
+
 
 # Boost
 if [ -n "$BOOST" ]; then
@@ -252,7 +276,8 @@ if [ -n "$BOOST" ]; then
         sed -e 's|^//#define BOOST_MPI_HOMOGENEOUS|#define BOOST_MPI_HOMOGENEOUS|' \
             -i boost/mpi/config.hpp
     fi
-    ./bootstrap.sh --prefix=${sw} --with-libraries=mpi,serialization,test link=static threading=multi
+    ./bootstrap.sh --prefix=${sw} --with-libraries=mpi,serialization,test \
+        variant=release threading=multi
     cat >> project-config.jam <<EOF
 # Boost will not build Boost.MPI unless it is explicitly 
 # told to by the following line:
@@ -263,7 +288,7 @@ EOF
     # then, build Boost with the new `bjam`
     PATH=$(pwd)/tools/jam/src/bin.$(uname -s | tr A-Z a-z)$(uname -m):$PATH
     export PATH
-    ./bjam --prefix=${sw} link=static threading=multi install
+    ./bjam --prefix=${sw} threading=multi variant=release install
     set +x
 fi # BOOST
 
@@ -276,9 +301,11 @@ if [ -n "$TCMALLOC" ]; then
     wget -N http://google-perftools.googlecode.com/files/google-perftools-${TCMALLOC}.tar.gz
     tar -xzf "google-perftools-${TCMALLOC}.tar.gz"
     cd google-perftools-${TCMALLOC}
-    ./configure --prefix=${sw} --enable-frame-pointers
+    ./configure --prefix=${sw} \
+        --enable-frame-pointers --disable-debualloc \
+        "$@";
     $concurrent_make
-    $concurrent_make install
+    make install
     set +x
 fi
 
