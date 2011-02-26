@@ -27,8 +27,6 @@
  */
 
 // TODO:
-// === first working version ===
-//   - have read_*() return the number of nonzero entries
 //   - check Processor phases to optimize communication/computation overlap
 
 
@@ -41,8 +39,10 @@
 #include <utility>
 #include <vector>
 
+#include <stdio.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <unistd.h>
 
 #include <boost/mpi.hpp>
 #include <boost/optional.hpp>
@@ -51,7 +51,7 @@
 #include <boost/serialization/vector.hpp>
 namespace mpi = boost::mpi;
 
-#ifdef WITH_OPENMP
+#ifdef _OPENMP
 #include <omp.h>
 #endif
 
@@ -68,27 +68,35 @@ typedef long long val_t;
 class Waterfall {
 
 public:
-  /** Constructor, taking row and column dimension; uses the @c boost::mpi
-      default communicator (@c MPI_COMM_WORLD ). */
-  Waterfall(const coord_t nrows, const coord_t ncols);
+  /** Constructor, taking row and column dimension, and MPI
+      communicator to use. */
+  Waterfall(const coord_t nrows, const coord_t ncols, mpi::communicator& comm);
   
   /** Read a matrix stream into the processors. Does not make any
       assumption on the order of entries in the input stream,
       therefore all entries have to be read into memory. Return number
-      of nonzero entries _read_. */
-  size_t read(std::istream& input);
+      of nonzero entries _read_. If @c transpose is @c true, then 
+      row and column values read from the stream are exchanged, i.e., 
+      the transpose of the matrix is read into memory. */
+  size_t read(std::istream& input, const bool transpose=false);
 
   /** Read a matrix stream into the processors. Assumes that entries
       belonging to one row are not interleaved with entries from other
       rows; i.e., that it can consider reading row @i i complete as
       soon as it finds a row index @i j != i. Return number of nonzero
-      entries _read_. */
-  size_t read_noninterleaved(std::istream& input);
+      entries _read_. If @c transpose is @c true, then row and column
+      values read from the stream are exchanged, i.e., the transpose
+      of the matrix is read into memory. */
+  size_t read_noninterleaved(std::istream& input, const bool transpose=false);
 
   /** Read a matrix stream into the processors. This should be run
       from one MPI rank only: it will then distribute the data to
-      other MPI ranks. Return total number of nonzero entries read. */
-  size_t read_and_distribute(std::istream& input) { throw "not implemented"; };
+      other MPI ranks. Return total number of nonzero entries read.
+      If @c transpose is @c true, then row and column values read from
+      the stream are exchanged, i.e., the transpose of the matrix is
+      read into memory. */
+  size_t read_and_distribute(std::istream& input, const bool transpose=false) 
+    { throw "not implemented"; };
 
   /** Return rank of matrix after in-place destructive computation. */
   int rank();
@@ -99,7 +107,7 @@ public:
   
 
 private:
-  mpi::communicator comm;
+  mpi::communicator& comm;
   const int mpi_id; /**< MPI rank. */
   const int mpi_nprocs; /**< Total number of ranks in MPI communicator. */
   
@@ -127,17 +135,12 @@ public:
         phase(running), inbox(), outbox(), 
         dense_threshold(dense_threshold_) 
     { 
-#ifdef WITH_OPENMP
+#ifdef _OPENMP
       omp_init_lock(&inbox_lock_);
 #endif
     };
-    /** Destructor. Releases OpenMP lock. */
-    ~Processor()
-    {
-#ifdef WITH_OPENMP
-      omp_destroy_lock(&inbox_lock_);
-#endif
-    };
+    /** Destructor. Releases OpenMP lock and frees up remaining memory. */
+    ~Processor();
 
   public:
     // forward declarations
@@ -169,7 +172,7 @@ public:
     /** List of incoming rows from other processors. */
     typedef std::list< row_ptr > inbox_t;
     inbox_t inbox;
-#ifdef WITH_OPENMP
+#ifdef _OPENMP
     /** Lock for accessing the @c inbox */
     omp_lock_t inbox_lock_;
 #endif
@@ -384,8 +387,8 @@ val_t gcd(long long const n, long long const m)
 
 // ------- Waterfall -------
 
-Waterfall::Waterfall(const coord_t nrows, const coord_t ncols)
-  : comm(mpi::communicator()), mpi_id(comm.rank()), mpi_nprocs(comm.size()),
+Waterfall::Waterfall(const coord_t nrows, const coord_t ncols, mpi::communicator& comm_)
+  : comm(comm_), mpi_id(comm.rank()), mpi_nprocs(comm.size()),
     nrows_(nrows), ncols_(ncols),
     procs()
 {  
@@ -397,7 +400,7 @@ Waterfall::Waterfall(const coord_t nrows, const coord_t ncols)
 
 
 size_t
-Waterfall::read_noninterleaved(std::istream& input) 
+Waterfall::read_noninterleaved(std::istream& input, const bool transpose) 
 {
     // count non-zero items read
     size_t nnz = 0;
@@ -415,6 +418,8 @@ Waterfall::read_noninterleaved(std::istream& input)
       // ignore zero entries in matrix -- they shouldn't be here in the first place
       if (0 == value and 0 != i and 0 != j) // '0 0 0' is end-of-stream marker
         continue; 
+      if (transpose)
+        std::swap(i, j);
       // SMS indices are 1-based
       --i;
       --j;
@@ -443,7 +448,7 @@ Waterfall::read_noninterleaved(std::istream& input)
 
 
 size_t
-Waterfall::read(std::istream& input) 
+Waterfall::read(std::istream& input, const bool transpose) 
 {
     // count non-zero items read
     size_t nnz = 0;
@@ -458,6 +463,8 @@ Waterfall::read(std::istream& input)
       input >> i >> j >> value;
       if (0 == i and 0 == j and 0 == value)
         break; // end of matrix stream
+      if (transpose)
+        std::swap(i, j);
       // ignore zero entries in matrix -- they shouldn't be there in the first place
       if (0 == value) 
         continue; 
@@ -479,13 +486,11 @@ Waterfall::read(std::istream& input)
       if (NULL != row) {
         const coord_t starting_column = row->first_nonzero_column();
         // commit row
-        if (is_local(starting_column)) {
+        if (is_local(starting_column))
           local_owner(starting_column).recv_row(row);
-        }
-        else { 
+        else 
           // discard non-local and null rows
           delete row;
-        };
       };
     }; // for (it = rows.begin(); ...)
     
@@ -509,7 +514,7 @@ Waterfall::rank()
     if (procs.size()-1 == n0)
       break;
     // step all processors
-#ifdef WITH_OPENMP
+#ifdef _OPENMP
 #pragma omp parallel for
 #endif
     for (size_t n = n0; n < procs.size(); ++n) {
@@ -596,18 +601,32 @@ Waterfall::remote_owner(const coord_t c) const
 
 // ------- Processor -------
 
+Waterfall::Processor::~Processor()
+{
+#ifdef _OPENMP
+      omp_destroy_lock(&inbox_lock_);
+#endif
+      for (block::iterator it = rows.begin(); it != rows.end(); ++it)
+        delete *it;
+};
+
+
 inline void 
 Waterfall::Processor::recv_row(row_ptr new_row) 
 {
-#ifdef WITH_OPENMP
+#ifdef _OPENMP
   omp_set_lock(&inbox_lock_);
 #endif
   inbox.push_back(new_row);
-#ifdef WITH_OPENMP
+#ifdef _OPENMP
   omp_unset_lock(&inbox_lock_);
 #endif
 };
 
+
+#ifdef _OPENMP
+static omp_lock_t send_row_lock_;
+#endif
 
 inline void 
 Waterfall::Processor::send_row(row_ptr row) 
@@ -617,6 +636,9 @@ Waterfall::Processor::send_row(row_ptr row)
     parent.local_owner(column).recv_row(row);
   else { // ship to remote process
     mpi::request req;
+#ifdef _OPENMP
+    omp_set_lock(&send_row_lock_);
+#endif
     if (row->kind == Row::sparse)
       req = parent.comm.isend(parent.remote_owner(column), TAG_ROW_SPARSE, 
                               static_cast<sparse_row_ptr>(row));
@@ -626,6 +648,9 @@ Waterfall::Processor::send_row(row_ptr row)
     else
       // should not happen!
       throw std::logic_error("Unhandled row type in Processor::send_row()");
+#ifdef _OPENMP
+    omp_unset_lock(&send_row_lock_);
+#endif
     outbox.push_back(req);
     delete row; // no longer needed
   };
@@ -1206,9 +1231,37 @@ main(int argc, char** argv)
       return 1;
     }
 
+  int provided;
+  MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
   mpi::environment env(argc, argv);
   mpi::communicator world;
   int myid = world.rank();
+  if (0 == myid and MPI_THREAD_MULTIPLE != provided) {
+    std::cerr << "WARNING: requested MPI_THREAD_MULTIPLE, but MPI library provided ";
+    if (MPI_THREAD_SINGLE == provided)
+      std::cerr << "MPI_THREAD_SINGLE";
+    else if (MPI_THREAD_FUNNELED == provided)
+      std::cerr << "MPI_THREAD_FUNNELED";
+    else if (MPI_THREAD_SERIALIZED == provided)
+      std::cerr << "MPI_THREAD_SERIALIZED";
+    else if (MPI_THREAD_MULTIPLE == provided)
+      std::cerr << "MPI_THREAD_MULTIPLE";
+    else 
+      std::cerr << "an unknown level (" <<provided<< ")";
+    std::cerr << std::endl;
+  } // DEBUG
+  // { // DEBUG: print MPI rank and hostname
+  //   char nodename[256];
+  //   int rc = gethostname(nodename, 255);
+  //   if (0 != rc) {
+  //     std::cerr << "Cannot get hostname - aborting" << std::endl;
+  //     return 1;
+  //   }; // if rc != 0
+  //   setlinebuf(stderr);
+  //   std::cerr << "DEBUG: MPI rank " <<myid
+  //             << " running on host " << nodename
+  //             << std::endl;
+  // }
 
   for (int i = 1; i < argc; ++i)
     {
@@ -1222,7 +1275,7 @@ main(int argc, char** argv)
       if (0 == myid) {
         std::cout << argv[0] << " file:"<<argv[i]
                   << " mpi:"<< world.size();
-#ifdef WITH_OPENMP
+#ifdef _OPENMP
         std::cout << " omp:"<< omp_get_max_threads();
 #endif
       }
@@ -1237,8 +1290,16 @@ main(int argc, char** argv)
         std::cout << " cols:" << cols;
       };
 
-      Waterfall w(rows, cols);
-      size_t nnz = w.read(input);
+      // possibly transpose matrix so that rows = min(rows, cols)
+      // i.e., minimize the number of eliminations to perform
+      bool transpose = false;
+      if (rows > cols) {
+        std::swap(rows, cols);
+        transpose = true;
+      };
+
+      Waterfall w(rows, cols, world);
+      size_t nnz = w.read(input, transpose);
       input.close();
       if (0 == myid)
         std::cout << " nonzero:" << nnz;
@@ -1272,6 +1333,8 @@ main(int argc, char** argv)
       if (0 == myid)
         std::cout << " wctime:" << std::fixed << std::setprecision(2) << elapsed << std::endl;
     }
+
+  MPI_Finalize();
 
   return 0;
 }
