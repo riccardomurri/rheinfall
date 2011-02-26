@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,10 @@
 #ifndef MODULAR_HPP
 #define MODULAR_HPP
 
+
+#if defined(WITH_MPI)
+# include <boost/mpi.hpp>
+#endif
 
 #include <iostream>
 
@@ -97,7 +101,14 @@ namespace modular {
         }
       return Modular<val_t>(a < 0 ? -u : u);
     };
-      
+
+#if defined(WITH_MPI)
+    // serialization support
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive& ar, const unsigned int version) { ar & val_; };
+#endif // WITH_MPI
+
   }; // class Modular<...>
 
 
@@ -105,6 +116,19 @@ namespace modular {
   template<typename val_t> val_t Modular<val_t>::modulus_;
 
 }; // namespace modular
+
+
+// inform Boost.MPI that Modular<T> is a POD type
+#if defined(WITH_MPI)
+BOOST_IS_MPI_DATATYPE(modular::Modular<int>)
+BOOST_IS_MPI_DATATYPE(modular::Modular<long>)
+# ifdef HAVE_LONG_LONG_INT
+BOOST_IS_MPI_DATATYPE(modular::Modular<long long>)
+# endif
+//BOOST_CLASS_TRACKING(val_t, boost::serialization::track_never);
+//BOOST_CLASS_IMPLEMENTATION(val_t, boost::serialization::object_serializable);
+#endif
+
 
 
 #endif // MODULAR_HPP
