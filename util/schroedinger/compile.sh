@@ -14,13 +14,14 @@ Usage: $PROG [REVNO]/[COMPILER]-[MPILIB] [CXXFLAGS ...]
 
 Setup the correct modules and paths for compiling 'Rheinfall' with the
 given COMPILER and MPILIB.  Compile the code and store the results in
-'~/sw/COMPILER-MPILIB-REVNO'.
+'run/REVNO/COMPILER-MPILIB'.
 
-The COMPILER tag selects the compiler type (gcc412, gcc441, gcc443,
+The COMPILER tag selects the compiler type (gcc412, gcc434, gcc443,
 gcc450, intel; default: gcc443); second tag MPILIB selects which MPI
-library will be used (ompi, mvapich, intel, or none; default:
-openmpi).  Third argument REVNO defaults to the current Bazaar
-repository revno, but can be overridden to tag variants of the code.
+library will be used (ompi, parastation, mvapich, intel, or none;
+default: openmpi).  Third argument REVNO defaults to the current
+Bazaar repository revno, but can be overridden to tag variants of the
+code.
 
 EOF
 }

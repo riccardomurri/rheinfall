@@ -13,7 +13,7 @@ set_mpi_and_compiler_flavor () {
 
     rev="$(echo $flavor | cut -d/ -f1)"
     compiler_and_mpilib="$(echo $flavor | cut -d/ -f2)"
-    if [ -z "$compiler_and_mpilib" ]; then
+    if [ -z "$compiler_and_mpilib" -o "x$compiler_and_mpilib" = "x$rev" ]; then
         # rev can be omitted - try to get it from the BZR repository
         compiler_and_mpilib="$rev"
         if test -d .bzr; then
@@ -40,12 +40,13 @@ set_mpi_and_compiler_flavor () {
     ## load modules
     source /panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/Modules/default/init/sh
 
-    supported_compilers='gcc412 gcc441 gcc443 gcc450 icc'
-    supported_mpilibs='openmpi mvapich intel none'
+    supported_compilers='gcc412 gcc434 gcc441 gcc443 gcc450 icc'
+    supported_mpilibs='openmpi parastation parastation-mt mvapich intel none'
 
      # load MPI - must match what the binary was compiled with!
     case "$mpi" in
-        ompi|openmpi) 
+        ompi|openmpi) # systemwide OpenMPI
+            pe=openmpi2
             case "$compiler" in
                 gcc450)    module load mpi/openmpi/gcc-4.5.0 ;;
                 gcc*)      module load mpi/openmpi/gcc ;;
@@ -53,8 +54,22 @@ set_mpi_and_compiler_flavor () {
             esac
             ;;
         ompi*) # My own OpenMPI install in ${sw}/lib etc.
+            pe=openmpi2
+            ;;
+        para*) # systemwide Parastation
+            pe=parastation
+            export PATH=/opt/parastation/mpi2/bin:/opt/parastation/bin:$PATH
+            export LD_LIBRARY_PATH=/opt/parastation/mpi2/lib:$LD_LIBRARY_PATH
+            export LD_RUN_PATH=$LD_LIBRARY_PATH
+            ;;
+        para*mt) # systemwide Parastation w/ threads support
+            pe=parastation
+            export PATH=/opt/parastation/mpi2-mt/bin:/opt/parastation/bin:$PATH
+            export LD_LIBRARY_PATH=/opt/parastation/mpi2-mt/lib:$LD_LIBRARY_PATH
+            export LD_RUN_PATH=$LD_LIBRARY_PATH
             ;;
         mvapich) # MVAPICH is not supported by modules, apparently
+            pe=mpich_rsh
             case "$compiler" in
                 gcc412)
                     export PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc/mvapich2-1.4rc2/bin:$PATH
@@ -69,8 +84,10 @@ set_mpi_and_compiler_flavor () {
             esac
             ;;
         mvapich*) # My own MVAPICH2 install in ${sw}/lib etc.
+            pe=mpich_rsh
             ;;
         impi|intel) # Intel MPI is not supported by modules, apparently
+            pe=openmpi2
             export PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/intel_mpi/3.2.1.009/bin64:$PATH
             export LD_LIBRARY_PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/intel_mpi/3.2.1.009/lib64:$LD_LIBRARY_PATH
             export LD_RUN_PATH=$LD_LIBRARY_PATH
@@ -94,10 +111,18 @@ set_mpi_and_compiler_flavor () {
             module load gcc/4.1.2
             export CC=gcc
             export CXX=g++
-            export OMPI_CC=`which gcc`
-            export OMPI_CXX=`which g++`
             cflags='-march=nocona'
             cxxflags='-march=nocona'
+            std_cflags='-O3'
+            std_cxxflags='-O3'
+            toolset=gcc
+            ;;
+        gcc434)
+            # GCC 4.3.4 is std on Schroedinger after the 2011-01-29 upgrade
+            export CC=gcc-4.3
+            export CXX=g++-4.3
+            cflags='-march=native'
+            cxxflags='-march=native'
             std_cflags='-O3'
             std_cxxflags='-O3'
             toolset=gcc
@@ -106,8 +131,6 @@ set_mpi_and_compiler_flavor () {
             module load gcc/4.4.1
             export CC=gcc-4.4.1
             export CXX=g++-4.4.1
-            export OMPI_CC=`which gcc-4.4.1`
-            export OMPI_CXX=`which g++-4.4.1`
             cflags='-march=nocona'
             cxxflags='-march=nocona'
             std_cflags='-O3'
@@ -116,10 +139,12 @@ set_mpi_and_compiler_flavor () {
             ;;
         gcc443)
             module load gcc/4.4.3
-            export CC=gcc
-            export CXX=g++
-            export OMPI_CC=`which gcc`
-            export OMPI_CXX=`which g++`
+            export CC=/panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/Compilers/gcc-4.4.3-build/bin/gcc
+            export CXX=/panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/Compilers/gcc-4.4.3-build/bin/g++
+            # however, we need to tell gcc that it has to use the 4.4.3
+            # libstdc++, otherwise it will try to use the system default one
+            export LD_RUN_PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/Compilers/gcc-4.4.3-build/lib:$LD_RUN_PATH
+            export LD_LIBRARY_PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/Compilers/gcc-4.4.3-build/lib:$LD_LIBRARY_PATH
             cflags='-march=native'
             cxxflags='-march=native'
             std_cflags='-O3'
@@ -127,11 +152,14 @@ set_mpi_and_compiler_flavor () {
             toolset=gcc
             ;;
         gcc450)
-            module load gcc/4.5.0
-            export CC=gcc
-            export CXX=g++
-            export OMPI_CC=`which gcc`
-            export OMPI_CXX=`which g++`
+            # GCC 4.5 provided by SLES11 package after 2011-02-29 upgrade
+            #module load gcc/4.5.0
+            export CC=gcc-4.5
+            export CXX=g++-4.5
+            # however, we need to tell gcc that it has to use the 4.5
+            # libstdc++, otherwise it will try to use the 4.3 one
+            export LD_RUN_PATH=/usr/lib64/gcc/x86_64-suse-linux/4.5:$LD_RUN_PATH
+            export LD_LIBRARY_PATH=/usr/lib64/gcc/x86_64-suse-linux/4.5:$LD_LIBRARY_PATH
             cflags='-march=native'
             cxxflags='-march=native'
             std_cflags='-O3'
@@ -142,10 +170,7 @@ set_mpi_and_compiler_flavor () {
             module load intel/comp/11.1.064
             export CC=icc
             export CXX=icpc
-            export OMPI_CC=`which icc`
-            export OMPI_CXX=`which icpc`
-            export I_MPI_CC=`which icc`
-            export I_MPI_CXX=`which icpc`
+            # c(xx)flags are the equivalent of `-fast` w/out the `-static`
             cflags='-xHOST -O3 -ipo -no-prec-div'
             cxxflags='-xHOST -O3 -ipo -no-prec-div'
             std_cflags='-O3'
@@ -156,6 +181,13 @@ set_mpi_and_compiler_flavor () {
             die 1 "Unknown compiler flavor '${compiler}' - please choose one of: $supported_compilers"
             ;;
     esac
+    # MPI wrappers should use the default compiler
+    export I_MPI_CC=`which $CC`
+    export I_MPI_CXX=`which $CXX`
+    export MPICH_CC=`which $CC`
+    export MPICH_CXX=`which $CXX`
+    export OMPI_CC=`which $CC`
+    export OMPI_CXX=`which $CXX`
 
     # enable local sw
     sw="$HOME/sw/${compiler}-${mpi}"

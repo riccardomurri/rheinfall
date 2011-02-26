@@ -16,9 +16,9 @@ Setup the correct modules and paths for supporting binaries compiled
 by COMPILER with MPILIB, and finally run
 'run/REVNO/COMPILER-MPILIB/PROG' with the given ARGS.
 
-The COMPILER tag selects the compiler type (gcc412, gcc441, gcc443,
+The COMPILER tag selects the compiler type (gcc412, gcc434, gcc443,
 gcc450, intel); second tag MPILIB selects which MPI library will be
-used (ompi, mvapich, intel, or none).
+used (ompi, parastation, mvapich, intel, or none).
 
 EOF
 }
@@ -33,6 +33,33 @@ if expr "$spec" : 'run/' >/dev/null 2>&1; then
     spec="$(echo $spec | cut -c5-)"
 fi
 set_mpi_and_compiler_flavor "$spec"
+
+
+## detect array jobs and act accordingly
+
+# XXX: option parsing is rheinfall-specific
+opts=''
+files=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -t|--transpose) opts="$opts -t" ;;
+        -v|--verbose)   opts="$opts -v" ;;
+        -m|--memory)    opts="$opts -m $2"; shift ;;
+        -p|--modulus)   opts="$opts -p $2"; shift ;;
+        --) shift; break ;;
+        *) files="$files $1" ;;
+    esac
+    shift
+done
+files="$files $*"
+
+nth () { declare -i n=$1; while [ $n -gt 0 ]; do shift; let n--; done; echo "$1"; }
+
+if [ "_$SGE_TASK_ID" != '_undefined' ]; then
+    args_from="$(nth $SGE_TASK_ID $files)"
+    files="$(cat $args_from)"
+    echo SGE Task $SGE_TASK_ID: replaced argument list with contents of file "'$args_from': $files"
+fi
 
 
 ## environment information
@@ -90,20 +117,27 @@ case "$exec" in
                 mpirun -np $np \
                     --bynode --nooversubscribe $gmca $hostfile \
                     -x LD_PRELOAD -x LD_LIBRARY_PATH -x PATH \
-                    $HOME/bin/_exec.sh $exec "$@" 
+                    $HOME/bin/_exec.sh $exec $opts $files 
+                ;;
+            para*) 
+                # filter hostfile so that we only have one occurrence of each host
+                uniq < $TMPDIR/machines > $TMPDIR/machines.uniq
+                mpiexec -np $np --hostfile $TMPDIR/machines.uniq \
+                    -e PATH,LD_LIBRARY_PATH,LD_PRELOAD --loopnodesfirst \
+                    $HOME/bin/_exec.sh $exec $opts $files 
                 ;;
             mvapich*) 
                 # filter hostfile so that we only have one occurrence of each host
                 uniq < $TMPDIR/machines > $TMPDIR/machines.uniq
                 mpirun_rsh -rsh -hostfile $TMPDIR/machines.uniq -np $np \
-                    $HOME/bin/_exec.sh $exec "$@" 
+                    $HOME/bin/_exec.sh $exec $opts $files 
                 ;;
             intel|impi) 
                 mpiexec  -perhost 1 \
                     -genvlist LD_PRELOAD,LD_LIBRARY_PATH,PATH \
                     -env I_MPI_DEVICE rdssm \
                     -n $np \
-                    $HOME/bin/_exec.sh $exec "$@"
+                    $HOME/bin/_exec.sh $exec $opts $files
                 ;;
         esac
         ;;
@@ -117,21 +151,27 @@ case "$exec" in
                 mpirun -np $NSLOTS --gmca btl tcp,sm,self \
                     --bynode --nooversubscribe --bind-to-core $gmca $hostfile \
                     -x LD_PRELOAD -x LD_LIBRARY_PATH -x PATH \
-                    $HOME/bin/_exec.sh $exec "$@" 
+                    $HOME/bin/_exec.sh $exec $opts $files 
+                ;;
+            para*) 
+                mpiexec -np $NSLOTS --hostfile $TMPDIR/machines \
+                    -e PATH,LD_LIBRARY_PATH,LD_PRELOAD --loopnodesfirst \
+                    $HOME/bin/_exec.sh $exec $opts $files 
                 ;;
             mvapich*) 
-                mpirun_rsh -rsh -hostfile $TMPDIR/machines -np $NSLOTS $HOME/bin/_exec.sh $exec "$@" 
+                mpirun_rsh -rsh -hostfile $TMPDIR/machines -np $NSLOTS $HOME/bin/_exec.sh $exec $opts $files 
                 ;;
             intel|impi) 
                 mpiexec -n $NSLOTS \
                     -genvlist LD_PRELOAD,LD_LIBRARY_PATH,PATH \
                     -env I_MPI_DEVICE rdssm \
-                    $HOME/bin/_exec.sh $exec "$@" 
+                    $HOME/bin/_exec.sh $exec $opts $files 
                 ;;
         esac
         ;;
-    *rank*) # no MPI... just run it!
-        $HOME/bin/_exec.sh $exec "$@"
+    *rank*) # no MPI... use poor man's parallelization with "xargs"
+        #$HOME/bin/_exec.sh $exec $opts $files
+        echo $files | xargs -n 1 -P 8 $HOME/bin/_exec.sh $exec $opts
         ;;
 esac
 rc=$?
