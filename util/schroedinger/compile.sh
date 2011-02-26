@@ -192,7 +192,8 @@ rm -rf "$build_dir"
 mkdir -p "$build_dir"
 cd "$build_dir"
 $top_src_dir/configure CXXFLAGS="-O3 -DNDEBUG $cxxflags" --with-boost=$sw --with-gmp=$sw
-make
+make -k
+rc=$?
 
 echo == Saving executables in "${top_src_dir}/run/${compiler}-${mpi}-${rev}/"
 mkdir -pv "${top_src_dir}/run/${compiler}-${mpi}-${rev}/"
@@ -202,4 +203,5 @@ cp -av \
 cd "${top_src_dir}" \
     && rm -rf "$build_dir"
 
-echo === Done. ===
+echo === Done: exit code $rc ===
+exit $rc
