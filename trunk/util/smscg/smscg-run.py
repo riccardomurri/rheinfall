@@ -82,7 +82,6 @@ from texttable import Texttable
 import gc3libs
 from gc3libs import Application
 import gc3libs.core
-import gc3libs.Default
 import gc3libs.persistence
 import gc3libs.utils
 
@@ -197,6 +196,8 @@ exe = None
 if len(args) != 0:
     exe = args[0]
     del args[0]
+    if not os.path.isabs(exe):
+        exe = os.path.join(os.getcwd(), exe)
 
 if exe is not None and len(args) == 0:
     cmdline.error("Missing BATCH specification.")
@@ -379,7 +380,9 @@ if exe is not None:
       files="$files '$file'"
     done
 
-    eval exec ./$exe $opts $files
+    rc=0
+    for file in $files; do eval ./$exe $opts $file; rc=$(expr $? + $rc); done
+    exit $rc
     """)
     os.fchmod(fd, 0755)
 
@@ -406,6 +409,8 @@ if exe is not None:
                 .replace('DATE', time.strftime('%Y-%m-%d', time.localtime(time.time())))
                 .replace('TIME', time.strftime('%H:%M', time.localtime(time.time())))
                 ),
+            # force running on idgc3grid01's fastest CPUs
+            tags = ['ENV/CPU/OPTERON-2384'],
             # smscg-run-specific data
             batch_file_path = batch,
             ))
