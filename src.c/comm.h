@@ -29,8 +29,13 @@
 #ifndef COMM_H
 #define COMM_H
 
-#include "config.h"
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#include "common.h"
 #include "row.h"
+#include "switchboard.h"
 #include "xarray.h"
 
 #ifdef WITH_MPI
@@ -38,33 +43,11 @@
 #endif
 
 
-/** An `outbox` is a list of pending MPI requests and associated row
-    pointers (the payload of such requests). These lists are kept in
-    separate xarrays in order to be able to use the xarray's storage
-    directly to MPI_{Test,Wait} calls. */
-XARRAY_DECLARE(requests_list, MPI_Request, /* no extra data */);
-typedef {
-  requests_list_t* requests;
-  rows_list_t*     rows;
-} outbox_t;
-
-/** Allocate a new @c outbox_t structure and return a pointer to it. */
-inline outbox_t* outbox_new(size_t nmemb) {
-  outbox_t* ob = xmalloc(sizeof(outbox_t));
-  ob->requests = requests_list_new(nmemb);
-  ob->rows = rows_list_new(nmemb);
-  return ob;
-};
-
-/** Free an @c outbox_t object previously allocated with `outbox_new`. */
-inline void outbox_free(outbox_t *ob) {
-  requests_list_free(ob->requests);
-  rows_list_free(ob->rows);
-  free(ob);
-};
-
-int comm_send_row(outbox_t* outbox, row_kind_t kind, void* row);
-int comm_send_end(outbox_t* outbox, coord_t dest);
+int comm_send_end(const switchboard_t* sb, coord_t dest);
+int comm_send_row(const switchboard_t* sb, outbox_t* const outbox, const row_t* cargo);
+void comm_receive(const switchboard_t* sb);
+outbox_t* comm_remove_completed(outbox_t* outbox);
+outbox_t* comm_wait_all_and_then_free(outbox_t* outbox);
 
 
 #endif // COMM_H
