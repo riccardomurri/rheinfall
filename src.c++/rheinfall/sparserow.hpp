@@ -162,7 +162,7 @@ namespace rheinfall {
 
   // ------- inline methods -------
 
-#include "mathdefs.hpp"
+#include "types.hpp"
 #include "denserow.hpp"
 
 namespace rheinfall {
