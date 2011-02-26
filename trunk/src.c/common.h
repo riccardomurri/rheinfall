@@ -33,24 +33,50 @@
 #include <config.h>
 #endif
 
-#include <inttypes.h>
-
 
 typedef long coord_t;
 #define mpitype_coord_t MPI_LONG
 #define fmtspec_coord_t "%ld"
 
-typedef long long val_t;
-#define mpitype_val_t MPI_LONG_LONG
-#define fmtspec_val_t "%lld"
-#define val_abs(x) imaxabs(x)
+
+#if defined(WITH_INTMAX_VALUES)
+
+# include <inttypes.h>
+typedef intmax_t val_t;
+// XXX: we just presume that `intmax_t` is the same as `long long`;
+// this should be moved into an autoconf test.
+# define mpitype_val_t MPI_LONG_LONG
+# define fmtspec_val_t "%lld"
+# define val_abs(x) imaxabs(x)
+
+#elif defined(WITH_DOUBLE_VALUES)
+
+# include <math.h>
+typedef double val_t;
+# define mpitype_val_t MPI_DOUBLE
+# define fmtspec_val_t "%f"
+# define val_abs(x) fabs(x)
+
+#elif defined(WITH_LONG_DOUBLE_VALUES)
+
+# include <math.h>
+typedef double val_t;
+# define mpitype_val_t MPI_LONG_DOUBLE
+# define fmtspec_val_t "%Lf"
+# define val_abs(x) fabsl(x)
+
+#endif // WITH_...
+
 
 #define DENSE_THRESHOLD 40.0
+
 
 #if (defined(WITH_MPI_SERIALIZED) || defined(WITH_MPI_MULTIPLE)) && ! defined(WITH_MPI)
 # define WITH_MPI
 #endif
 
+
 #define _inline static inline
+
 
 #endif // CONFIG_H
