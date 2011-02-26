@@ -508,20 +508,13 @@ public:
   coord_t 
   Rheinfall<val_t,coord_t>::rank() 
   {
-#ifdef _OPENMP
-    boost::optional <coord_t> ending_next;
-#endif
-
     // kickstart termination signal
     if (is_local(0)) {
       vpu_for_column(0)->end_phase();
-#ifdef _OPENMP
-      ending_next = 0;
-#endif
     };
 
-    // collect (partial) ranks
-    std::vector<int> r(vpus.size(), 0);
+    // where to collect (partial) ranks
+    std::vector<coord_t> r(vpus.size(), 0);
   
     coord_t n0 = 0;
     while(n0 < vpus.size()) {
@@ -534,60 +527,10 @@ public:
       if (n0 >= vpus.size())
         break; // exit `while(n0 < vpus.size())` loop
 #ifdef _OPENMP
-      size_t total_size, chunk_size, bottom, top;
-#     pragma omp parallel private(total_size,chunk_size,bottom,top) default(shared)
-      {
-        if (!! ending_next) {
-          assert(*ending_next == 0);
-          if (omp_get_thread_num() == 0) {
-            // master thread takes care of the ending ranks
-            coord_t col = *ending_next;
-            while (col < ncols_ and is_local(col)) {
-              const coord_t n = vpu_index_for_column(col);
-              r[n] = vpus[n]->step();
-              col++;
-            };
-            if (col < ncols_) 
-              n0 = vpu_index_for_column(col);
-            else
-              n0 = vpus.size();
-            ending_next.reset();
-          }
-          else {
-            // other threads loop over all VPUs with a non-empty inbox
-            total_size = vpus.size() - n0;
-            chunk_size = total_size / std::max(1, omp_get_num_threads()-1);
-            bottom = n0 + chunk_size * (omp_get_thread_num() - 1);
-            top = std::min(bottom + chunk_size, vpus.size());
-            for (coord_t n = top-1; n >= bottom; --n) {
-              // XXX: all this locking is definitely slowing us down,
-              // but neither OpenMP nor Boost (as of 1.43) provide any
-              // way to do concurrent-access data structures...
-              omp_set_lock(&(vpus[n]->inbox_lock_));
-              // FIXME: could gcc optimize this out of the lock/unlock pair?
-              bool data_in_vpu_inbox = not (vpus[n]->inbox.empty());
-              omp_unset_lock(&(vpus[n]->inbox_lock_));
-              if (data_in_vpu_inbox) {
-#               pragma omp task untied firstprivate(n)
-                r[n] = vpus[n]->step();
-              };
-            };
-#           pragma omp taskwait
-            { /* no-op for taskwait */ };
-          };
-        } // end if (!! ending_next)
-        else {
-          // run parallel loop over all VPUs with a non-empty inbox
-#         pragma omp for schedule(static)
-          for (coord_t n = n0; n < vpus.size(); ++n)
-            if (not vpus[n]->inbox.empty()) 
-              r[n] = vpus[n]->step();
-        }; // end else if (!! ending_next)
-      }; // end omp parallel
-#else // no OpenMP, loop over all VPUs
+# pragma omp parallel for schedule(static,w_)
+#endif // _OPENMP
       for (coord_t n = n0; n < vpus.size(); ++n)
         r[n] = vpus[n]->step();
-#endif // _OPENMP
 #ifdef WITH_MPI
       while (boost::optional<mpi::status> status = comm_.iprobe()) { 
         switch(status->tag()) {
@@ -621,9 +564,6 @@ public:
           Processor* vpu = vpu_for_column(column);
           assert(NULL != vpu);
           vpu->end_phase();
-# ifdef _OPENMP
-          ending_next = column;
-# endif
           break;
         };
         }; // switch(status->tag())

@@ -3,7 +3,7 @@
 ##
 
 AC_PREREQ([2.67])
-AC_INIT([rheinfall],[0.11.26],[riccardo.murri@gmail.com])
+AC_INIT([rheinfall],[0.13.08],[riccardo.murri@gmail.com])
 AC_CONFIG_SRCDIR([src.c++/rheinfall/rheinfall.hpp])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
@@ -29,15 +29,15 @@ AC_LANG([C])
 gl_INIT
 
 
-# DON'T check for OpenMP -- the code won't run... (to be fixed someday).
-#AC_LANG_PUSH([C])
-#AC_OPENMP
-#AC_LANG_POP([C])
+# check for OpenMP
+AC_LANG_PUSH([C])
+AC_OPENMP
+AC_LANG_POP([C])
 AM_CONDITIONAL([HAVE_OPENMP_CC], [test "_$OPENMP_CFLAGS" != '_'])
 
-#AC_LANG_PUSH([C++])
-#AC_OPENMP
-#AC_LANG_POP([C++])
+AC_LANG_PUSH([C++])
+AC_OPENMP
+AC_LANG_POP([C++])
 AM_CONDITIONAL([HAVE_OPENMP_CXX], [test "_$OPENMP_CXXFLAGS" != '_'])
 
 
