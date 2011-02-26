@@ -151,6 +151,20 @@ sigfpe(int signum, siginfo_t* siginfo, void* ucp)
 }
 
 
+void
+sigsegv(int signum, siginfo_t* siginfo, void* ucp)
+{
+  fprintf(stderr, "*** Segmentation fault (SIGSEGV): ");
+  switch (siginfo->si_code) {
+  case SEGV_MAPERR:  fprintf(stderr, "address not mapped"); break;
+  case  SEGV_ACCERR: fprintf(stderr, "invalid permissions for mapped object"); break;
+  default:           fprintf(stderr, "unknown fault"); break;
+  };
+  fprintf(stderr, " ***\n");
+  exit(signum);
+}
+
+
 int
 main(int argc, char** argv)
 {
@@ -269,14 +283,26 @@ main(int argc, char** argv)
     };
   };
 
+  // install signal handlers only if not running MPI: OpenMPI does a
+  // better job at it than the simple-minded functions here.
+  struct sigaction sa;
+#ifndef WITH_MPI
+
   // gracefully handle SIGINT, so that we can interrupt the process
   // and still get profiling information dumped to disk
-  struct sigaction sa;
   sa.sa_handler = sigint;
   sa.sa_flags = 0;
   sigemptyset(&sa.sa_mask);
   sigaddset(&sa.sa_mask, SIGINT);
   sigaction (SIGINT, &sa, NULL);
+
+  // dump backtrace on SIGSEGV
+  sa.sa_sigaction = sigsegv;
+  sa.sa_flags = SA_SIGINFO|SA_ONSTACK;
+  sigemptyset(&sa.sa_mask);
+  sigaddset(&sa.sa_mask, SIGSEGV);
+  sigaction (SIGSEGV, &sa, NULL);
+#endif // WITH_MPI
 
   // start processing
   for (int i = optind; i < argc; ++i)
