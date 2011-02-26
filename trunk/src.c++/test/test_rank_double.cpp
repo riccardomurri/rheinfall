@@ -28,6 +28,10 @@
  */
 
 #include <config.h>
+// ignore GMP even if defined, since we're not going to test it
+#ifdef HAVE_GMPXX
+# undef HAVE_GMPXX
+#endif
 
 typedef long double val_t;
 typedef long coord_t;
