@@ -213,7 +213,7 @@ namespace rheinfall {
                                                  const int source, const int tag)
   {
     SparseRow<val_t,coord_t>* row = new  SparseRow<val_t,coord_t>();
-    comm.recv(source, tag, row);
+    comm.recv(source, tag, *row);
     return row;
   };
 
@@ -453,7 +453,9 @@ namespace rheinfall {
     // When the class Archive corresponds to an output archive, the
     // & operator is defined similar to <<.  Likewise, when the class Archive
     // is a type of input archive the & operator is defined similar to >>.
-    ar & boost::serialization::base_object<Row_>(*this) & storage;
+    ar 
+      & boost::serialization::base_object< Row<val_t,coord_t> >(*this) 
+      & storage;
     assert(this->__ok());
   }; // SparseRow::serialize(...)
 #endif // WITH_MPI
