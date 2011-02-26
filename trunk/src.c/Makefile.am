@@ -17,6 +17,9 @@ endif
 endif
 
 AM_CPPFLAGS =
+if WITH_GE
+  AM_CPPFLAGS += -DWITH_GE
+endif
 AM_CFLAGS =
 AM_LDFLAGS =
 LDADD =
