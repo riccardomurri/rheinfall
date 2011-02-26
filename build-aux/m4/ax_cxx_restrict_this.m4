@@ -8,7 +8,7 @@
 #
 # DESCRIPTION
 #
-#   Determine whether the C++ compiler supports defining a member
+#   Determine whether the C++ compiler supports qualifying a member
 #   function with a restricted "this" pointer.  Define "restrict_this"
 #   to the correct spelling; use like this:
 #      
