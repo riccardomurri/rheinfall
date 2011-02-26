@@ -159,8 +159,9 @@ namespace rheinfall {
 
   template <typename val_t, typename coord_t>
   inline Row<val_t,coord_t>*
-  Row<val_t,coord_t>::gaussian_elimination(Row<val_t,coord_t>* other, 
-                                           const double dense_threshold) const
+  Row<val_t,coord_t>::gaussian_elimination(Row<val_t,coord_t>* restrict other, 
+                                           const double dense_threshold) 
+    const restrict_this
   {
     if ((sparse == this->kind) and (sparse == other->kind)) {
       SparseRow<val_t,coord_t> const* s1 = static_cast<SparseRow<val_t,coord_t> const*>(this);

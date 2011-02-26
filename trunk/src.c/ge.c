@@ -56,8 +56,8 @@ val_t gcd(intmax_t const n, intmax_t const m)
     a sparse @a pivot_row. Return pointer to newly-allocated dense row,
     and frees pointer to @a other.  @see gaussian_elimination */
 static inline sparse_row_t* 
-gaussian_elimination_sparse_with_sparse_pivot(sparse_row_t* const pivot_row, 
-                                              sparse_row_t* other_row)
+gaussian_elimination_sparse_with_sparse_pivot(sparse_row_t* const restrict pivot_row, 
+                                              sparse_row_t* restrict other_row)
 {
   assert(sparse_row_ok(pivot_row));
   assert(sparse_row_ok(other_row));
@@ -158,8 +158,8 @@ gaussian_elimination_sparse_with_sparse_pivot(sparse_row_t* const pivot_row,
     a sparse @a pivot_row. Return pointer to newly-allocated dense row,
     and frees pointer to @a other.  @see gaussian_elimination */
 static inline dense_row_t* 
-gaussian_elimination_dense_with_sparse_pivot(sparse_row_t* const pivot_row,
-                                             dense_row_t* other_row)
+gaussian_elimination_dense_with_sparse_pivot(sparse_row_t* const restrict pivot_row,
+                                             dense_row_t* restrict other_row)
 {
   assert(pivot_row->starting_column_ >= other_row->starting_column_);
   assert(pivot_row->ending_column_ == other_row->ending_column_);
@@ -190,8 +190,8 @@ gaussian_elimination_dense_with_sparse_pivot(sparse_row_t* const pivot_row,
     in-place with a dense @a pivot_row.  Return pointer to the updated
     row @a other.  @see gaussian_elimination */
 static inline dense_row_t* 
-gaussian_elimination_dense_with_dense_pivot(dense_row_t* const pivot_row,
-                                            dense_row_t* other)
+gaussian_elimination_dense_with_dense_pivot(dense_row_t* const restrict pivot_row,
+                                            dense_row_t* restrict other)
 {
   assert(pivot_row->starting_column_ == other->starting_column_);
   assert(0 != pivot_row->leading_term_);
@@ -236,7 +236,7 @@ gaussian_elimination_sparse_with_dense_pivot(dense_row_t* const pivot_row,
 
 
 row_t*
-gaussian_elimination(row_t* const pivot_row, row_t* other_row, 
+gaussian_elimination(row_t* const restrict pivot_row, row_t* restrict other_row, 
                      const double dense_threshold)
 {
   if ((ROW_SPARSE == pivot_row->kind) && (ROW_SPARSE == other_row->kind)) {
