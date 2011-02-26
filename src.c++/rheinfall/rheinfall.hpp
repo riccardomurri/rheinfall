@@ -34,6 +34,7 @@
 #include "row.hpp"
 #include "sparserow.hpp"
 #include "denserow.hpp"
+#include "types.hpp"
 
 #ifdef _OPENMP
 # include <omp.h>
@@ -56,18 +57,18 @@ namespace rheinfall {
 
 public:
 
-  /** Constructor. If compiled with MPI, will use the default
-      communicator @c MPI_COMM_WORLD */
+    /** Constructor. If compiled with MPI, will use the default
+        communicator @c MPI_COMM_WORLD */
     Rheinfall(const coord_t ncols, 
               const coord_t width = 1,
-              const double dense_threshold = 40.0);
-
+              const float dense_threshold = 40.0);
+    
 #ifdef WITH_MPI
-  /** Constructor, taking explicit MPI communicator. */
+    /** Constructor, taking explicit MPI communicator. */
     Rheinfall(mpi::communicator& comm, 
               const coord_t ncols,
               const coord_t width = 1,
-              const double dense_threshold = 40.0);
+              const float dense_threshold = 40.0);
 #endif // WITH_MPI
 
     /** Destructor. When using OpenMP and MPI serialization, destroys
@@ -75,130 +76,135 @@ public:
     ~Rheinfall();
   
 
-  /** Read a matrix stream into the processors. Does not make any
-      assumption on the order of entries in the input stream,
-      therefore all entries have to be read into memory. Return number
-      of nonzero entries _read_.  
+    /** Read a matrix stream into the processors. Does not make any
+        assumption on the order of entries in the input stream,
+        therefore all entries have to be read into memory. Return number
+        of nonzero entries _read_.  
+        
+        If arguments @a nrows and @a ncols are null, then the first line
+        read from stream @a input is assumed to be a header line, from
+        which the number of rows and columns is extracted (and returned
+        in @a nrows and @a ncols); otherwise, if @a nrows is not zero,
+        no header line is read and @a nrows, @a ncols must contain the
+        exact number of rows and columns in the matrix.
+        
+        If @c local_only is @c true (default), only rows assigned to the
+        local MPI rank are retained and other are discarded.  If @c
+        local_only is @c false, rows are sent to the destination MPI
+        rank as soon as they are read; only one rank should do the I/O.
+        
+        If @c transpose is @c true, then row and column values read from
+        the stream are exchanged, i.e., the transpose of the matrix is
+        read into memory. 
 
-      If arguments @a nrows and @a ncols are null, then the first line
-      read from stream @a input is assumed to be a header line, from
-      which the number of rows and columns is extracted (and returned
-      in @a nrows and @a ncols); otherwise, if @a nrows is not zero,
-      no header line is read and @a nrows, @a ncols must contain the
-      exact number of rows and columns in the matrix.
-
-      If @c local_only is @c true (default), only rows assigned to the
-      local MPI rank are retained and other are discarded.  If @c
-      local_only is @c false, rows are sent to the destination MPI
-      rank as soon as they are read; only one rank should do the I/O.
-
-      If @c transpose is @c true, then row and column values read from
-      the stream are exchanged, i.e., the transpose of the matrix is
-      read into memory. */
+        Finally, if @p ac is not @c NULL, every triple (row, column,
+        value) read from the stream is passed to @c ac->process.  This
+        could be used to compute, e.g., the matrix norm.
+    */
     coord_t read(std::istream& input, coord_t& nrows, coord_t& ncols, 
                  const bool local_only=true, const bool transpose=false);
-
-  /** Read a matrix stream into the processors. Assumes that entries
-      belonging to one row are not interleaved with entries from other
-      rows; i.e., that it can consider reading row @i i complete as
-      soon as it finds a row index @i j != i. Return number of nonzero
-      entries _read_. 
-
-      If arguments @a nrows and @a ncols are null, then the first line
-      read from stream @a input is assumed to be a header line, from
-      which the number of rows and columns is extracted (and returned
-      in @a nrows and @a ncols); otherwise, if @a nrows is not zero,
-      no header line is read and @a nrows, @a ncols must contain the
-      exact number of rows and columns in the matrix.
-
-      If @c transpose is @c true, then row and column values read from
-      the stream are exchanged, i.e., the transpose of the matrix is
-      read into memory. */
+    
+    /** Read a matrix stream into the processors. Assumes that entries
+        belonging to one row are not interleaved with entries from other
+        rows; i.e., that it can consider reading row @i i complete as
+        soon as it finds a row index @i j != i. Return number of nonzero
+        entries _read_. 
+        
+        If arguments @a nrows and @a ncols are null, then the first line
+        read from stream @a input is assumed to be a header line, from
+        which the number of rows and columns is extracted (and returned
+        in @a nrows and @a ncols); otherwise, if @a nrows is not zero,
+        no header line is read and @a nrows, @a ncols must contain the
+        exact number of rows and columns in the matrix.
+        
+        If @c transpose is @c true, then row and column values read from
+        the stream are exchanged, i.e., the transpose of the matrix is
+        read into memory. */
     coord_t read_noninterleaved(std::istream& input, coord_t& nrows, coord_t& ncols, 
                                 const bool transpose=false);
 
-  /** Return rank of matrix after in-place destructive computation. */
-  coord_t rank();
-
-public:
-  /** A single processing element. */
-  class Processor {
-
-  public:
-    Processor(Rheinfall& parent,
-              const coord_t column,
-              const double dense_threshold = 40.0);
-    /** Destructor. Releases OpenMP lock and frees up remaining memory. */
-    ~Processor();
-
-  protected:     
-    Rheinfall<val_t,coord_t>& parent_;
-    const coord_t column_;
-    friend class Rheinfall<val_t,coord_t>; // XXX: see rank()
-
-    /** Row used for elimination */
-    Row<val_t,coord_t>* u;
-
-    /** Processor state: it is `running` when Gaussian elimination
-        operations are being carried out regularly; it turns @c ending
-        when a @c TAG_END message is received; it is @c done when the
-        final contribution to the rank has been computed and the @c
-        step() method should be called no more. */
-    enum { running, ending, done } phase;
+    /** Return rank of matrix after in-place destructive computation. */
+    coord_t rank();
     
-    typedef std::list< Row<val_t,coord_t>* > row_list;
-    /** The block of rows that will be eliminated next time @c step() is called. */
-    row_list rows;
-    /** List of incoming rows from other processors. */
-    row_list inbox;
+    /** A row will switch its storage to dense format when the percent
+        of nonzero entries w.r.t. total length exceeds this
+        value. Default is to switch to dense storage at 40% fill-in. */
+    float dense_threshold;
+
+
+  protected:
+    /** A single processing element. */
+    class Processor {
+      
+    public:
+      Processor(Rheinfall& parent,
+                const coord_t column);
+      /** Destructor. Releases OpenMP lock and frees up remaining memory. */
+      ~Processor();
+      
+    protected:     
+      Rheinfall<val_t,coord_t>& parent_;
+      const coord_t column_;
+      friend class Rheinfall<val_t,coord_t>; // XXX: see rank()
+      
+      /** Row used for elimination */
+      Row<val_t,coord_t>* u;
+      
+      /** Processor state: it is `running` when Gaussian elimination
+          operations are being carried out regularly; it turns @c ending
+          when a @c TAG_END message is received; it is @c done when the
+          final contribution to the rank has been computed and the @c
+          step() method should be called no more. */
+      enum { running, ending, done } phase;
+      
+      typedef std::list< Row<val_t,coord_t>* > row_list;
+      /** The block of rows that will be eliminated next time @c step() is called. */
+      row_list rows;
+      /** List of incoming rows from other processors. */
+      row_list inbox;
 #ifdef _OPENMP
-    /** Lock for accessing the @c inbox */
-    omp_lock_t inbox_lock_;
+      /** Lock for accessing the @c inbox */
+      omp_lock_t inbox_lock_;
 #endif
 
 #ifdef WITH_MPI
-    /** List of rows sent to other processors and the associated MPI request. 
-        We need to keep track of these in order to free the resources when we're done. */
-    typedef std::list< std::pair< mpi::request,Row<val_t,coord_t>* > > outbox_t;
-    outbox_t outbox;
+      /** List of rows sent to other processors and the associated MPI request. 
+          We need to keep track of these in order to free the resources when we're done. */
+      typedef std::list< std::pair< mpi::request,Row<val_t,coord_t>* > > outbox_t;
+      outbox_t outbox;
 #endif
 
-    /** A row will switch its storage to dense format when the percent of
-        nonzero entries w.r.t. total length exceeds this value. */
-    const double dense_threshold_;
-
-    /** Stores the result of the last invocation of @c step(). */
-    coord_t result_;
+      /** Stores the result of the last invocation of @c step(). */
+      coord_t result_;
 
 #ifdef _OPENMP
-  private:
-    /** Lock for running the @c step() function. */
-    omp_lock_t processing_lock_;
+    private:
+      /** Lock for running the @c step() function. */
+      omp_lock_t processing_lock_;
 #endif
+      
+    public: 
 
-  public: 
-
-    /** Append the given row to @c inbox */
-    void recv_row(Row<val_t,coord_t>* new_row);
-
-    /** Make a pass over the block of rows and return either 0 or 1
-        (depending whether elimination took place or not). */
-    coord_t step();
-
-    /** Switch processor to @c ending state: after one final round of
-        elimination, a @c TAG_END message will be sent to the next
-        column VPU and no further VPU activity will follow: each
-        invocation to @c step() will return always the same result. */
-    void end_phase();
-
-    /** Return @a true if the processor is in @c done state. */
-    bool is_done() const;
-  };
+      /** Append the given row to @c inbox */
+      void recv_row(Row<val_t,coord_t>* new_row);
+      
+      /** Make a pass over the block of rows and return either 0 or 1
+          (depending whether elimination took place or not). */
+      coord_t step();
+      
+      /** Switch processor to @c ending state: after one final round of
+          elimination, a @c TAG_END message will be sent to the next
+          column VPU and no further VPU activity will follow: each
+          invocation to @c step() will return always the same result. */
+      void end_phase();
+      
+      /** Return @a true if the processor is in @c done state. */
+      bool is_done() const;
+    };
 
 
-protected:
-  const coord_t ncols_;
-  std::vector<Processor*> vpus;   /**< Local processors. */
+    const coord_t ncols_;
+    std::vector<Processor*> vpus;   /**< Local processors. */
 
 #ifdef WITH_MPI
     mpi::communicator comm_;
@@ -276,7 +282,7 @@ protected:
   template <typename val_t, typename coord_t>
   Rheinfall<val_t,coord_t>::Rheinfall(const coord_t ncols, 
                                       const coord_t width,
-                                      const double dense_threshold)
+                                      const float dense_threshold)
     : ncols_(ncols)
     , vpus()
     , w_(width)
@@ -285,6 +291,7 @@ protected:
     , me_(comm_.rank())
     , nprocs_(comm_.size())
 #endif
+    , dense_threshold(dense_threshold)
   {  
     // setup the array of processors
 #ifdef WITH_MPI
@@ -295,7 +302,7 @@ protected:
     vpus.reserve(nmemb);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
-        vpus.push_back(new Processor(*this, c, ncols_-1));
+        vpus.push_back(new Processor(*this, c));
     // internal check that the size of the data structure is actually correct
     assert(vpus.size() <= nmemb);
   };
@@ -306,19 +313,20 @@ protected:
   Rheinfall<val_t,coord_t>::Rheinfall(mpi::communicator& comm, 
                                       const coord_t ncols, 
                                       const coord_t width,
-                                      const double dense_threshold)
+                                      const float dense_threshold)
   : ncols_(ncols)
   , vpus()
   , comm_(comm)
   , me_(comm.rank())
   , nprocs_(comm.size())
   , w_(width)
+  , dense_threshold(dense_threshold)
 {  
   // setup the array of processors
   vpus.reserve(1 + ncols_ / nprocs_);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
-        vpus.push_back(new Processor(*this, c, ncols_-1));
+        vpus.push_back(new Processor(*this, c));
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_init_lock(& mpi_send_lock_); 
 # endif // _OPENMP && WITH_MPI_SERIALIZED
@@ -445,7 +453,9 @@ protected:
          ++it) {
       if (it->second.begin() != it->second.end()) { // non-null matrix row
         SparseRow<val_t,coord_t>* row = 
-          SparseRow<val_t,coord_t>::new_from_range(it->second.begin(), it->second.end(), ncols-1);
+          SparseRow<val_t,coord_t>::new_from_range(it->second.begin(), 
+                                                   it->second.end(), 
+                                                   ncols-1);
         if (NULL == row)
           continue; // with next `it`
         const coord_t starting_column = row->first_nonzero_column();
@@ -732,10 +742,9 @@ Rheinfall<val_t,coord_t>::send_end(Processor const& origin, const coord_t column
 
   template <typename val_t, typename coord_t>
   Rheinfall<val_t,coord_t>::Processor::Processor(Rheinfall<val_t,coord_t>& parent, 
-                                                 const coord_t ending_column,
-                                                 const double dense_threshold)
+                                                 const coord_t column)
       : parent_(parent),
-        column_(ending_column), 
+        column_(column), 
         u(NULL), 
         phase(running), 
         rows(), 
@@ -743,7 +752,6 @@ Rheinfall<val_t,coord_t>::send_end(Processor const& origin, const coord_t column
 #ifdef WITH_MPI
         outbox(), 
 #endif
-        dense_threshold_(dense_threshold),
         result_(0)
     { 
 #ifdef _OPENMP
@@ -815,7 +823,7 @@ Rheinfall<val_t,coord_t>::Processor::step()
 
     assert (NULL != u);
     for (typename row_list::iterator it = rows.begin(); it != rows.end(); ++it) {
-      // swap `u` and the new row if the new row is shorter, or has < leading term
+      // swap `u` and the new row if the new row is shorter, or has "better" leading term
       if (Row<val_t,coord_t>::sparse == (*it)->kind) {
         SparseRow<val_t,coord_t>* s = static_cast<SparseRow<val_t,coord_t>*>(*it);
         if (Row<val_t,coord_t>::sparse == u->kind) {
@@ -830,7 +838,7 @@ Rheinfall<val_t,coord_t>::Processor::step()
       }
       else if (Row<val_t,coord_t>::dense == (*it)->kind) {
         if (Row<val_t,coord_t>::dense == u->kind) {
-          // swap `u` and `row` iff `row`'s leading term is less
+          // swap `u` and `row` iff `row`'s leading term is "better"
           if (first_is_better_pivot<val_t>
               (static_cast<DenseRow<val_t,coord_t>*>(*it)->leading_term_,
                static_cast<DenseRow<val_t,coord_t>*>(u)->leading_term_))
@@ -843,10 +851,12 @@ Rheinfall<val_t,coord_t>::Processor::step()
         assert(false); // forgot a row kind in `if` chain?
 
       // perform elimination -- return NULL in case resulting row is full of zeroes
-      Row<val_t,coord_t>* new_row = u->gaussian_elimination(*it, dense_threshold_);
+      Row<val_t,coord_t>* new_row = u->gaussian_elimination(*it, parent_.dense_threshold);
       // ship reduced rows to other processors
-       if (NULL != new_row)
+      if (NULL != new_row) {
+        assert(new_row->starting_column_ > this->column_);
         parent_.send_row(*this, new_row);
+      };
     }; // end for (it = rows.begin(); ...)
     rows.clear();
     result_ = (NULL == u? 0 : 1);

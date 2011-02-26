@@ -94,7 +94,7 @@ namespace rheinfall {
 
     /** Return fill-in percentage, that is the number of actual
         nonzero entries divided by the number of potential entries.  */
-    double fill_in() const;
+    float fill_in() const;
 
     /** Reset starting column and leading term to the first nonzero
         entry in the row.  Return pointer to this row. If this row
@@ -195,7 +195,7 @@ namespace rheinfall {
   SparseRow<val_t,coord_t>*
   SparseRow<val_t,coord_t>::new_from_range(ForwardIter p0,
                                            ForwardIter p1,
-                                           const coord_t ending_column) 
+                                           const coord_t ending_column)
   { 
     SparseRow<val_t,coord_t>* row = new SparseRow();
     row->ending_column_ = ending_column;
@@ -204,9 +204,10 @@ namespace rheinfall {
     for (; p0 != p1; ++p0) {
       const coord_t coord = p0->first;
       const val_t value = p0->second;
-      assert(not is_zero(value));
+      if(0 == value)
+        continue;
       if (coord < starting_column) {
-        if (not is_zero(leading_term))
+        if (0 != leading_term)
           row->set(starting_column, leading_term);
         starting_column = coord;
         leading_term = value;
@@ -250,7 +251,7 @@ namespace rheinfall {
   {
     assert(0 <= Row_::starting_column_);
     assert(Row_::starting_column_ <= Row_::ending_column_);
-    assert(not is_zero(Row_::leading_term_));
+    assert(0 != Row_::leading_term_);
     // entries in `this->storage` are *always* ordered by increasing column index
     coord_t s1 = Row_::starting_column_;
     for (typename storage_t::const_iterator it = storage.begin(); 
@@ -258,7 +259,7 @@ namespace rheinfall {
          ++it) {
       assert(s1 < it->first);
       assert(it->first <= Row_::ending_column_);
-      assert(not is_zero(it->second));
+      assert(0 != it->second);
       s1 = it->first;
     };
     return true;
@@ -274,7 +275,7 @@ namespace rheinfall {
       Row_::starting_column_ = storage.front().first;
       assert(0 <= Row_::starting_column_ and Row_::starting_column_ < Row_::ending_column_);
       Row_::leading_term_ = storage.front().second;
-      assert(not is_zero(Row_::leading_term_));
+      assert(0 != Row_::leading_term_);
       storage.erase(storage.begin());
       assert(this->__ok());
       return this;
@@ -289,7 +290,7 @@ namespace rheinfall {
 
 
   template <typename val_t, typename coord_t>
-  double 
+  float
   SparseRow<val_t,coord_t>::fill_in() const 
   { 
     return 100.0 * size() / (Row_::ending_column_ - Row_::starting_column_); 
@@ -337,14 +338,14 @@ namespace rheinfall {
       val_t entry;
       if (other_col < this_col) {
         entry = b * other_i->second;
-        assert(not is_zero(entry));
+        assert(0 != entry);
         coord = other_col;
         nonzero_found = true;
         ++other_i;
       }
       else if (other_col == this_col) {
         entry = a * this_i->second + b * other_i->second;
-        if (not is_zero(entry)) {
+        if (0 != entry) {
           coord = this_col;
           nonzero_found = true;
         };
@@ -353,7 +354,7 @@ namespace rheinfall {
       }
       else if (other_col > this_col) {
         entry = a * this_i->second;
-        assert(not is_zero(entry));
+        assert(0 != entry);
         coord = this_col;
         nonzero_found = true;
         ++this_i;
@@ -399,6 +400,7 @@ namespace rheinfall {
   {
     assert(this->starting_column_ == other->starting_column_);
     assert(this->__ok());
+    assert(other->__ok());
     assert(0 != other->leading_term_);
 
     val_t a, b;
@@ -413,10 +415,14 @@ namespace rheinfall {
          ++it)
       {
         assert(it->first > Row_::starting_column_ and it->first <= Row_::ending_column_);
-        other->storage[other->size() - (it->first - other->starting_column_)] += a*it->second;
+        other->storage[other->size()-1 - (it->first - (other->starting_column_ + 1))] += a * it->second;
       };
+    other->Row_::leading_term_ = 0; // by construction
 
-    return other->adjust(); // content update done, adjust size and starting column
+    DenseRow<val_t,coord_t>* result = other->adjust();
+    assert(NULL == result 
+           or result->Row_::starting_column_ > this->Row_::starting_column_);
+    return result; // content update done, adjust size and starting column
   }; // DenseRow<val_t,coord_t>* gaussian_elimination(DenseRow<val_t,coord_t>* other)
 
 

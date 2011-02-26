@@ -1,7 +1,7 @@
 // Hey Emacs, this is -*- c++ -*-
 
 #define BOOST_TEST_MODULE rheinfall
-#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
 
 #include <rheinfall.hpp>
 

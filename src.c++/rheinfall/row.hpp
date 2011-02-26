@@ -86,7 +86,8 @@ namespace rheinfall {
         first nonzero entry at a column index strictly larger than
         the one of both rows. Return pointer to the combined row, which
         could possibly be this row if in-place update took place. */
-    Row* gaussian_elimination(Row* other, const double dense_threshold = 40.0) const;
+    Row* gaussian_elimination(Row* other, 
+                              const float dense_threshold) const;
 
     /** Print a textual representation of the row to stream @c o.
         See http://www.parashift.com/c++-faq-lite/input-output.html#faq-15.11 */
@@ -160,7 +161,7 @@ namespace rheinfall {
   template <typename val_t, typename coord_t>
   inline Row<val_t,coord_t>*
   Row<val_t,coord_t>::gaussian_elimination(Row<val_t,coord_t>* restrict other, 
-                                           const double dense_threshold) 
+                                           const float dense_threshold) 
     const restrict_this
   {
     if ((sparse == this->kind) and (sparse == other->kind)) {

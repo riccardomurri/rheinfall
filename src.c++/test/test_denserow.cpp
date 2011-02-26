@@ -27,10 +27,13 @@
  */
 
 #include <config.h>
-
+// ignore GMP even if defined, since we're not going to test it
+#ifdef HAVE_GMPXX
+# undef HAVE_GMPXX
+#endif
 
 #define BOOST_TEST_MODULE rheinfall::DenseRow
-#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>
 
 #include <denserow.hpp>
 using namespace rheinfall;
@@ -69,20 +72,52 @@ BOOST_AUTO_TEST_CASE( check_denserow_get_set )
 }
 
 
-BOOST_AUTO_TEST_CASE( check_denserow_adjust )
+BOOST_AUTO_TEST_CASE( check_denserow_adjust0 )
 {
+  // `adjust` is protected, so we need a subclass to test it
   class D: public DenseRow<int,int> {
   public:
     D(int size) : DenseRow<int,int>::DenseRow(0, size-1) { };
     D* adjust() { return static_cast<D*>(this->DenseRow<int,int>::adjust()); }
   };
 
-  D d(100);
-  d.set(77, 7);
+  D* d = new D(100);
+  BOOST_CHECK_EQUAL ( static_cast<void*>(d->adjust()), static_cast<void*>(NULL) );
+}
 
-  D* dd = d.adjust();
+
+BOOST_AUTO_TEST_CASE( check_denserow_adjust1 )
+{
+  // `adjust` is protected, so we need a subclass to test it
+  class D: public DenseRow<int,int> {
+  public:
+    D(int size) : DenseRow<int,int>::DenseRow(0, size-1) { };
+    D* adjust() { return static_cast<D*>(this->DenseRow<int,int>::adjust()); }
+  };
+
+  D* d = new D(100);
+  d->set(77, 7);
+
+  D* dd = d->adjust();
+  BOOST_CHECK_EQUAL ( static_cast<void*>(d), static_cast<void*>(dd) );
   BOOST_CHECK_EQUAL ( dd->first_nonzero_column(), 77 );
   BOOST_CHECK_EQUAL ( dd->get(77), 7 );
+}
+
+
+BOOST_AUTO_TEST_CASE( check_denserow_ge_with_dense0 )
+{
+  DenseRow<int,int> *p1 = new DenseRow<int,int>(0,100);
+  for(int i = 0; i*i <= 100; ++i)
+    p1->set(i, 2);
+
+  DenseRow<int,int> *p2 = new DenseRow<int,int>(0,100);
+  for(int i = 0; i*i <= 100; ++i)
+    p2->set(i, 5);
+
+  // check elimination
+  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  BOOST_CHECK_EQUAL( p3, (static_cast<DenseRow<int,int>*>(NULL)) );
 }
 
 
@@ -193,6 +228,22 @@ BOOST_AUTO_TEST_CASE( check_denserow_ctor_from_sparserow2 )
       BOOST_CHECK_EQUAL(d.get(i), -1);
     else 
       BOOST_CHECK_EQUAL(d.get(i), 0);
+}
+
+
+BOOST_AUTO_TEST_CASE( check_denserow_ge_with_sparse0 )
+{
+  DenseRow<int,int> *p1 = new DenseRow<int,int>(0,100);
+  for(int i = 0; i*i <= 100; ++i)
+    p1->set(i, 5);
+
+  SparseRow<int,int> *p2 = new SparseRow<int,int>(0,100,2);
+  for(int i = 1; i*i <= 100; ++i)
+    p2->set(i, 2);
+
+  // check elimination
+  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  BOOST_CHECK_EQUAL( p3, (static_cast<DenseRow<int,int>*>(NULL)) );
 }
 
 
