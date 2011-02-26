@@ -33,6 +33,9 @@
 #include "config.hpp"
 #include "row.hpp"
 
+#include <boost/mpl/bool.hpp>
+namespace mpl = boost::mpl;
+
 #ifdef WITH_MPI
 # include <boost/mpi.hpp>
 # include <boost/serialization/access.hpp>
