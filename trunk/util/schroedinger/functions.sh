@@ -124,14 +124,14 @@ set_mpi_and_compiler_flavor () {
             export OMPI_CXX=`which icpc`
             export I_MPI_CC=`which icc`
             export I_MPI_CXX=`which icpc`
-            cflags='-O3 -xHOST'
-            cxxflags='-O3 -xHOST'
+            cflags='-xHOST -O3 -ipo -no-prec-div'
+            cxxflags='-xHOST -O3 -ipo -no-prec-div'
             std_cflags='-O3'
             std_cxxflags='-O3'
-            toolset=gcc
+            toolset=intel
             ;;
         *) 
-            die 1 "Unknown compiler flavor '${compiler} - please choose one of: $supported_compilers"
+            die 1 "Unknown compiler flavor '${compiler}' - please choose one of: $supported_compilers"
             ;;
     esac
 
