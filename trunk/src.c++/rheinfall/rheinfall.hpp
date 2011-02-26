@@ -684,10 +684,10 @@ protected:
     omp_set_lock(& mpi_send_lock_);
 # endif
     if (row->kind == Row<val_t,coord_t>::sparse) 
-      req = comm_.isend(owner(column), TAG_ROW_SPARSE, 
+      req = comm_.issend(owner(column), TAG_ROW_SPARSE, 
                         *(static_cast<SparseRow<val_t,coord_t>*>(row)));
     else if (row->kind == Row<val_t,coord_t>::dense)
-      req = comm_.isend(owner(column), TAG_ROW_DENSE, 
+      req = comm_.issend(owner(column), TAG_ROW_DENSE, 
                         *(static_cast<DenseRow<val_t,coord_t>*>(row)));
     else 
       // should not happen!

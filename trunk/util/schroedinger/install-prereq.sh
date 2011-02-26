@@ -16,7 +16,7 @@
 #GIVARO=3.3.2
 #ATLAS=3.8.3
 #LINBOX=1.1.7rc0
-BOOST=1.43.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.43.0/boost_1_43_0.tar.gz
+BOOST=1.45.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.45.0/boost_1_45_0.tar.gz
 #TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
 
 
@@ -267,6 +267,7 @@ if [ -n "$BOOST" ]; then
     #     -O "${boost_file}.tar.gz"
     set -x 
     tar -xzf  "${src_home}/${boost_file}.tar.gz"
+    patch -p0 -i $(dirname $0)/boost_1_45_0.patch
     cd ${boost_file}
     # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
     #sed -e 's|^//#define BOOST_MPI_HOMOGENEOUS|#define BOOST_MPI_HOMOGENEOUS|' \
