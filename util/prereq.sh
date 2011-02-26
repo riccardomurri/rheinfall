@@ -13,7 +13,7 @@ LINBOX=1.1.7rc0
 GMP=5.0.1
 GIVARO=3.3.2
 ATLAS=3.8.3
-BOOST=1.43.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.43.0/boost_1_43_0.tar.gz
+BOOST=1.45.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.45.0/boost_1_45_0.tar.gz
 TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
 #TBB=20100915oss # http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_lin.tgz
 
@@ -270,6 +270,7 @@ if [ -n "$BOOST" ]; then
         -O "${boost_file}.tar.gz"
     set -x 
     tar -xzf  "${boost_file}.tar.gz"
+    patch -p0 -i $(dirname $0)/boost_1_45_0.patch
     cd ${boost_file}
     # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
     if [ "x$BOOST_MPI_HOMOGENEOUS" = "xyes" ]; then
