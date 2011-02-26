@@ -456,11 +456,11 @@ namespace rheinfall {
   SparseRow<val_t,coord_t>::print_on(std::ostream& out) const 
   {
     out << "{ "
-        << Row_::starting_column_ <<":"<< Row_::leading_term_;
+        << Row_::starting_column_ <<":"<< to_printable(Row_::leading_term_);
     for (typename storage_t::const_iterator it = storage.begin(); 
          it != storage.end(); 
          ++it) {
-      out <<" "<< it->first <<":"<< it->second; 
+      out <<" "<< it->first <<":"<< to_printable(it->second);
     }
     out << " }";
   };
