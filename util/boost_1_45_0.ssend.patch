@@ -1,0 +1,1174 @@
+Only in boost_1_45_0: bjam
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/boost/mpi/communicator.hpp boost_1_45_0/boost/mpi/communicator.hpp
+--- boost_1_45_0.orig/boost/mpi/communicator.hpp	2008-06-26 21:25:44.000000000 +0200
++++ boost_1_45_0/boost/mpi/communicator.hpp	2010-12-11 18:55:38.000000000 +0100
+@@ -296,7 +296,6 @@
+    *
+    *  @param proxy The @c skeleton_proxy containing a reference to the
+    *  object whose skeleton will be transmitted.
+-   *
+    */
+   template<typename T>
+   void send(int dest, int tag, const skeleton_proxy<T>& proxy) const;
+@@ -344,11 +343,61 @@
+    *  @param tag The tag that will be associated with this message. Tags
+    *  may be any integer between zero and an implementation-defined
+    *  upper limit. This limit is accessible via @c environment::max_tag().
+-   *
+    */
+   void send(int dest, int tag) const;
+ 
+   /**
++   *  @brief Synchronously send data to another process.
++   *
++   *  This routine executes a potentially blocking synchronous send
++   *  with tag @p tag to the process with rank @p dest. This routine
++   *  is exactly equivalent to @ref send(int,int,const T&) (which see)
++   *  but uses an MPI synchronous send (MPI_Ssend).
++   *
++   */
++  template<typename T>
++  void ssend(int dest, int tag, const T& value) const;
++
++  /**
++   *  @brief Synchronously send the skeleton of an object.
++   *
++   *  This routine executes a potentially blocking send with tag @p
++   *  tag to the process with rank @p dest. It can be received by the
++   *  destination process with a matching @c recv call. This variation
++   *  on @c ssend will be used when a synchronous send of a skeleton
++   *  is explicitly requested via code such as:
++   *
++   *  @code
++   *    comm.ssend(dest, tag, skeleton(object));
++   *  @endcode
++   *
++   *  This routine is exactly equivalent to @ref send(int,int,const
++   *  skeleton_proxy<T>&) (which see) but uses an MPI synchronous send
++   *  (MPI_Ssend).
++   *
++   */
++  template<typename T>
++  void ssend(int dest, int tag, const skeleton_proxy<T>& proxy) const;
++
++  /**
++   *  @brief Synchronously send an array of values to another process.
++   *
++   *  This routine is equivalent to @ref send(int,int,const T*,int)
++   *  (which see) but uses an MPI synchronous send (MPI_Ssend).
++   */
++  template<typename T>
++  void ssend(int dest, int tag, const T* values, int n) const;
++
++  /**
++   *  @brief Synchronously send a message to another process without
++   *  any data.
++   *
++   *  This routine is equivalent to @ref send(int,int) (which see) but
++   *  uses an MPI synchronous send (MPI_Ssend).
++   */
++  void ssend(int dest, int tag) const;
++
++  /**
+    * @brief Receive data from a remote process.
+    *
+    * This routine blocks until it receives a message from the process @p
+@@ -586,12 +635,49 @@
+    *  may be any integer between zero and an implementation-defined
+    *  upper limit. This limit is accessible via @c environment::max_tag().
+    *
+-   *
+    *  @returns a @c request object that describes this communication.
+    */
+   request isend(int dest, int tag) const;
+ 
+   /**
++   *  @brief Synchronously send a message to a remote process without
++   *  blocking.
++   *
++   *  This routine is equivalent to @ref isend(int,int,const T&)
++   *  (which see) but uses an MPI synchronous send (MPI_Ssend).
++   */
++  template<typename T>
++  request issend(int dest, int tag, const T& value) const;
++
++  /**
++   *  @brief Synchronously send the skeleton of an object without blocking.
++   *
++   *  This routine is equivalent to @ref isend(int,int,const skeleton_proxy<T>&)
++   *  (which see) but uses an MPI synchronous send (MPI_Ssend).
++   */
++  template<typename T>
++  request issend(int dest, int tag, const skeleton_proxy<T>& proxy) const;
++
++  /**
++   *  @brief Synchronously send an array of values to another process
++   *  without blocking.
++   *
++   *  This routine is equivalent to @ref isend(int,int,const T*,int)
++   *  (which see) but uses an MPI synchronous send (MPI_Ssend).
++   */
++  template<typename T>
++  request issend(int dest, int tag, const T* values, int n) const;
++
++  /**
++   *  @brief Synchronously send a message to another process without
++   *  any data without blocking.
++   *
++   *  This routine is equivalent to @ref isend(int,int)
++   *  (which see) but uses an MPI synchronous send (MPI_Ssend).
++   */
++  request issend(int dest, int tag) const;
++
++  /**
+    *  @brief Prepare to receive a message from a remote process.
+    *
+    *  The @c irecv method is functionally identical to the @c recv
+@@ -885,7 +971,8 @@
+    * map directly to that datatype.
+    */
+   template<typename T>
+-  void send_impl(int dest, int tag, const T& value, mpl::true_) const;
++  void send_impl(int dest, int tag, const T& value, mpl::true_, 
++                 const bool synchronous = false) const;
+ 
+   /**
+    * INTERNAL ONLY
+@@ -895,7 +982,15 @@
+    * to be deserialized on the receiver side.
+    */
+   template<typename T>
+-  void send_impl(int dest, int tag, const T& value, mpl::false_) const;
++  void send_impl(int dest, int tag, const T& value, mpl::false_,
++                 const bool synchronous = false) const;
++
++  /**
++   * INTERNAL ONLY
++   */
++  template<typename T>
++  void send_impl(int dest, int tag, const skeleton_proxy<T>& proxy,
++                 const bool synchronous) const;
+ 
+   /**
+    * INTERNAL ONLY
+@@ -905,7 +1000,8 @@
+    */
+   template<typename T>
+   void 
+-  array_send_impl(int dest, int tag, const T* values, int n, mpl::true_) const;
++  array_send_impl(int dest, int tag, const T* values, int n, mpl::true_,
++                  const bool synchronous = false) const;
+ 
+   /**
+    * INTERNAL ONLY
+@@ -917,7 +1013,7 @@
+   template<typename T>
+   void 
+   array_send_impl(int dest, int tag, const T* values, int n, 
+-                  mpl::false_) const;
++                  mpl::false_, const bool synchronous = false) const;
+ 
+   /**
+    * INTERNAL ONLY
+@@ -926,7 +1022,8 @@
+    * map directly to that datatype.
+    */
+   template<typename T>
+-  request isend_impl(int dest, int tag, const T& value, mpl::true_) const;
++  request isend_impl(int dest, int tag, const T& value, mpl::true_,
++                     const bool synchronous = false) const;
+ 
+   /**
+    * INTERNAL ONLY
+@@ -936,7 +1033,15 @@
+    * to be deserialized on the receiver side.
+    */
+   template<typename T>
+-  request isend_impl(int dest, int tag, const T& value, mpl::false_) const;
++  request isend_impl(int dest, int tag, const T& value, mpl::false_,
++                     const bool synchronous = false) const;
++
++  /**
++   * INTERNAL ONLY
++   */
++  template<typename T>
++  request isend_impl(int dest, int tag, const skeleton_proxy<T>& proxy,
++                     const bool synchronous) const;
+ 
+   /**
+    * INTERNAL ONLY
+@@ -947,7 +1052,7 @@
+   template<typename T>
+   request 
+   array_isend_impl(int dest, int tag, const T* values, int n, 
+-                   mpl::true_) const;
++                   mpl::true_, const bool synchronous = false) const;
+ 
+   /**
+    * INTERNAL ONLY
+@@ -959,7 +1064,7 @@
+   template<typename T>
+   request 
+   array_isend_impl(int dest, int tag, const T* values, int n, 
+-                   mpl::false_) const;
++                   mpl::false_, const bool synchronous = false) const;
+ 
+   /**
+    * INTERNAL ONLY
+@@ -1105,11 +1210,18 @@
+ // map directly to that datatype.
+ template<typename T>
+ void
+-communicator::send_impl(int dest, int tag, const T& value, mpl::true_) const
++communicator::send_impl(int dest, int tag, const T& value, mpl::true_, 
++                        const bool synchronous) const
+ {
++  if (synchronous) {
++    BOOST_MPI_CHECK_RESULT(MPI_Ssend,
++                           (const_cast<T*>(&value), 1, get_mpi_datatype<T>(value),
++                            dest, tag, MPI_Comm(*this)));
++  } else {
+   BOOST_MPI_CHECK_RESULT(MPI_Send,
+                          (const_cast<T*>(&value), 1, get_mpi_datatype<T>(value),
+                           dest, tag, MPI_Comm(*this)));
++  };
+ }
+ 
+ // We're sending a type that does not have an associated MPI
+@@ -1117,10 +1229,14 @@
+ // to be deserialized on the receiver side.
+ template<typename T>
+ void
+-communicator::send_impl(int dest, int tag, const T& value, mpl::false_) const
++communicator::send_impl(int dest, int tag, const T& value, mpl::false_,
++                        const bool synchronous) const
+ {
+   packed_oarchive oa(*this);
+   oa << value;
++  if (synchronous)
++    ssend(dest, tag, oa);
++  else
+   send(dest, tag, oa);
+ }
+ 
+@@ -1129,7 +1245,15 @@
+ template<typename T>
+ void communicator::send(int dest, int tag, const T& value) const
+ {
+-  this->send_impl(dest, tag, value, is_mpi_datatype<T>());
++  send_impl(dest, tag, value, is_mpi_datatype<T>(), false);
++}
++
++// Single-element receive may either send the element directly or
++// serialize it via a buffer.
++template<typename T>
++void communicator::ssend(int dest, int tag, const T& value) const
++{
++  send_impl(dest, tag, value, is_mpi_datatype<T>(), true);
+ }
+ 
+ // We're sending an array of a type that has an associated MPI
+@@ -1137,12 +1261,19 @@
+ template<typename T>
+ void
+ communicator::array_send_impl(int dest, int tag, const T* values, int n,
+-                              mpl::true_) const
++                              mpl::true_, const bool synchronous) const
+ {
++  if (synchronous) {
++    BOOST_MPI_CHECK_RESULT(MPI_Ssend,
++                           (const_cast<T*>(values), n, 
++                            get_mpi_datatype<T>(*values),
++                            dest, tag, MPI_Comm(*this)));
++  } else {
+   BOOST_MPI_CHECK_RESULT(MPI_Send,
+                          (const_cast<T*>(values), n, 
+                           get_mpi_datatype<T>(*values),
+                           dest, tag, MPI_Comm(*this)));
++  };
+ }
+ 
+ // We're sending an array of a type that does not have an associated
+@@ -1151,10 +1282,13 @@
+ template<typename T>
+ void
+ communicator::array_send_impl(int dest, int tag, const T* values, int n,
+-                              mpl::false_) const
++                              mpl::false_, const bool synchronous) const
+ {
+   packed_oarchive oa(*this);
+   oa << n << boost::serialization::make_array(values, n);
++  if (synchronous)
++    ssend(dest, tag, oa);
++  else
+   send(dest, tag, oa);
+ }
+ 
+@@ -1162,7 +1296,14 @@
+ template<typename T>
+ void communicator::send(int dest, int tag, const T* values, int n) const
+ {
+-  this->array_send_impl(dest, tag, values, n, is_mpi_datatype<T>());
++  this->array_send_impl(dest, tag, values, n, is_mpi_datatype<T>(), false);
++}
++
++// Array ssend must send the elements directly
++template<typename T>
++void communicator::ssend(int dest, int tag, const T* values, int n) const
++{
++  this->array_send_impl(dest, tag, values, n, is_mpi_datatype<T>(), true);
+ }
+ 
+ // We're receiving a type that has an associated MPI datatype, so we
+@@ -1251,13 +1392,21 @@
+ // map directly to that datatype.
+ template<typename T>
+ request
+-communicator::isend_impl(int dest, int tag, const T& value, mpl::true_) const
++communicator::isend_impl(int dest, int tag, const T& value, mpl::true_, 
++                         const bool synchronous) const
+ {
+   request req;
++  if (synchronous) {
++    BOOST_MPI_CHECK_RESULT(MPI_Issend,
++                           (const_cast<T*>(&value), 1, 
++                            get_mpi_datatype<T>(value),
++                            dest, tag, MPI_Comm(*this), &req.m_requests[0]));
++  } else {
+   BOOST_MPI_CHECK_RESULT(MPI_Isend,
+                          (const_cast<T*>(&value), 1, 
+                           get_mpi_datatype<T>(value),
+                           dest, tag, MPI_Comm(*this), &req.m_requests[0]));
++  };
+   return req;
+ }
+ 
+@@ -1266,11 +1415,14 @@
+ // to be deserialized on the receiver side.
+ template<typename T>
+ request
+-communicator::isend_impl(int dest, int tag, const T& value, mpl::false_) const
++communicator::isend_impl(int dest, int tag, const T& value, mpl::false_,
++                         const bool synchronous) const
+ {
+   shared_ptr<packed_oarchive> archive(new packed_oarchive(*this));
+   *archive << value;
+-  request result = isend(dest, tag, *archive);
++  request result = (synchronous?
++                    issend(dest, tag, *archive)
++                    : isend(dest, tag, *archive));
+   result.m_data = archive;
+   return result;
+ }
+@@ -1280,30 +1432,47 @@
+ template<typename T>
+ request communicator::isend(int dest, int tag, const T& value) const
+ {
+-  return this->isend_impl(dest, tag, value, is_mpi_datatype<T>());
++  return isend_impl(dest, tag, value, is_mpi_datatype<T>(), false);
++}
++
++// Single-element receive may either send the element directly or
++// serialize it via a buffer.
++template<typename T>
++request communicator::issend(int dest, int tag, const T& value) const
++{
++  return isend_impl(dest, tag, value, is_mpi_datatype<T>(), true);
+ }
+ 
+ template<typename T>
+ request
+ communicator::array_isend_impl(int dest, int tag, const T* values, int n,
+-                               mpl::true_) const
++                               mpl::true_, const bool synchronous) const
+ {
+   request req;
++  if (synchronous) {
++    BOOST_MPI_CHECK_RESULT(MPI_Issend,
++                           (const_cast<T*>(values), n, 
++                            get_mpi_datatype<T>(*values),
++                            dest, tag, MPI_Comm(*this), &req.m_requests[0]));
++  } else {
+   BOOST_MPI_CHECK_RESULT(MPI_Isend,
+                          (const_cast<T*>(values), n, 
+                           get_mpi_datatype<T>(*values),
+                           dest, tag, MPI_Comm(*this), &req.m_requests[0]));
++  };
+   return req;
+ }
+ 
+ template<typename T>
+ request
+ communicator::array_isend_impl(int dest, int tag, const T* values, int n, 
+-                               mpl::false_) const
++                               mpl::false_, const bool synchronous) const
+ {
+   shared_ptr<packed_oarchive> archive(new packed_oarchive(*this));
+   *archive << n << boost::serialization::make_array(values, n);
+-  request result = isend(dest, tag, *archive);
++  request result = (synchronous?
++                    issend(dest, tag, *archive)
++                    : isend(dest, tag, *archive));
+   result.m_data = archive;
+   return result;
+ }
+@@ -1313,7 +1482,14 @@
+ template<typename T>
+ request communicator::isend(int dest, int tag, const T* values, int n) const
+ {
+-  return array_isend_impl(dest, tag, values, n, is_mpi_datatype<T>());
++  return array_isend_impl(dest, tag, values, n, is_mpi_datatype<T>(), false);
++}
++
++// Array isend must send the elements directly
++template<typename T>
++request communicator::issend(int dest, int tag, const T* values, int n) const
++{
++  return array_isend_impl(dest, tag, values, n, is_mpi_datatype<T>(), true);
+ }
+ 
+ namespace detail {
+@@ -1615,7 +1791,8 @@
+ template<>
+ BOOST_MPI_DECL void
+ communicator::send<packed_skeleton_oarchive>
+-  (int dest, int tag, const packed_skeleton_oarchive& ar) const;
++                                   (int dest, int tag, 
++                                    const packed_skeleton_oarchive& ar) const;
+ 
+ /**
+  * INTERNAL ONLY
+@@ -1624,6 +1801,32 @@
+ BOOST_MPI_DECL void
+ communicator::send<content>(int dest, int tag, const content& c) const;
+ 
++
++/**
++ * INTERNAL ONLY
++ */
++template<>
++BOOST_MPI_DECL void
++communicator::ssend<packed_oarchive>(int dest, int tag,
++                                    const packed_oarchive& ar) const;
++
++/**
++ * INTERNAL ONLY
++ */
++template<>
++BOOST_MPI_DECL void
++communicator::ssend<packed_skeleton_oarchive>
++                                   (int dest, int tag, 
++                                    const packed_skeleton_oarchive& ar) const;
++
++/**
++ * INTERNAL ONLY
++ */
++template<>
++BOOST_MPI_DECL void
++communicator::ssend<content>(int dest, int tag, const content& c) const;
++
++
+ /**
+  * INTERNAL ONLY
+  */
+@@ -1664,8 +1867,8 @@
+  */
+ template<>
+ BOOST_MPI_DECL request
+-communicator::isend<packed_oarchive>(int dest, int tag,
+-                                     const packed_oarchive& ar) const;
++communicator::isend<packed_oarchive>
++  (int dest, int tag, const packed_oarchive& ar) const;
+ 
+ /**
+  * INTERNAL ONLY
+@@ -1684,6 +1887,29 @@
+ 
+ /**
+  * INTERNAL ONLY
++ */
++template<>
++BOOST_MPI_DECL request
++communicator::issend<packed_oarchive>
++  (int dest, int tag, const packed_oarchive& ar) const;
++
++/**
++ * INTERNAL ONLY
++ */
++template<>
++BOOST_MPI_DECL request
++communicator::issend<packed_skeleton_oarchive>
++  (int dest, int tag, const packed_skeleton_oarchive& ar) const;
++
++/**
++ * INTERNAL ONLY
++ */
++template<>
++BOOST_MPI_DECL request
++communicator::issend<content>(int dest, int tag, const content& c) const;
++
++/**
++ * INTERNAL ONLY
+  */
+ template<>
+ BOOST_MPI_DECL request
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/boost/mpi/detail/communicator_sc.hpp boost_1_45_0/boost/mpi/detail/communicator_sc.hpp
+--- boost_1_45_0.orig/boost/mpi/detail/communicator_sc.hpp	2007-11-25 19:07:19.000000000 +0100
++++ boost_1_45_0/boost/mpi/detail/communicator_sc.hpp	2010-12-11 19:37:54.000000000 +0100
+@@ -15,14 +15,32 @@
+ 
+ template<typename T>
+ void
+-communicator::send(int dest, int tag, const skeleton_proxy<T>& proxy) const
++communicator::send_impl(int dest, int tag, const skeleton_proxy<T>& proxy,
++                        const bool synchronous) const
+ {
+   packed_skeleton_oarchive ar(*this);
+   ar << proxy.object;
++  if (synchronous)
++    ssend(dest, tag, ar);
++  else
+   send(dest, tag, ar);
+ }
+ 
+ template<typename T>
++void
++communicator::send(int dest, int tag, const skeleton_proxy<T>& proxy) const
++{
++  send_impl(dest, tag, proxy, false);
++}
++
++template<typename T>
++void
++communicator::ssend(int dest, int tag, const skeleton_proxy<T>& proxy) const
++{
++  send_impl(dest, tag, proxy, true);
++}
++
++template<typename T>
+ status
+ communicator::recv(int source, int tag, const skeleton_proxy<T>& proxy) const
+ {
+@@ -43,17 +61,34 @@
+ 
+ template<typename T>
+ request
+-communicator::isend(int dest, int tag, const skeleton_proxy<T>& proxy) const
++communicator::isend_impl(int dest, int tag, const skeleton_proxy<T>& proxy,
++                         const bool synchronous) const
+ {
+   shared_ptr<packed_skeleton_oarchive> 
+     archive(new packed_skeleton_oarchive(*this));
+ 
+   *archive << proxy.object;
+-  request result = isend(dest, tag, *archive);
++  request result = (synchronous?
++                    issend(dest, tag, *archive)
++                    : isend(dest, tag, *archive));
+   result.m_data = archive;
+   return result;
+ }
+ 
++template<typename T>
++request
++communicator::isend(int dest, int tag, const skeleton_proxy<T>& proxy) const
++{
++  return isend_impl(dest, tag, proxy, false);
++}
++
++template<typename T>
++request
++communicator::issend(int dest, int tag, const skeleton_proxy<T>& proxy) const
++{
++  return isend_impl(dest, tag, proxy, true);
++}
++
+ namespace detail {
+   template<typename T>
+   struct serialized_irecv_data<const skeleton_proxy<T> >
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/boost/mpi/detail/point_to_point.hpp boost_1_45_0/boost/mpi/detail/point_to_point.hpp
+--- boost_1_45_0.orig/boost/mpi/detail/point_to_point.hpp	2007-11-25 19:07:19.000000000 +0100
++++ boost_1_45_0/boost/mpi/detail/point_to_point.hpp	2010-11-29 01:01:11.000000000 +0100
+@@ -15,12 +15,13 @@
+ 
+ namespace boost { namespace mpi { namespace detail {
+ 
+-/** Sends a packed archive using MPI_Send. */
++/** Sends a packed archive using MPI_Send/MPI_Ssend. */
+ BOOST_MPI_DECL void
+ packed_archive_send(MPI_Comm comm, int dest, int tag,
+-                    const packed_oarchive& ar);
++                    const packed_oarchive& ar,
++                    const bool synchronous = false);
+ 
+-/** Sends a packed archive using MPI_Isend.
++/** Sends a packed archive using MPI_Isend/MPI_Issend.
+  *
+  * This routine may split sends into multiple packets. The MPI_Request
+  * for each packet will be placed into the out_requests array, up to
+@@ -32,7 +33,8 @@
+ BOOST_MPI_DECL int
+ packed_archive_isend(MPI_Comm comm, int dest, int tag,
+                      const packed_oarchive& ar,
+-                     MPI_Request* out_requests, int num_out_requests);
++                     MPI_Request* out_requests, int num_out_requests,
++                     const bool synchronous = false);
+ 
+ /**
+  * \overload
+@@ -40,7 +42,8 @@
+ BOOST_MPI_DECL int
+ packed_archive_isend(MPI_Comm comm, int dest, int tag,
+                      const packed_iarchive& ar,
+-                     MPI_Request* out_requests, int num_out_requests);
++                     MPI_Request* out_requests, int num_out_requests,
++                     const bool synchronous = false);
+ 
+ /** Receives a packed archive using MPI_Recv. */
+ BOOST_MPI_DECL void
+Only in boost_1_45_0: bootstrap.log
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/libs/mpi/src/broadcast.cpp boost_1_45_0/libs/mpi/src/broadcast.cpp
+--- boost_1_45_0.orig/libs/mpi/src/broadcast.cpp	2007-11-25 19:38:02.000000000 +0100
++++ boost_1_45_0/libs/mpi/src/broadcast.cpp	2010-11-29 00:27:21.000000000 +0100
+@@ -35,7 +35,7 @@
+     if (dest != root) {
+       // Build up send requests for each child send.
+       num_requests += detail::packed_archive_isend(comm, dest, tag, oa,
+-                                                   &requests[num_requests], 2);
++                                                   &requests[num_requests], 2, false);
+     }
+   }
+ 
+@@ -76,7 +76,7 @@
+         // Build up send requests for each child send.
+         num_requests += detail::packed_archive_isend(comm, dest, tag, ia,
+                                                      &requests[num_requests],
+-                                                     2);
++                                                     2, false);
+       }
+     }
+ 
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/libs/mpi/src/communicator.cpp boost_1_45_0/libs/mpi/src/communicator.cpp
+--- boost_1_45_0.orig/libs/mpi/src/communicator.cpp	2007-11-25 19:38:02.000000000 +0100
++++ boost_1_45_0/libs/mpi/src/communicator.cpp	2010-12-11 18:54:33.000000000 +0100
+@@ -94,6 +94,13 @@
+                           dest, tag, MPI_Comm(*this)));
+ }
+ 
++void communicator::ssend(int dest, int tag) const
++{
++  BOOST_MPI_CHECK_RESULT(MPI_Ssend,
++                         (MPI_BOTTOM, 0, MPI_PACKED,
++                          dest, tag, MPI_Comm(*this)));
++}
++
+ status communicator::recv(int source, int tag) const
+ {
+   status stat;
+@@ -192,15 +199,31 @@
+ communicator::send<packed_oarchive>(int dest, int tag,
+                                     const packed_oarchive& ar) const
+ {
+-  detail::packed_archive_send(MPI_Comm(*this), dest, tag, ar);
++  detail::packed_archive_send(MPI_Comm(*this), dest, tag, ar, false);
++}
++
++template<>
++void
++communicator::ssend<packed_oarchive>(int dest, int tag,
++                                    const packed_oarchive& ar) const
++{
++  detail::packed_archive_send(MPI_Comm(*this), dest, tag, ar, true);
++}
++
++template<>
++void
++communicator::send<packed_skeleton_oarchive>(int dest, int tag, 
++                                             const packed_skeleton_oarchive& ar) const
++{
++  send(dest, tag, ar.get_skeleton());
+ }
+ 
+ template<>
+ void
+-communicator::send<packed_skeleton_oarchive>
+-  (int dest, int tag, const packed_skeleton_oarchive& ar) const
++communicator::ssend<packed_skeleton_oarchive>(int dest, int tag, 
++                                              const packed_skeleton_oarchive& ar) const
+ {
+-  this->send(dest, tag, ar.get_skeleton());
++  ssend(dest, tag, ar.get_skeleton());
+ }
+ 
+ template<>
+@@ -212,6 +235,14 @@
+ }
+ 
+ template<>
++void communicator::ssend<content>(int dest, int tag, const content& c) const
++{
++  BOOST_MPI_CHECK_RESULT(MPI_Ssend,
++                         (MPI_BOTTOM, 1, c.get_mpi_datatype(),
++                          dest, tag, MPI_Comm(*this)));
++}
++
++template<>
+ status
+ communicator::recv<packed_iarchive>(int source, int tag,
+                                     packed_iarchive& ar) const
+@@ -251,16 +282,35 @@
+ {
+   request req;
+   detail::packed_archive_isend(MPI_Comm(*this), dest, tag, ar,
+-                               &req.m_requests[0] ,2);
++                               &req.m_requests[0], 2, false);
+   return req;
+ }
+ 
+ template<>
+ request
+-communicator::isend<packed_skeleton_oarchive>
+-  (int dest, int tag, const packed_skeleton_oarchive& ar) const
++communicator::issend<packed_oarchive>(int dest, int tag,
++                                     const packed_oarchive& ar) const
+ {
+-  return this->isend(dest, tag, ar.get_skeleton());
++  request req;
++  detail::packed_archive_isend(MPI_Comm(*this), dest, tag, ar,
++                               &req.m_requests[0], 2, true);
++  return req;
++}
++
++template<>
++request
++communicator::isend<packed_skeleton_oarchive>(int dest, int tag, 
++                                              const packed_skeleton_oarchive& ar) const
++{
++  return isend(dest, tag, ar.get_skeleton());
++}
++
++template<>
++request
++communicator::issend<packed_skeleton_oarchive>(int dest, int tag, 
++                                               const packed_skeleton_oarchive& ar) const
++{
++  return issend(dest, tag, ar.get_skeleton());
+ }
+ 
+ template<>
+@@ -273,6 +323,16 @@
+   return req;
+ }
+ 
++template<>
++request communicator::issend<content>(int dest, int tag, const content& c) const
++{
++  request req;
++  BOOST_MPI_CHECK_RESULT(MPI_Issend,
++                         (MPI_BOTTOM, 1, c.get_mpi_datatype(),
++                          dest, tag, MPI_Comm(*this), &req.m_requests[0]));
++  return req;
++}
++    
+ request communicator::isend(int dest, int tag) const
+ {
+   request req;
+@@ -280,6 +340,15 @@
+                          (MPI_BOTTOM, 0, MPI_PACKED,
+                           dest, tag, MPI_Comm(*this), &req.m_requests[0]));
+   return req;
++}
++
++request communicator::issend(int dest, int tag) const
++{
++  request req;
++  BOOST_MPI_CHECK_RESULT(MPI_Issend,
++                         (MPI_BOTTOM, 0, MPI_PACKED,
++                          dest, tag, MPI_Comm(*this), &req.m_requests[0]));
++  return req;
+ }
+ 
+ template<>
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/libs/mpi/src/point_to_point.cpp boost_1_45_0/libs/mpi/src/point_to_point.cpp
+--- boost_1_45_0.orig/libs/mpi/src/point_to_point.cpp	2008-06-26 21:25:44.000000000 +0200
++++ boost_1_45_0/libs/mpi/src/point_to_point.cpp	2010-11-29 00:27:19.000000000 +0100
+@@ -26,34 +26,58 @@
+ 
+ void
+ packed_archive_send(MPI_Comm comm, int dest, int tag,
+-                    const packed_oarchive& ar)
++                    const packed_oarchive& ar,
++                    const bool synchronous)
+ {
+   const void* size = &ar.size();
++  // size and content are sent in separate messages: since we only
++  // need a guarantee that the *content* has arrived when a
++  // synchronous call is done, we can send the content with MPI_Ssend
++  // and use a "standard send" for the size.
+   BOOST_MPI_CHECK_RESULT(MPI_Send,
+                          (const_cast<void*>(size), 1, 
+                           get_mpi_datatype<std::size_t>(ar.size()), 
+                           dest, tag, comm));
++  if (synchronous) {
++    BOOST_MPI_CHECK_RESULT(MPI_Ssend,
++                           (const_cast<void*>(ar.address()), ar.size(),
++                            MPI_PACKED,
++                            dest, tag, comm));
++  } else {
+   BOOST_MPI_CHECK_RESULT(MPI_Send,
+                          (const_cast<void*>(ar.address()), ar.size(),
+                           MPI_PACKED,
+                           dest, tag, comm));
++  };
+ }
+ 
+ int
+ packed_archive_isend(MPI_Comm comm, int dest, int tag,
+                      const packed_oarchive& ar,
+-                     MPI_Request* out_requests, int num_out_requests)
++                     MPI_Request* out_requests, int num_out_requests,
++                     const bool synchronous)
+ {
+   assert(num_out_requests >= 2);
+   const void* size = &ar.size();
++  // size and content are sent in separate messages: since we only
++  // need a guarantee that the *content* has arrived when a
++  // synchronous call is done, we can send the content with MPI_Ssend
++  // and use a "standard send" for the size.
+   BOOST_MPI_CHECK_RESULT(MPI_Isend,
+                          (const_cast<void*>(size), 1, 
+                           get_mpi_datatype<std::size_t>(ar.size()), 
+                           dest, tag, comm, out_requests));
++  if (synchronous) {
++    BOOST_MPI_CHECK_RESULT(MPI_Issend,
++                           (const_cast<void*>(ar.address()), ar.size(),
++                            MPI_PACKED,
++                            dest, tag, comm, out_requests + 1));
++  } else {
+   BOOST_MPI_CHECK_RESULT(MPI_Isend,
+                          (const_cast<void*>(ar.address()), ar.size(),
+                           MPI_PACKED,
+                           dest, tag, comm, out_requests + 1));
++  };
+ 
+   return 2;
+ }
+@@ -61,19 +85,31 @@
+ int
+ packed_archive_isend(MPI_Comm comm, int dest, int tag,
+                      const packed_iarchive& ar,
+-                     MPI_Request* out_requests, int num_out_requests)
++                     MPI_Request* out_requests, int num_out_requests,
++                     const bool synchronous)
+ {
+   assert(num_out_requests >= 2);
+ 
+   const void* size = &ar.size();
++  // size and content are sent in separate messages: since we only
++  // need a guarantee that the *content* has arrived when a
++  // synchronous call is done, we can send the content with MPI_Ssend
++  // and use a "standard send" for the size.
+   BOOST_MPI_CHECK_RESULT(MPI_Isend,
+                          (const_cast<void*>(size), 1, 
+                           get_mpi_datatype<std::size_t>(ar.size()), 
+                           dest, tag, comm, out_requests));
++  if (synchronous) {
++    BOOST_MPI_CHECK_RESULT(MPI_Issend,
++                           (const_cast<void*>(ar.address()), ar.size(),
++                            MPI_PACKED,
++                            dest, tag, comm, out_requests + 1));
++  } else {
+   BOOST_MPI_CHECK_RESULT(MPI_Isend,
+                          (const_cast<void*>(ar.address()), ar.size(),
+                           MPI_PACKED,
+                           dest, tag, comm, out_requests + 1));
++  };
+ 
+   return 2;
+ }
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/libs/mpi/test/nonblocking_test.cpp boost_1_45_0/libs/mpi/test/nonblocking_test.cpp
+--- boost_1_45_0.orig/libs/mpi/test/nonblocking_test.cpp	2007-11-25 19:38:02.000000000 +0100
++++ boost_1_45_0/libs/mpi/test/nonblocking_test.cpp	2010-12-11 16:30:05.000000000 +0100
+@@ -41,11 +41,14 @@
+   "test_some (keep results)"
+ };
+ 
++enum synch_behavior { synch_no, synch_yes, synch_both };
++
+ 
+ template<typename T>
+ void
+ nonblocking_test(const communicator& comm, const T* values, int num_values, 
+-                 const char* kind, method_kind method = mk_all)
++                 const char* kind, method_kind method = mk_all, 
++                 synch_behavior synch = synch_both)
+ {
+   using boost::mpi::wait_any;
+   using boost::mpi::test_any;
+@@ -54,23 +57,33 @@
+   using boost::mpi::wait_some;
+   using boost::mpi::test_some;
+ 
++  if (synch == synch_both) {
++    nonblocking_test(comm, values, num_values, kind, method, synch_no);
++    nonblocking_test(comm, values, num_values, kind, method, synch_yes);
++    return;
++  };
++  const bool synchronous = (synch == synch_yes);
++
+   if (method == mk_all || method == mk_all_except_test_all) {
+-    nonblocking_test(comm, values, num_values, kind, mk_wait_any);
+-    nonblocking_test(comm, values, num_values, kind, mk_test_any);
+-    nonblocking_test(comm, values, num_values, kind, mk_wait_all);
+-    nonblocking_test(comm, values, num_values, kind, mk_wait_all_keep);
++    nonblocking_test(comm, values, num_values, kind, mk_wait_any, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_test_any, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_wait_all, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_wait_all_keep, synch);
+     if (method == mk_all) {
+-      nonblocking_test(comm, values, num_values, kind, mk_test_all);
+-      nonblocking_test(comm, values, num_values, kind, mk_test_all_keep);
++      nonblocking_test(comm, values, num_values, kind, mk_test_all, synch);
++      nonblocking_test(comm, values, num_values, kind, mk_test_all_keep, synch);
+     }
+-    nonblocking_test(comm, values, num_values, kind, mk_wait_some);
+-    nonblocking_test(comm, values, num_values, kind, mk_wait_some_keep);
+-    nonblocking_test(comm, values, num_values, kind, mk_test_some);
+-    nonblocking_test(comm, values, num_values, kind, mk_test_some_keep);
++    nonblocking_test(comm, values, num_values, kind, mk_wait_some, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_wait_some_keep, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_test_some, synch);
++    nonblocking_test(comm, values, num_values, kind, mk_test_some_keep, synch);
+   } else {
++
+     if (comm.rank() == 0) {
+       std::cout << "Testing " << method_kind_names[method] 
+-                << " with " << kind << "...";
++                << " with " << kind 
++                << (synchronous ? " (ssend) " : "")
++                << "...";
+       std::cout.flush();
+     }
+ 
+@@ -82,9 +95,13 @@
+ 
+     std::vector<request> reqs;
+     // Send/receive the first value
+-    reqs.push_back(comm.isend((comm.rank() + 1) % comm.size(), 0, values[0]));
+     reqs.push_back(comm.irecv((comm.rank() + comm.size() - 1) % comm.size(),
+                               0, incoming_value));
++    if (synchronous)
++      reqs.push_back(comm.issend((comm.rank() + 1) % comm.size(), 0, values[0]));
++    else
++      reqs.push_back(comm.isend((comm.rank() + 1) % comm.size(), 0, values[0]));
++
+ 
+     if (method != mk_wait_any && method != mk_test_any) {
+ #ifndef LAM_MPI
+@@ -94,12 +111,19 @@
+       // when using shared memory, not TCP.
+ 
+       // Send/receive an empty message
++      if (synchronous)
++        reqs.push_back(comm.issend((comm.rank() + 1) % comm.size(), 1));
++      else
+       reqs.push_back(comm.isend((comm.rank() + 1) % comm.size(), 1));
+       reqs.push_back(comm.irecv((comm.rank() + comm.size() - 1) % comm.size(),
+                                 1));
+ #endif
+ 
+       // Send/receive an array
++      if (synchronous)
++        reqs.push_back(comm.issend((comm.rank() + 1) % comm.size(), 2, values,
++                                  num_values));
++      else
+       reqs.push_back(comm.isend((comm.rank() + 1) % comm.size(), 2, values,
+                                 num_values));
+       reqs.push_back(comm.irecv((comm.rank() + comm.size() - 1) % comm.size(),
+@@ -121,11 +145,11 @@
+           result = test_any(reqs.begin(), reqs.end());
+         } while (!result);
+         if (result->second == reqs.begin())
+-          reqs[1].wait();
++          reqs[1].wait(); // wait for the isend()
+         else
+-          reqs[0].wait();
+-        break;
++          reqs[0].wait(); // wait for the irecv()
+       }
++      break;
+ 
+     case mk_wait_all:
+       wait_all(reqs.begin(), reqs.end());
+diff -ruw -x '*~' -x '*.o' -x '*.a' boost_1_45_0.orig/libs/mpi/test/skeleton_content_test.cpp boost_1_45_0/libs/mpi/test/skeleton_content_test.cpp
+--- boost_1_45_0.orig/libs/mpi/test/skeleton_content_test.cpp	2007-11-25 19:38:02.000000000 +0100
++++ boost_1_45_0/libs/mpi/test/skeleton_content_test.cpp	2010-12-11 16:40:48.000000000 +0100
+@@ -23,7 +23,7 @@
+ 
+ void
+ test_skeleton_and_content(const communicator& comm, int root,
+-                          bool manual_broadcast)
++                          bool manual_broadcast, bool synchronous)
+ {
+   using boost::mpi::skeleton;
+   using boost::mpi::content;
+@@ -41,11 +41,17 @@
+       original_list.push_back(i);
+ 
+     std::cout << "Broadcasting integer list skeleton from root " << root
++              << (synchronous and manual_broadcast? " (ssend) " : "") 
+               << "...";
+     if (manual_broadcast) {
+       // Broadcast the skeleton (manually)
+       for (int p = 0; p < comm.size(); ++p)
+-        if (p != root) comm.send(p, 0, skeleton(original_list));
++        if (p != root) {
++          if (synchronous)
++            comm.ssend(p, 0, skeleton(original_list));
++          else
++            comm.send(p, 0, skeleton(original_list));
++        };
+     } else {
+       broadcast(comm, skeleton(original_list), root);
+     }
+@@ -53,22 +59,32 @@
+ 
+     // Broadcast the content (manually)
+     std::cout << "Broadcasting integer list content from root " << root
+-              << "...";
++              << (synchronous? " (ssend) " : "") << "...";
+     {
+       content c = get_content(original_list);
+       for (int p = 0; p < comm.size(); ++p)
+-        if (p != root) comm.send(p, 1, c);
++        if (p != root) {
++          if (synchronous)
++            comm.ssend(p, 1, c);
++          else
++            comm.send(p, 1, c);
++        };
+     }
+     std::cout << "OK." << std::endl;
+ 
+     // Reverse the list, broadcast the content again
+     std::reverse(original_list.begin(), original_list.end());
+     std::cout << "Broadcasting reversed integer list content from root "
+-              << root << "...";
++              << root << (synchronous? " (ssend) " : "") << "...";
+     {
+       content c = get_content(original_list);
+       for (int p = 0; p < comm.size(); ++p)
+-        if (p != root) comm.send(p, 2, c);
++        if (p != root) {
++          if (synchronous)
++            comm.ssend(p, 2, c);
++          else
++            comm.send(p, 2, c);
++        };
+     }
+     std::cout << "OK." << std::endl;
+   } else {
+@@ -101,8 +117,10 @@
+   (comm.barrier)();
+ }
+ 
++
+ void
+-test_skeleton_and_content_nonblocking(const communicator& comm, int root)
++test_skeleton_and_content_nonblocking(const communicator& comm, int root, 
++                                      bool synchronous)
+ {
+   using boost::mpi::skeleton;
+   using boost::mpi::content;
+@@ -122,26 +140,37 @@
+       original_list.push_back(i);
+ 
+     std::cout << "Non-blocking broadcast of integer list skeleton from root " << root
++              << (synchronous? " (ssend) " : "") 
+               << "...";
+ 
+     // Broadcast the skeleton (manually)
+     {
+       std::vector<request> reqs;
+       for (int p = 0; p < comm.size(); ++p)
+-        if (p != root) 
++        if (p != root) {
++          if (synchronous)
++            reqs.push_back(comm.issend(p, 0, skeleton(original_list)));
++          else
+           reqs.push_back(comm.isend(p, 0, skeleton(original_list)));
++        };
+       wait_all(reqs.begin(), reqs.end());
+     }
+     std::cout << "OK." << std::endl;
+ 
+     // Broadcast the content (manually)
+     std::cout << "Non-blocking broadcast of integer list content from root " << root
++              << (synchronous? " (ssend) " : "") 
+               << "...";
+     {
+       content c = get_content(original_list);
+       std::vector<request> reqs;
+       for (int p = 0; p < comm.size(); ++p)
+-        if (p != root) reqs.push_back(comm.isend(p, 1, c));
++        if (p != root) { 
++          if (synchronous)
++            reqs.push_back(comm.issend(p, 1, c));
++          else
++            reqs.push_back(comm.isend(p, 1, c)); 
++        };
+       wait_all(reqs.begin(), reqs.end());
+     }
+     std::cout << "OK." << std::endl;
+@@ -149,12 +178,18 @@
+     // Reverse the list, broadcast the content again
+     std::reverse(original_list.begin(), original_list.end());
+     std::cout << "Non-blocking broadcast of reversed integer list content from root "
++              << (synchronous? " (ssend) " : "") 
+               << root << "...";
+     {
+       std::vector<request> reqs;
+       content c = get_content(original_list);
+       for (int p = 0; p < comm.size(); ++p)
+-        if (p != root) reqs.push_back(comm.isend(p, 2, c));
++        if (p != root) { 
++          if (synchronous)
++            reqs.push_back(comm.issend(p, 2, c));
++          else
++            reqs.push_back(comm.isend(p, 2, c));
++        };
+       wait_all(reqs.begin(), reqs.end());
+     }
+     std::cout << "OK." << std::endl;
+@@ -199,12 +234,21 @@
+     MPI_Abort(comm, -1);
+   }
+ 
+-  test_skeleton_and_content(comm, 0, true);
+-  test_skeleton_and_content(comm, 0, false);
+-  test_skeleton_and_content(comm, 1, true);
+-  test_skeleton_and_content(comm, 1, false);
+-  test_skeleton_and_content_nonblocking(comm, 0);
+-  test_skeleton_and_content_nonblocking(comm, 1);
++  // non-synchronous
++  test_skeleton_and_content(comm, 0, true, false);
++  test_skeleton_and_content(comm, 0, false, false);
++  test_skeleton_and_content(comm, 1, true, false);
++  test_skeleton_and_content(comm, 1, false, false);
++  // synchronous
++  test_skeleton_and_content(comm, 0, true, true);
++  test_skeleton_and_content(comm, 0, false, true);
++  test_skeleton_and_content(comm, 1, true, true);
++  test_skeleton_and_content(comm, 1, false, true);
++
++  test_skeleton_and_content_nonblocking(comm, 0, false);
++  test_skeleton_and_content_nonblocking(comm, 1, false);
++  test_skeleton_and_content_nonblocking(comm, 0, true);
++  test_skeleton_and_content_nonblocking(comm, 1, true);
+ 
+   return 0;
+ }
+Only in boost_1_45_0: project-config.jam
+Only in boost_1_45_0: stage
+Only in boost_1_45_0/tools/build/v2/engine/src: bin.linuxx86_64
+Only in boost_1_45_0/tools/build/v2/engine/src: bootstrap

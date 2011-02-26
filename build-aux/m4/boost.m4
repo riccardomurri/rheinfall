@@ -22,7 +22,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 m4_define([_BOOST_SERIAL], [m4_translit([
-# serial 15
+# serial 14
 ], [#
 ], [])])
 
@@ -421,7 +421,7 @@ case $Boost_lib in #(
     ifelse([$6],[],
             [AC_MSG_ERROR([Boost.$1 not found.])],
             [$6])
-    ;;
+    ;; #(
   yes)
     :
     $7
@@ -476,11 +476,11 @@ AC_DEFUN([BOOST_BIND],
 
 # BOOST_CONVERSION([ACTION-IF-NOT-FOUND], [ACTION-IF-FOUND])
 # ----------------------------------------------------------
-# Look for Boost.Conversion (cast / lexical_cast). If the library is
+# Look for Boost.Conversion (cast and lexical_cast). If the library is
 # found, run ACTION-IF-FOUND, otherwise run ACTION-IF-NOT-FOUND.
 AC_DEFUN([BOOST_CONVERSION],
-[BOOST_FIND_HEADER([boost/cast.hpp], [$2], [])
-BOOST_FIND_HEADER([boost/lexical_cast.hpp], [$2], [$3])
+[BOOST_FIND_HEADER([boost/cast.hpp], [$2], 
+        [BOOST_FIND_HEADER([boost/lexical_cast.hpp], [$2], [$3])])
 ])# BOOST_CONVERSION
 
 
@@ -743,11 +743,11 @@ AC_DEFUN([BOOST_SIGNALS],
 
 # BOOST_SMART_PTR([ACTION-IF-NOT-FOUND], [ACTION-IF-FOUND])
 # ---------------------------------------------------------
-# Look for Boost.SmartPtr.  If the library is found, run ACTION-IF-FOUND,
-# otherwise run ACTION-IF-NOT-FOUND.
+# Look for Boost.SmartPtr (scoped_ptr and shared_ptr).  If the library
+# is found, run ACTION-IF-FOUND, otherwise run ACTION-IF-NOT-FOUND.
 AC_DEFUN([BOOST_SMART_PTR],
-[BOOST_FIND_HEADER([boost/scoped_ptr.hpp], [$2], [])
-BOOST_FIND_HEADER([boost/shared_ptr.hpp], [$2], [$3])
+[BOOST_FIND_HEADER([boost/scoped_ptr.hpp], [$2], 
+        [BOOST_FIND_HEADER([boost/shared_ptr.hpp], [$2], [$3])])
 ])
 
 
@@ -841,11 +841,11 @@ AC_DEFUN([BOOST_TOKENIZER],
 
 # BOOST_TRIBOOL([ACTION-IF-NOT-FOUND], [ACTION-IF-FOUND])
 # -------------------------------------------------------
-# Look for Boost.Tribool.  If the library is found, run ACTION-IF-FOUND,
-# otherwise run ACTION-IF-NOT-FOUND.
+# Look for Boost.Tribool (tribool and tribool_fwd).  If the library is
+# found, run ACTION-IF-FOUND, otherwise run ACTION-IF-NOT-FOUND.
 AC_DEFUN([BOOST_TRIBOOL],
-[BOOST_FIND_HEADER([boost/logic/tribool_fwd.hpp], [$2], [])
- BOOST_FIND_HEADER([boost/logic/tribool.hpp], [$2], [$3])
+[BOOST_FIND_HEADER([boost/logic/tribool_fwd.hpp], [$2], 
+        [BOOST_FIND_HEADER([boost/logic/tribool.hpp], [$2], [$3])])
 ])
 
 
@@ -876,11 +876,12 @@ AC_DEFUN([BOOST_UTILITY],
 
 # BOOST_VARIANT([ACTION-IF-NOT-FOUND], [ACTION-IF-FOUND])
 # -------------------------------------------------------
-# Look for Boost.Variant.  If the library is found, run ACTION-IF-FOUND,
-# otherwise run ACTION-IF-NOT-FOUND.
+# Look for Boost.Variant (variant and variant_fwd).  If the library is
+# found, run ACTION-IF-FOUND, otherwise run ACTION-IF-NOT-FOUND.
 AC_DEFUN([BOOST_VARIANT],
-[BOOST_FIND_HEADER([boost/variant/variant_fwd.hpp], [$2], [])
- BOOST_FIND_HEADER([boost/variant.hpp], [$2], [$3])])
+[BOOST_FIND_HEADER([boost/variant/variant_fwd.hpp], [$2], 
+        [BOOST_FIND_HEADER([boost/variant.hpp], [$2], [$3])])
+])
 
 
 # BOOST_WAVE([PREFERRED-RT-OPT], [ACTION-IF-NOT-FOUND], [ACTION-IF-FOUND])
@@ -1120,11 +1121,11 @@ boost_use_source=:
 test -f conftest.$ac_objext && ac_ext=$ac_objext && boost_use_source=false &&
   _AS_ECHO_LOG([re-using the existing conftest.$ac_objext])
 AS_IF([_AC_DO_STDERR($ac_link) && {
-	 test -z "$ac_[]_AC_LANG_ABBREV[]_werror_flag" ||
-	 test ! -s conftest.err
+         test -z "$ac_[]_AC_LANG_ABBREV[]_werror_flag" ||
+         test ! -s conftest.err
        } && test -s conftest$ac_exeext && {
-	 test "$cross_compiling" = yes ||
-	 $as_executable_p conftest$ac_exeext
+         test "$cross_compiling" = yes ||
+         $as_executable_p conftest$ac_exeext
 dnl FIXME: use AS_TEST_X instead when 2.61 is widespread enough.
        }],
       [$2],
