@@ -4,7 +4,7 @@
 nobase_include_HEADERS = rheinfall/rheinfall.hpp rheinfall/row.hpp rheinfall/sparserow.hpp rheinfall/denserow.hpp rheinfall/types.hpp
 
 # build example programs
-bin_PROGRAMS = rank-int rank-double rank-mod rank-mpq rank-mpz
+bin_PROGRAMS = rank-int rank-double rank-mod 
 
 EXTRA_PROGRAMS = rank-int32 rank-int64
 if HAVE_INT32_T
@@ -14,16 +14,24 @@ if HAVE_INT64_T
   bin_PROGRAMS += rank-int64 rank-mod-int64
 endif
 
+EXTRA_PROGRAMS += rank-mpq rank-mpz
+if HAVE_GMPXX
+  bin_PROGRAMS += rank-mpq rank-mpz
+endif
+
 EXTRA_PROGRAMS += rank-int-omp rank-double-omp rank-mod-omp rank-mpq-omp rank-mpz-omp
 EXTRA_PROGRAMS += rank-int32-omp 
 EXTRA_PROGRAMS += rank-int64-omp rank-mod-int64-omp
 if HAVE_OPENMP_CXX
-  bin_PROGRAMS +=  rank-int-omp rank-mod-omp  rank-mpq-omp rank-mpz-omp
+  bin_PROGRAMS +=  rank-int-omp rank-mod-omp 
 if HAVE_INT32_T
   bin_PROGRAMS += rank-int32-omp
 endif
 if HAVE_INT64_T
   bin_PROGRAMS += rank-int64-omp rank-mod-int64-omp
+endif
+if HAVE_GMPXX 
+  bin_PROGRAMS += rank-mpq-omp rank-mpz-omp
 endif
 endif
 EXTRA_PROGRAMS += rank-int-mpi rank-double rank-mod-mpi rank-mpq-mpi rank-mpz-mpi
