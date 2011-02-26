@@ -55,11 +55,21 @@ import os
 import os.path
 from optparse import OptionParser
 import pwd
+import re
 import sys
 import random
 import shutil
 import tarfile
 import time
+
+
+# patch sys.path to include likely locations for the
+# `texttable` module
+p = os.path.realpath(os.path.dirname(sys.argv[0]))
+sys.path.append(p)
+sys.path.append(os.path.join(p, 'util'))
+
+from texttable import Texttable
 
 
 ## interface to Gc3libs
@@ -406,6 +416,69 @@ def pprint(tasks, output=sys.stdout, session=None):
                           ('%s (%s)' % (task.execution.state, task.persistent_id)), 
                           task.execution.info))
 
+
+def center(text, width=80):
+    """
+    Return `text` padded with spaces on the left so that it's centered
+    on a line of the given width.
+    """
+    return ("%" + str((width - len(text)) / 2) + "s\n") % text
+    
+rank_line_re = re.compile(r'^[^ ]+/(?:[idqz]?rank(-int|-mod|-double)?([_-]mpi|[_-]omp){0,2}|lbrank_(?:bb|se_linear|se_none)) file:')
+jobid_re = re.compile(r'.[eo]([0-9]+)')
+whitespace_re = re.compile(r'\s+', re.X)
+garbage_re = re.compile(r'(MPI process \(rank: \d+\) terminated unexpectedly|\[[0-9a-z]+:\d+\] \[ *\d+\]|.*SIG[A-Z]+[0-9]*|/[/a-z0-9_]+: line [0-9]+: [0-9]+ Aborted|\[[a-z0-9]+:[0-9]+\] \*\*\* Process received signal).*')
+
+
+def output_final_data(tasks, output=sys.stdout):
+    """
+    For each processed task, output a table summarizing processed
+    matrix name, rank, CPU time and wall-clock time elapsed in the
+    computation.
+    """
+    for task in tasks:
+        output.write("### %s " % os.path.basename(task.batch_file_path))
+        if task.execution.signal != 0:
+            output.write("[KILLED by signal %d, use 'ginfo %s' to inspect]\n"
+                         % (task.execution.signal, task))
+        else:
+            output.write("\n")
+        output_file = os.path.join(task.output_dir, task.stdout)
+        if not os.path.exists(output_file):
+            logger.warning("No output file '%s' found in directory '%s'" 
+                           % (task.stdout, task.output_dir))
+            continue # with next task
+        # build output table
+        t = Texttable(0)
+        t.set_deco(Texttable.BORDER | Texttable.HEADER)
+        t.header(['Matrix', 'rank', 'cputime', 'wctime'])
+        t.set_cols_align(['l', 'l', 'l', 'l'])
+        # parse output file
+        f = open(output_file, 'r')
+        for line in f.readlines():
+            line = line.strip()
+            if not rank_line_re.match(line):
+                continue
+            line = garbage_re.sub('', line)
+            words = line.split(' ')[1:]
+            outcome = dict(w.split(':',1) for w in words)
+            if not outcome.has_key('cputime') and outcome.has_key('time'):
+                outcome['cputime'] = outcome['time']
+            if not outcome.has_key('wctime') and outcome.has_key('time'):
+                outcome['wctime'] = outcome['time']
+            if (not outcome.has_key('rank') or not outcome.has_key('file')
+                or not outcome.has_key('cputime') or not outcome.has_key('wctime')):
+                # computation failed, go to next line
+                continue
+            # extract matrix name from file name
+            outcome['matrix'] = os.path.splitext(os.path.basename(outcome['file']))[0]
+            t.add_row([outcome['matrix'], outcome['rank'],
+                       outcome['cputime'], outcome['wctime']])
+        f.close()
+        output.write(t.draw())
+        output.write("\n")
+
+
 # create a `Core` instance to interface with the Grid middleware
 grid = gc3libs.core.Core(*gc3libs.core.import_config(
         gc3libs.Default.CONFIG_FILE_LOCATIONS
@@ -435,6 +508,9 @@ def main(tasks):
                      % (session_file_name, str(ex)))
     ## print results to user
     stats = compute_stats(tasks)
+    if stats['TERMINATED'] == len(tasks):
+        output_final_data(tasks)
+        sys.exit(0)
     if options.list:
         pprint(tasks, sys.stdout)
     else:
