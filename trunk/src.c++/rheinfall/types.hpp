@@ -31,6 +31,8 @@
 #define RF_TYPES_HPP
 
 
+#include "modular.hpp"
+
 #include <boost/mpl/bool.hpp>
 namespace mpl = boost::mpl;
 #include <boost/static_assert.hpp>
@@ -211,6 +213,33 @@ namespace rheinfall {
   RF_TYPE_IS_DIVISION_RING(mpf_class)
 #endif 
 
+  // modular arithmetic
+  /** Declare template specializations for instances of a type
+   *  modeling an unordered division ring (i.e., like @ref
+   *  RF_TYPE_IS_DIVISION_RING but no relational operators are
+   *  defined, so fall back to the generic implementation of @ref
+   *  first_is_better_pivot).
+   */
+#define RF_TYPE_IS_UNORDERED_DIVISION_RING(T)       \
+  template <>                                       \
+  void get_row_multipliers<T>(T const& lead_x,      \
+                              T const& lead_y,      \
+                              T& a, T& b)           \
+  {                                                 \
+    assert(lead_x != 0);                            \
+    a = - lead_y / lead_x;                          \
+    b = 1;                                          \
+  };                                                \
+
+  RF_TYPE_IS_UNORDERED_DIVISION_RING(modular::Modular<int>)
+  RF_TYPE_IS_UNORDERED_DIVISION_RING(modular::Modular<long>)
+#ifdef HAVE_LONG_LONG_INT
+  RF_TYPE_IS_UNORDERED_DIVISION_RING(modular::Modular<long long>)
+#endif
+#ifdef HAVE_INT128_T
+  RF_TYPE_IS_UNORDERED_DIVISION_RING(modular::Modular<int128_t>)
+#endif
+
 
   // by default, do NOT use in-place update within DenseRow::gaussian_elimination
   template<typename T> class use_inplace_update : public mpl::bool_<false> { };
@@ -269,7 +298,42 @@ namespace rheinfall {
     value = value_;
   };
 #endif // HAVE_INT128_T
+  
+  template<>
+  void read_value(std::istream& in, modular::Modular<int>& value)
+  {
+    int value_;
+    in >> value_;
+    value = value_;
+  };
 
+  template<>
+  void read_value(std::istream& in, modular::Modular<long>& value)
+  {
+    long value_;
+    in >> value_;
+    value = value_;
+  };
+
+#ifdef HAVE_LONG_LONG_INT
+  template<>
+  void read_value(std::istream& in, modular::Modular<long long>& value)
+  {
+    long long value_;
+    in >> value_;
+    value = value_;
+  };
+#endif 
+
+#ifdef HAVE_INT128_T
+  template<>
+  void read_value(std::istream& in, modular::Modular<int128_t>& value)
+  {
+    long long value_;
+    in >> value_;
+    value = value_;
+  };
+#endif
 }; // namespace rheinfall
 
 
