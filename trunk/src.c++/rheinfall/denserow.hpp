@@ -145,7 +145,7 @@ namespace rheinfall {
   template <typename val_t, typename coord_t>
   inline
   DenseRow<val_t,coord_t>::DenseRow(const SparseRow<val_t,coord_t>* r) 
-    : Row_::Row(Row_::dense, r->starting_column_, r->ending_column_, r->leading_term_),
+    : Row_::Row(Row_::dense, r->starting_column_, r->ending_column_),
       storage(Row_::ending_column_ - Row_::starting_column_, 0) 
   { 
     assert(std::distance(r->storage.begin(), r->storage.end()) <= storage.size());
@@ -162,7 +162,7 @@ namespace rheinfall {
   inline
   DenseRow<val_t,coord_t>::DenseRow(const coord_t starting_column, 
                                     const size_t ending_column) 
-    : Row_::Row(Row_::dense, starting_column, ending_column, 0),
+    : Row_::Row(Row_::dense, starting_column, ending_column),
       storage(ending_column - starting_column, 0)
   { 
     // nothing to do
@@ -183,7 +183,7 @@ namespace rheinfall {
   template <typename val_t, typename coord_t>
   inline
   DenseRow<val_t,coord_t>::DenseRow() 
-    : Row_::Row(Row_::dense, -1, -1, 0), storage() 
+    : Row_::Row(Row_::dense, -1, -1), storage() 
   { 
     // nothing to do
   };
@@ -194,22 +194,21 @@ namespace rheinfall {
   inline DenseRow<val_t,coord_t>*
   DenseRow<val_t,coord_t>::adjust()
   {
-    if (0 == Row_::leading_term_) {
-      // compute new starting column
-      for (int j = storage.size()-1; j >= 0; --j)
-        if (storage[j] != 0) {
-          Row_::leading_term_ = storage[j];
-          Row_::starting_column_ += (storage.size() - j);
-          storage.erase(storage.begin()+j, storage.end());
-          return this;
+    // compute new starting column
+    const int top = storage.size() - 1;
+    for (int j = top; j >= 0; --j) {
+      if (storage[j] != 0) {
+        if (top > j) {
+          Row_::starting_column_ += top - j;
+          storage.erase(storage.begin()+(j+1), storage.end());
         };
-      // no nonzero element found in storage,
-      // this is now a null row
-      delete this;
-      return NULL;
-    }
-    else
-      return this;
+        return this;
+      };
+    };
+    // no nonzero element found in storage,
+    // this is now a null row
+    delete this;
+    return NULL;
   };
 
 
@@ -218,8 +217,8 @@ namespace rheinfall {
   DenseRow<val_t,coord_t>::gaussian_elimination(const SparseRow<val_t,coord_t>* other) const
   {
     assert(this->starting_column_ == other->starting_column_);
-    assert(0 != this->leading_term_);
-    assert(0 != other->leading_term_);
+    assert(0 != this->first_nonzero_value());
+    assert(0 != other->first_nonzero_value());
 
     // convert `other` to dense storage upfront: adding the
     // non-zero entries from `this` would made it pretty dense
@@ -236,13 +235,13 @@ namespace rheinfall {
   {
     assert(this->Row_::starting_column_ == other->Row_::starting_column_);
     assert(this->Row_::ending_column_ == other->Row_::ending_column_);
-    assert(0 != this->Row_::leading_term_);
-    assert(0 != other->Row_::leading_term_);
+    assert(0 != this->Row_::first_nonzero_value());
+    assert(0 != other->Row_::first_nonzero_value());
     assert(this->size() == other->size());
 
     val_t a, b;
-    rheinfall::get_row_multipliers<val_t>(this->Row_::leading_term_, 
-                                          other->Row_::leading_term_, 
+    rheinfall::get_row_multipliers<val_t>(this->Row_::first_nonzero_value(), 
+                                          other->Row_::first_nonzero_value(), 
                                           a, b);
 
     DenseRow<val_t,coord_t>* result = new DenseRow(1 + this->Row_::starting_column_, 
@@ -252,7 +251,6 @@ namespace rheinfall {
     size_t other_j = 0; 
     for (size_t j = 0; j < this->size()-1; ++j, ++this_j, ++other_j)
        result->storage[j] = b*other->storage[other_j] + a*this->storage[this_j];
-    result->Row_::leading_term_ = b*other->storage[other_j] + a*this->storage[this_j];
     delete other;
     return result->adjust(); // update done, adjust size and starting column
   }; // dense_row_ptr gaussian_elimination(dense_row_ptr other)
@@ -263,10 +261,7 @@ namespace rheinfall {
   DenseRow<val_t,coord_t>::get(const coord_t col) const
   {
     assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
-    if (col == Row_::starting_column_)
-      return Row_::leading_term_;
-    else
-      return storage[size() - (col - (Row_::starting_column_ + 1)) - 1];
+    return storage[storage.size()-1  - (col - Row_::starting_column_)];
   };
 
 
@@ -274,8 +269,7 @@ namespace rheinfall {
   inline void
   DenseRow<val_t,coord_t>::print_on(std::ostream& out) const 
   {
-    out << "["
-        << Row_::starting_column_ <<":"<< Row_::leading_term_;
+    out << "[" << Row_::starting_column_ <<":";
     for (int j = storage.size()-1; j >= 0; --j)
       out <<","<< storage[j];
     out << "]";
@@ -302,10 +296,7 @@ namespace rheinfall {
   DenseRow<val_t,coord_t>::set(const coord_t col, const val_t value) 
   {
     assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
-    if (col == Row_::starting_column_)
-      Row_::leading_term_ = value;
-    else
-      storage[storage.size() - (col - (Row_::starting_column_ + 1)) - 1] = value;
+    storage[storage.size()-1 - (col - Row_::starting_column_)] = value;
   };
 
 
