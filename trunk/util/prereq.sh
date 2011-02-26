@@ -19,7 +19,7 @@ TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6
 
 # undefine when running on a non-homogeneous cluster
 # (i.e., nodes may have different arch and/or memory size)
-BOOST_MPI_HOMOGENEOUS=yes
+#BOOST_MPI_HOMOGENEOUS=yes
 
 
 ## No customization should be necessary further down here
@@ -87,6 +87,13 @@ require_command wget
 
 set -e
 
+# find Rheinfall source directory
+if [ -e util/${PROG} ]; then
+    etc_dir=$(pwd)/util
+elif [ -e ${PROG} ]; then
+    etc_dir=$(pwd)
+fi
+
 # target directory
 sw="${1:-`pwd`/sw}"; shift
 mkdir -p "${sw}"
@@ -102,12 +109,11 @@ PYTHONPATH=${sw}/lib/python
 ncpus="$(grep -c '^processor' /proc/cpuinfo)"
 concurrent_make="make -j $ncpus"
 
-if grep -q '^cpu MHz' /proc/cpuinfo; then
-    mhz=`grep '^cpu MHz' /proc/cpuinfo | head -1 | cut -d: -f2 | cut -d. -f1 | tr -d ' '`
-else
-    bogomips=`fgrep bogomips /proc/cpuinfo | head -1 | cut -d: -f2 | cut -d. -f1`
-    mhz=`expr $bogomips / 2`
-fi
+# the `cpu MHz` line in /proc/cpuinfo states the *current* CPU clock,
+# whereas "bogomips" is approximately twice the maximal clock on all Intel/AMD CPUs,
+# see: http://tldp.org/HOWTO/BogoMips/bogo-faq.html#AEN192
+bogomips=`fgrep bogomips /proc/cpuinfo | head -1 | cut -d: -f2 | cut -d. -f1`
+mhz=`expr $bogomips / 2`
 
 case `uname -m` in
         i?86) bits=32 ;;
@@ -270,7 +276,7 @@ if [ -n "$BOOST" ]; then
         -O "${boost_file}.tar.gz"
     set -x 
     tar -xzf  "${boost_file}.tar.gz"
-    patch -p0 -i $(dirname $0)/boost_1_45_0.ssend.patch
+    patch -p0 -i ${etc_dir}/boost_1_45_0.ssend.patch
     cd ${boost_file}
     # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
     if [ "x$BOOST_MPI_HOMOGENEOUS" = "xyes" ]; then
