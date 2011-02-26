@@ -138,6 +138,8 @@ case "$compiler" in
         module load gcc/4.1.2
         export CC=gcc
         export CXX=g++
+        export OMPI_CC=`which gcc`
+        export OMPI_CXX=`which g++`
         cflags='-O3 -march=nocona'
         toolset=gcc
         ;;
@@ -145,6 +147,8 @@ case "$compiler" in
         module load gcc/4.4.1
         export CC=gcc
         export CXX=g++
+        export OMPI_CC=`which gcc`
+        export OMPI_CXX=`which g++`
         cflags='-O3 -march=nocona'
         toolset=gcc
         ;;
@@ -152,6 +156,8 @@ case "$compiler" in
         module load gcc/4.4.3
         export CC=gcc
         export CXX=g++
+        export OMPI_CC=`which gcc`
+        export OMPI_CXX=`which g++`
         cflags='-O3 -march=native'
         toolset=gcc
         ;;
@@ -159,6 +165,8 @@ case "$compiler" in
         module load gcc/4.5.0
         export CC=gcc
         export CXX=g++
+        export OMPI_CC=`which gcc`
+        export OMPI_CXX=`which g++`
         cflags='-O3 -march=native'
         toolset=gcc
         ;;
@@ -394,6 +402,9 @@ fi # LINBOX
 # Boost
 if [ -n "$BOOST" ]; then
     _ Installing Boost ${BOOST}
+    # clean up old installation
+    rm -rf ${sw}/include/boost ${sw}/lib/libboost_*
+    # now build new one
     cd ${sw}/build
     boost_file=$(echo boost_$BOOST | tr . _)
     #wget "http://surfnet.dl.sourceforge.net/project/boost/boost/${BOOST}/${boost_file}.tar.gz" \
@@ -401,6 +412,9 @@ if [ -n "$BOOST" ]; then
     set -x 
     tar -xzf  "${src_home}/${boost_file}.tar.gz"
     cd ${boost_file}
+    # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
+    sed -e 's|^//#define BOOST_MPI_HOMOGENEOUS|#define BOOST_MPI_HOMOGENEOUS|' \
+        -i boost/mpi/config.hpp
     ./bootstrap.sh --prefix=${sw} --with-libraries=mpi,serialization,test link=static threading=multi
     cat >> project-config.jam <<EOF
 # Boost will not build Boost.MPI unless it is explicitly 
