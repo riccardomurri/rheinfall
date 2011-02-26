@@ -95,12 +95,12 @@ namespace rheinfall {
         could possibly be this row if in-place update took place. */
       DenseRow<val_t,coord_t>* gaussian_elimination(const SparseRow<val_t,coord_t>* other) const;
 
-    /** Perform Gaussian elimination: sum a multiple of this row to
-        (a multiple of) row @c r so that the combination has its
-        first nonzero entry at a column index strictly larger than
-        the one of both rows. Return pointer to the combined row, which
-        could possibly be this row if in-place update took place. */
-      DenseRow<val_t,coord_t>* gaussian_elimination(const DenseRow<val_t,coord_t>* other) const;
+    /** Perform Gaussian elimination: sum a multiple of this row to (a
+        multiple of) row @c r so that the combination has its first
+        nonzero entry at a column index strictly larger than the one
+        of both rows. Return pointer to the combined row, which could
+        possibly be the @p other row if in-place update took place. */
+      DenseRow<val_t,coord_t>* gaussian_elimination(DenseRow<val_t,coord_t>* other) const;
 
     protected:
       typedef Row<val_t,coord_t> Row_; //< Nickname for base class; used to shorten templatized expressions
@@ -119,6 +119,16 @@ namespace rheinfall {
           contents of the stored row.  Return pointer to adjusted row.
           If this is a null row, then delete it and return NULL. */
       DenseRow<val_t,coord_t>* adjust();
+
+      /** Perform Gaussian Elimination, adding a suitable multiple of
+          @a this to @p other, in-place.  Return pointer to @p other. */
+      DenseRow<val_t,coord_t>* gaussian_elimination_impl(mpl::true_ inplace_update, 
+                                                         DenseRow<val_t,coord_t>* restrict other) const; 
+      /** Perform Gaussian Elimination, storing a suitable linear
+          combination of @a this and @p other into a newly-allocated
+          @c DenseRow.  Return pointer the new row and delete @p other. */
+      DenseRow<val_t,coord_t>* gaussian_elimination_impl(mpl::false_ inplace_update, 
+                                                         const DenseRow<val_t,coord_t>* restrict other) const;
 
 #ifdef WITH_MPI
       /** Default constructor, needed by boost::serialize.
@@ -233,7 +243,7 @@ namespace rheinfall {
 
   template <typename val_t, typename coord_t>
   inline DenseRow<val_t,coord_t>*
-  DenseRow<val_t,coord_t>::gaussian_elimination(const DenseRow<val_t,coord_t>* restrict other) 
+  DenseRow<val_t,coord_t>::gaussian_elimination(DenseRow<val_t,coord_t>* restrict other) 
     const restrict_this
   {
     assert(this->Row_::starting_column_ == other->Row_::starting_column_);
@@ -242,10 +252,40 @@ namespace rheinfall {
     assert(not is_zero(other->Row_::leading_term_));
     assert(this->size() == other->size());
 
+    return this->gaussian_elimination_impl(use_inplace_update<val_t>(), other);
+  }; // dense_row_ptr gaussian_elimination(dense_row_ptr other)
+
+
+  template <typename val_t, typename coord_t>
+  inline DenseRow<val_t,coord_t>*
+  DenseRow<val_t,coord_t>::gaussian_elimination_impl(mpl::true_ inplace_update, 
+                                                     DenseRow<val_t,coord_t>* restrict other) 
+    const restrict_this
+  {
     val_t a, b;
-    rheinfall::get_row_multipliers<val_t>(this->Row_::leading_term_, 
-                                          other->Row_::leading_term_, 
-                                          a, b);
+    get_row_multipliers<val_t>(this->Row_::leading_term_, 
+                               other->Row_::leading_term_, 
+                               a, b);
+
+    for (size_t j = 0; j < this->size()-1; ++j) {
+      other->storage[j] *= b;
+      other->storage[j] += a*this->storage[j];
+    }
+    other->Row_::leading_term_ = 0;
+    return other->adjust(); // update done, adjust size and starting column
+  }; // dense_row_ptr gaussian_elimination_impl(mpl::true_, dense_row_ptr other)
+
+
+  template <typename val_t, typename coord_t>
+  inline DenseRow<val_t,coord_t>*
+  DenseRow<val_t,coord_t>::gaussian_elimination_impl(mpl::false_ inplace_update, 
+                                                     const DenseRow<val_t,coord_t>* restrict other)
+    const restrict_this
+  {
+    val_t a, b;
+    get_row_multipliers<val_t>(this->Row_::leading_term_, 
+                               other->Row_::leading_term_, 
+                               a, b);
 
     DenseRow<val_t,coord_t>* restrict result = 
       new DenseRow(1 + this->Row_::starting_column_, this->Row_::ending_column_);
@@ -257,7 +297,7 @@ namespace rheinfall {
     result->Row_::leading_term_ = b*other->storage[other_j] + a*this->storage[this_j];
     delete other;
     return result->adjust(); // update done, adjust size and starting column
-  }; // dense_row_ptr gaussian_elimination(dense_row_ptr other)
+  }; // dense_row_ptr gaussian_elimination_impl(mpl::false_, dense_row_ptr other)
 
 
   template <typename val_t, typename coord_t>

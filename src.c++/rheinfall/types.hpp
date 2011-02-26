@@ -251,6 +251,23 @@ namespace rheinfall {
   RF_USE_EXACT_IS_ZERO(mpz_class)
 #endif
 
+
+  // by default, use in-place update within DenseRow::gaussian_elimination
+  template<typename T> class use_inplace_update : public mpl::bool_<false> { };
+
+  // don't use in-place update for POD types, might give some
+  // advantage due to the split of read- and write- accesses to memory
+  template<> class use_inplace_update<int> : public mpl::bool_<true> { };
+  template<> class use_inplace_update<long> : public mpl::bool_<true> { };
+#ifdef HAVE_LONG_LONG_INT
+  template<> class use_inplace_update<long long> : public mpl::bool_<true> { };
+#endif
+  template<> class use_inplace_update<float> : public mpl::bool_<true> { };
+  template<> class use_inplace_update<double> : public mpl::bool_<true> { };
+#ifdef HAVE_LONG_DOUBLE
+  template<> class use_inplace_update<long double> : public mpl::bool_<true> { };
+#endif
+  
 }; // namespace rheinfall
 
 
