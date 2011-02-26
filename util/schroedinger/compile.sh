@@ -10,7 +10,7 @@ PROG="$(basename $0)"
 
 usage () {
 cat <<EOF
-Usage: $PROG [COMPILER]-[MPILIB]-[REVNO]
+Usage: $PROG [COMPILER]-[MPILIB]-[REVNO] [CXXFLAGS]
 
 Setup the correct modules and paths for compiling 'Rheinfall' with the
 given COMPILER and MPILIB.  Compile the code and store the results in
@@ -24,6 +24,10 @@ repository revno, but can be overridden to tag variants of the code.
 
 EOF
 }
+case `hostname` in
+	login*) usage; exit 1 ;;
+	*) : ;;
+esac
 
 flavor="$1"; shift
 compiler="$(echo $flavor | cut -d- -f1)"
@@ -38,6 +42,13 @@ rev="$(echo $flavor | cut -d- -f3)"
 if [ -z "$rev" ]; then
     rev="$( cat .bzr/branch/last-revision | (read revno rest; echo r$revno) )"
 fi
+
+
+CXXFLAGS="$*"
+if [ "x$CXXFLAGS" = 'x' ]; then
+  CXXFLAGS='-O3 -DNDEBUG'
+fi
+
 
 ## helper functions
 die () {
@@ -191,7 +202,8 @@ set -e
 rm -rf "$build_dir"
 mkdir -p "$build_dir"
 cd "$build_dir"
-$top_src_dir/configure CXXFLAGS="-O3 -DNDEBUG $cxxflags" --with-boost=$sw --with-gmp=$sw
+$top_src_dir/configure CXXFLAGS="$CXXFLAGS $cxxflags" --with-boost=$sw --with-gmp=$sw
+set +e
 make -k
 rc=$?
 
@@ -202,6 +214,9 @@ cp -av \
     "${top_src_dir}/run/${compiler}-${mpi}-${rev}/"
 cd "${top_src_dir}" \
     && rm -rf "$build_dir"
+
+echo == Run unit tests ==
+make check
 
 echo === Done: exit code $rc ===
 exit $rc
