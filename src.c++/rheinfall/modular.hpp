@@ -66,28 +66,25 @@ namespace modular {
     friend bool operator!=(const val_t& a, const Modular<val_t>& b) { return not (a == b); };
 
     friend Modular<val_t> operator+(const Modular<val_t>& a, const Modular<val_t>& b) { return Modular<val_t>((a.val_ + b.val_) % Modular<val_t>::modulus_); };
-
-    friend Modular<val_t> operator-(const Modular<val_t>& a, const Modular<val_t>& b) { return Modular<val_t>((Modular<val_t>::modulus_ + a.val_ - b.val_) % Modular<val_t>::modulus_); };
-    
+    friend Modular<val_t> operator-(const Modular<val_t>& a, const Modular<val_t>& b) { return Modular<val_t>((a.val_ - b.val_) % Modular<val_t>::modulus_); };
     friend Modular<val_t> operator*(const Modular<val_t>& a, const Modular<val_t>& b) { return Modular<val_t>((a.val_ * b.val_) % Modular<val_t>::modulus_); };
-
     friend Modular<val_t> operator/(const Modular<val_t>& a, const Modular<val_t>& b) { return a * b.inverse(); };
 
     friend std::ostream& operator<<(std::ostream& out, Modular<val_t> a) { out << a.val_ << "[mod " << Modular<val_t>::modulus_ << "]"; return out; };
 
     /// unary minus: additive inverse
-    friend Modular<val_t> operator-(const Modular<val_t>& a) { return Modular<val_t>((Modular<val_t>::modulus_ - a.val_) % Modular<val_t>::modulus_); };
+    friend Modular<val_t> operator-(const Modular<val_t>& a) { return Modular<val_t>(- a.val_); };
     
     /// multiplicative inverse
     Modular<val_t> inverse() const
     {
       // compute u,v such that u*val_ + v*modulus_ = 1
-      register val_t u, v, a, b;
+      val_t u, v, a, b;
       u = 1; a = val_;
       v = 0; b = modulus_;
       while (b != 0)
         {
-          register val_t q, t1, t2;
+          val_t q, t1, t2;
           q = a / b;
           t1 = u - q * v; 
           t2 = a - q * b;
@@ -100,7 +97,9 @@ namespace modular {
     };
       
   }; // class Modular<...>
-    
+
+
+  // instanciate the static class members
   template<typename val_t> val_t Modular<val_t>::modulus_;
 
 }; // namespace modular
