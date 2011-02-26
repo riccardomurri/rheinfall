@@ -19,6 +19,9 @@ gl_EARLY
 AC_PROG_CXX
 AC_PROG_INSTALL
 
+AC_PATH_PROG([GZIP],  [gzip], [:])
+AC_PATH_PROG([WGET],  [wget], [:])
+
 
 # initialize GNU LibTool
 LT_INIT

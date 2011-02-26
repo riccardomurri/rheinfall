@@ -8,7 +8,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -46,7 +46,8 @@ typedef long coord_t;
 
 
 #define BOOST_TEST_MODULE rheinfall
-#include <boost/test/unit_test.hpp>
+#include <boost/test/included/unit_test.hpp>
+
 
 BOOST_AUTO_TEST_SUITE( test_rank_double )
 #include "test_rank.cpp.inc"
