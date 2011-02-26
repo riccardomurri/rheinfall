@@ -43,57 +43,39 @@ AM_CONDITIONAL([HAVE_OPENMP_CXX], [test "x$OPENMP_CXXFLAGS" != x])
 
 # check for MPI
 AC_ARG_WITH([mpi],
-            [AS_HELP_STRING([--with-mpi],
-              [prefix of MPI libraries @<:@guess@:>@])],
-            [],
-            [with_mpi=guess])
-AM_CONDITIONAL([HAVE_MPICC], [test "x$have_mpicc" != no])
-AM_CONDITIONAL([HAVE_MPICXX], [test "x$have_mpicxx" != no])
-AS_IF([test "x$with_mpi" != xno],
-  [# check for MPI compiler support
-   save_CXX="$CXX"
-   save_CC="$CC"
-   save_LIBS="$LIBS"
-   compiler_subst () { subst="[$]1"; shift; orig="[$]1"; shift; echo "[$]subst [$][@]"; };
+    [AS_HELP_STRING([--with-mpi=yes|no],
+            [Build MPI-enabled example programs. 
+                If argument is 'yes' (default), the MPI C/C++ compilers must be
+                reachable with the standard executable search path PATH.
+                If the argument is 'no', then example programs that make 
+                use of MPI will not be built.])],
+    [],
+    [with_mpi=yes])
+if test "x$with_mpi" = 'xyes'; then :
+    AC_LANG_PUSH([C])
+    LX_FIND_MPI()
+    AC_LANG_POP([C])
+    AC_LANG_PUSH([C++])
+    LX_FIND_MPI()
+    AC_LANG_POP([C++])
+fi
+AM_CONDITIONAL([HAVE_MPICC], [test "x$have_C_mpi" != no])
+AM_CONDITIONAL([HAVE_MPICXX], [test "x$have_CXX_mpi" != no])
 
-   AC_LANG_PUSH([C])
-   AX_MPI([have_mpicc="yes"],
-          [have_mpicc="no";
-           AC_MSG_WARN([No C MPI implementation found: MPI example C programs will not be built.])])
-   AS_IF([test AS_VAR_GET([have_mpicc]) != no],[
-     CC=`compiler_subst $MPICC $CC`
-     LIBS="$MPILIBS $LIBS"
-   ],[
-     CC="$save_CC"
-     LIBS="$save_LIBS"
-   ])
-   AC_SUBST(MPICC)
-   AC_LANG_POP([C])
-
-   AC_LANG_PUSH([C++])
-   AX_MPI([have_mpicxx="yes"],
-          [have_mpicxx="no";
-           AC_MSG_WARN([No C++ MPI implementation found: MPI example C++ programs will not be built.])])
-   AS_IF([test AS_VAR_GET([have_mpicxx]) != no],[
-     CXX=`compiler_subst $MPICXX $CXX`
-     LIBS="$MPILIBS $LIBS"
-   ],[
-     CXX="$save_CXX"
-     LIBS="$save_LIBS"
-   ])
-   AC_SUBST(MPICXX)
-   AC_LANG_POP([C++])
-])
 
 # check for needed Boost libraries
 BOOST_REQUIRE
 BOOST_STATIC
 BOOST_SERIALIZATION
 BOOST_MPI([], 
-          [], 
-          [# disable MPI/C++ altogether
-           have_mpicxx=no;
-           AC_MSG_WARN([Could not find a usable Boost.MPI library; not compiling MPI example C++ programs.])])
+    [], 
+    [# disable MPI/C++ altogether
+        have_CXX_mpi=no;
+        AC_MSG_WARN([Could not find a usable Boost.MPI library; not compiling MPI example C++ programs.])],
+    [$MPI_CXXFLAGS],
+    [$MPI_CXXFLAGS],
+    [$MPI_CXXLDFLAGS],
+    [$MPI_CXXLDFLAGS])
 BOOST_STATICASSERT
 BOOST_TEST([], 
            [have_boost_test=yes], 
