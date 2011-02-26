@@ -363,14 +363,12 @@ Waterfall::read_noninterleaved(std::istream& input)
     val_t value;
     while (not input.eof()) {
       input >> i >> j >> value;
-      if (0 == i and 0 == j and 0 == value)
-        break; // end of matrix stream
-      if (0 == value)
+      assert(0 <= i and i <= nrows_);
+      assert(0 <= j and j <= ncols_);
+      // ignore zero entries in matrix -- they shouldn't be here in the first place
+      if (0 == value and 0 != i and 0 != j) // '0 0 0' is end-of-stream marker
         continue; 
-      ++nnz;
       // SMS indices are 1-based
-      assert(i > 0 and i <= nrows_);
-      assert(j > 0 and i <= ncols_);
       --i;
       --j;
       // new row?
@@ -411,6 +409,9 @@ Waterfall::read_noninterleaved(std::istream& input)
         row.clear();
         current_row_index = i;
       }; // if i != current_row_index
+      if (0 == i and 0 == j and 0 == value)
+        break; // end of matrix stream
+      ++nnz;
       row.push_back(std::make_pair(j, value));
     }; // while (! eof)
     
