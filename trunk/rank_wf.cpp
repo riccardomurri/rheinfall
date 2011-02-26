@@ -31,25 +31,30 @@
 
 
 #include <cassert>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <fstream>
 #include <list>
+#include <map>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
+#include <string.h> // memcpy
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <unistd.h>
 
-#include <boost/mpi.hpp>
-#include <boost/optional.hpp>
-#include <boost/serialization/access.hpp>
-#include <boost/serialization/utility.hpp>
-#include <boost/serialization/vector.hpp>
-namespace mpi = boost::mpi;
+#ifdef WITH_MPI
+# include <boost/mpi.hpp>
+# include <boost/optional.hpp>
+# include <boost/serialization/access.hpp>
+# include <boost/serialization/utility.hpp>
+# include <boost/serialization/vector.hpp>
+  namespace mpi = boost::mpi;
+#endif
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -68,9 +73,14 @@ typedef long long val_t;
 class Waterfall {
 
 public:
+#ifdef WITH_MPI
   /** Constructor, taking row and column dimension, and MPI
       communicator to use. */
   Waterfall(const coord_t nrows, const coord_t ncols, mpi::communicator& comm);
+#else 
+  /** Constructor, taking row and column dimension. */
+  Waterfall(const coord_t nrows, const coord_t ncols);
+#endif
   
   /** Read a matrix stream into the processors. Does not make any
       assumption on the order of entries in the input stream,
@@ -89,6 +99,7 @@ public:
       of the matrix is read into memory. */
   size_t read_noninterleaved(std::istream& input, const bool transpose=false);
 
+#ifdef WITH_MPI
   /** Read a matrix stream into the processors. This should be run
       from one MPI rank only: it will then distribute the data to
       other MPI ranks. Return total number of nonzero entries read.
@@ -97,6 +108,7 @@ public:
       read into memory. */
   size_t read_and_distribute(std::istream& input, const bool transpose=false) 
     { throw "not implemented"; };
+#endif
 
   /** Return rank of matrix after in-place destructive computation. */
   int rank();
@@ -107,9 +119,11 @@ public:
   
 
 private:
+#ifdef WITH_MPI
   mpi::communicator& comm;
   const int mpi_id; /**< MPI rank. */
   const int mpi_nprocs; /**< Total number of ranks in MPI communicator. */
+#endif
   
   const coord_t nrows_;
   const coord_t ncols_;
@@ -120,7 +134,9 @@ protected:
   // implement cyclic distribution of columns to MPI ranks
   bool is_local(const coord_t c) const; 
   Processor& local_owner(const coord_t c);
+#ifdef WITH_MPI
   int remote_owner(const coord_t c) const;
+#endif
 
 public:
   /** A single processing element. */
@@ -132,7 +148,10 @@ public:
               const double dense_threshold_ = 40.0) 
       : parent(parent_),
         starting_column(starting_column_), ending_column(ending_column_), rows(), 
-        phase(running), inbox(), outbox(), 
+        phase(running), inbox(), 
+#ifdef WITH_MPI
+        outbox(), 
+#endif
         dense_threshold(dense_threshold_) 
     { 
 #ifdef _OPENMP
@@ -177,10 +196,12 @@ public:
     omp_lock_t inbox_lock_;
 #endif
 
+#ifdef WITH_MPI
     /** List of rows sent to other processors and the associated MPI request. 
         We need to keep track of these in order to free the resources when we're done. */
     typedef std::list< mpi::request > outbox_t;
     outbox_t outbox;
+#endif
 
     /** A row will switch its storage to dense format when the percent of
         nonzero entries w.r.t. total length exceeds this value. */
@@ -231,10 +252,12 @@ public:
           classes; see
           http://www.parashift.com/c++-faq-lite/input-output.html#faq-15.11 */
       virtual void print_on(std::ostream& o) const = 0;
+#ifdef WITH_MPI
       // boost::serialization support
       friend class boost::serialization::access;
       template<class Archive>
       void serialize(Archive& ar, const unsigned int version);
+#endif
       /** Used in two-phase construction idioms, to signal that
           construction is done and the object can now be used to full power. */
       bool initialized_;
@@ -286,6 +309,7 @@ public:
         : Row(sparse, -1, ending_column, 0, false), storage() 
       { };
       friend class DenseRow;
+#ifdef WITH_MPI
       // serialization support
       /** Default constructor, needed by boost::serialize.
           Initializes the row with invalid values; should call
@@ -296,6 +320,7 @@ public:
       friend class boost::serialization::access;
       template<class Archive>
       void serialize(Archive& ar, const unsigned int version);
+#endif
 #ifndef NDEBUG
     private:
       bool __ok() const;
@@ -335,8 +360,10 @@ public:
       /** Print a textual representation of the row to stream @c o. */
       virtual void print_on(std::ostream& o) const;
       friend class Waterfall;
+#ifdef WITH_MPI
       friend class boost::serialization::access;
       template<class Archive> void serialize(Archive& ar, const unsigned int version);
+#endif
       /** Adjust @c _size and @c starting_column to reflect the actual
           contents of the stored row.  Return pointer to adjust row,
           or NULL if the result is a null row.  May delete @c this as
@@ -387,6 +414,7 @@ val_t gcd(long long const n, long long const m)
 
 // ------- Waterfall -------
 
+#ifdef WITH_MPI
 Waterfall::Waterfall(const coord_t nrows, const coord_t ncols, mpi::communicator& comm_)
   : comm(comm_), mpi_id(comm.rank()), mpi_nprocs(comm.size()),
     nrows_(nrows), ncols_(ncols),
@@ -397,6 +425,17 @@ Waterfall::Waterfall(const coord_t nrows, const coord_t ncols, mpi::communicator
   for (int n = 0; n < 1 + (ncols_ / mpi_nprocs); ++n)
     procs.push_back(new Processor(*this, mpi_id + n * mpi_nprocs, ncols_-1));
 };
+#else
+Waterfall::Waterfall(const coord_t nrows, const coord_t ncols)
+  : nrows_(nrows), ncols_(ncols),
+    procs()
+{  
+  // setup the array of processors
+  procs.reserve(1 + ncols_);
+  for (int n = 0; n < 1 + ncols_; ++n)
+    procs.push_back(new Processor(*this, n, ncols_-1));
+};
+#endif
 
 
 size_t
@@ -520,8 +559,8 @@ Waterfall::rank()
     for (size_t n = n0; n < procs.size(); ++n) {
       r[n] = procs[n]->step();
     };
+#ifdef WITH_MPI
     // manage arrival of messages
-    int ending_this_turn = -1;
     while (boost::optional<mpi::status> status = comm.iprobe()) { 
       switch(status->tag()) {
       case TAG_ROW_SPARSE: {
@@ -547,30 +586,34 @@ Waterfall::rank()
         coord_t column = -1;
         comm.recv(status->source(), status->tag(), column);
         assert(column >= 0 and is_local(column));
-        ending_this_turn = column;
+        local_owner(column).end_phase();
       };
       }; // switch(status->tag())
     }; // while(iprobe)
-    if (ending_this_turn >= 0)
-      local_owner(ending_this_turn).end_phase();
+#endif
   };
 
   // the partial rank is computed as the sum of all ranks computed
   // by local processors
-  int partial_rank = 0;
+  int local_rank = 0;
   for (size_t n = 0; n < r.size(); ++n)
-    partial_rank += r[n];
-  
-  // wait until all processors have done running
-  comm.barrier();
+    local_rank += r[n];
 
   // free used resources
   for (size_t n = 0; n < procs.size(); ++n)
     delete procs[n];
 
+#ifdef WITH_MPI
+  // wait until all processors have done running
+  comm.barrier();
+
   // collect the partial ranks for all processes
   int rank = 0;
-  mpi::all_reduce(comm, partial_rank, rank, std::plus<int>());
+  mpi::all_reduce(comm, local_rank, rank, std::plus<int>());
+#else
+  int rank = local_rank;
+#endif
+
   return rank;
 };
 
@@ -579,7 +622,11 @@ inline bool
 Waterfall::is_local(const coord_t c) const 
 { 
   assert(c >= 0 and c < ncols_);
+#ifdef WITH_MPI
   return (mpi_id == c % mpi_nprocs); 
+#else
+  return true;
+#endif
 };
 
 
@@ -587,16 +634,22 @@ inline Waterfall::Processor&
 Waterfall::local_owner(const coord_t c)
 { 
   assert(c >= 0 and c < ncols_);
+#ifdef WITH_MPI
   return *(procs[c / mpi_nprocs]); 
+#else
+  return *(procs[c]);
+#endif
 };
 
 
+#ifdef WITH_MPI
 inline int 
 Waterfall::remote_owner(const coord_t c) const
 { 
   assert(c >= 0 and c < ncols_);
   return (c % mpi_nprocs); 
 };
+#endif
 
 
 // ------- Processor -------
@@ -624,7 +677,7 @@ Waterfall::Processor::recv_row(row_ptr new_row)
 };
 
 
-#ifdef _OPENMP
+#if defined(_OPENMP) and defined(WITH_MPI)
 static omp_lock_t send_row_lock_;
 #endif
 
@@ -634,11 +687,12 @@ Waterfall::Processor::send_row(row_ptr row)
   coord_t column = row->first_nonzero_column();
   if (parent.is_local(column))
     parent.local_owner(column).recv_row(row);
+#ifdef WITH_MPI
   else { // ship to remote process
     mpi::request req;
-#ifdef _OPENMP
+# ifdef _OPENMP
     omp_set_lock(&send_row_lock_);
-#endif
+# endif
     if (row->kind == Row::sparse)
       req = parent.comm.isend(parent.remote_owner(column), TAG_ROW_SPARSE, 
                               static_cast<sparse_row_ptr>(row));
@@ -648,12 +702,13 @@ Waterfall::Processor::send_row(row_ptr row)
     else
       // should not happen!
       throw std::logic_error("Unhandled row type in Processor::send_row()");
-#ifdef _OPENMP
+# ifdef _OPENMP
     omp_unset_lock(&send_row_lock_);
-#endif
+# endif
     outbox.push_back(req);
     delete row; // no longer needed
   };
+#endif // WITH_MPI
 };
 
 
@@ -687,22 +742,25 @@ Waterfall::Processor::step()
   };
 
   if (running == phase) {
+#ifdef WITH_MPI
     if (outbox.size() > 0) {
       // check if some test messages have arrived
       // and free corresponding resources
       outbox.erase(mpi::test_some(outbox.begin(), outbox.end()), outbox.end());
     };
+#endif
   }
   else { // `phase == ending`: end message already received
     // pass end message along
     if (starting_column < ending_column)
       send_end(starting_column + 1);
-        
+
+#ifdef WITH_MPI        
     if (outbox.size() > 0) {
       // wait untill all sent messages have arrived
       mpi::wait_all(outbox.begin(), outbox.end());
     };
-        
+#endif
     // all done
     phase = done;
   };
@@ -732,9 +790,11 @@ Waterfall::Processor::send_end(const coord_t column) const
 {
   if (parent.is_local(column))
     parent.local_owner(column).end_phase();
+#ifdef WITH_MPI
   else { // ship to remote process
     parent.comm.send(parent.remote_owner(column), TAG_END, column);
   };
+#endif
 }; // send_end
 
 
@@ -803,6 +863,7 @@ operator<<(std::ostream& out, Waterfall::Processor::Row const& row)
 };
 
 
+#ifdef WITH_MPI
 template<class Archive>
 inline void 
 Waterfall::Processor::Row::serialize(Archive& ar, const unsigned int version) 
@@ -817,7 +878,7 @@ Waterfall::Processor::Row::serialize(Archive& ar, const unsigned int version)
   assert (starting_column_ <= ending_column_);
   assert(0 != leading_term_);
 }; // Row::serialize(...)
-
+#endif
 
 
 // ------- SparseRow -------
@@ -1027,6 +1088,7 @@ Waterfall::Processor::SparseRow::get(const coord_t col) const
 };
 
 
+#ifdef WITH_MPI
 template<class Archive>
 inline void 
 Waterfall::Processor::SparseRow::serialize(Archive& ar, const unsigned int version) 
@@ -1039,6 +1101,7 @@ Waterfall::Processor::SparseRow::serialize(Archive& ar, const unsigned int versi
   initialized_ = true;
   assert(this->__ok());
 }; // SparseRow::serialize(...)
+#endif // WITH_MPI
 
 
 inline void
@@ -1184,6 +1247,7 @@ Waterfall::Processor::DenseRow::adjust()
 };
 
 
+#ifdef WITH_MPI
 template<class Archive>
 inline void 
 Waterfall::Processor::DenseRow::serialize(Archive& ar, const unsigned int version) 
@@ -1195,6 +1259,7 @@ Waterfall::Processor::DenseRow::serialize(Archive& ar, const unsigned int versio
   ar & boost::serialization::base_object<Row>(*this) & storage;
   initialized_ = true;
 };
+#endif // WITH_MPI
 
 
 inline void
@@ -1231,6 +1296,7 @@ main(int argc, char** argv)
       return 1;
     }
 
+#ifdef WITH_MPI
   int provided;
   MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
   mpi::environment env(argc, argv);
@@ -1262,6 +1328,9 @@ main(int argc, char** argv)
   //             << " running on host " << nodename
   //             << std::endl;
   // }
+#else
+  const int myid = 0;
+#endif // WITH_MPI
 
   for (int i = 1; i < argc; ++i)
     {
@@ -1273,8 +1342,10 @@ main(int argc, char** argv)
       };
 
       if (0 == myid) {
-        std::cout << argv[0] << " file:"<<argv[i]
-                  << " mpi:"<< world.size();
+        std::cout << argv[0] << " file:"<<argv[i];
+#ifdef WITH_MPI
+        std::cout << " mpi:"<< world.size();
+#endif
 #ifdef _OPENMP
         std::cout << " omp:"<< omp_get_max_threads();
 #endif
@@ -1298,7 +1369,11 @@ main(int argc, char** argv)
         transpose = true;
       };
 
+#ifdef WITH_MPI
       Waterfall w(rows, cols, world);
+#else
+      Waterfall w(rows, cols);
+#endif
       size_t nnz = w.read(input, transpose);
       input.close();
       if (0 == myid)
@@ -1334,7 +1409,9 @@ main(int argc, char** argv)
         std::cout << " wctime:" << std::fixed << std::setprecision(2) << elapsed << std::endl;
     }
 
+#ifdef WITH_MPI
   MPI_Finalize();
+#endif
 
   return 0;
 }
