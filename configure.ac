@@ -33,12 +33,12 @@ gl_INIT
 AC_LANG_PUSH([C])
 AC_OPENMP
 AC_LANG_POP([C])
-AM_CONDITIONAL([HAVE_OPENMP_CC], [test "x$OPENMP_CFLAGS" != x])
+AM_CONDITIONAL([HAVE_OPENMP_CC], [test "_$OPENMP_CFLAGS" != '_'])
 
 AC_LANG_PUSH([C++])
 AC_OPENMP
 AC_LANG_POP([C++])
-AM_CONDITIONAL([HAVE_OPENMP_CXX], [test "x$OPENMP_CXXFLAGS" != x])
+AM_CONDITIONAL([HAVE_OPENMP_CXX], [test "_$OPENMP_CXXFLAGS" != '_'])
 
 
 # check for MPI
@@ -59,29 +59,31 @@ if test "x$with_mpi" = 'xyes'; then :
     LX_FIND_MPI()
     AC_LANG_POP([C++])
 fi
-AM_CONDITIONAL([HAVE_MPICC], [test "x$have_C_mpi" != no])
-AM_CONDITIONAL([HAVE_MPICXX], [test "x$have_CXX_mpi" != no])
+AM_CONDITIONAL([HAVE_MPICC], [test "_$have_C_mpi" = '_yes'])
+AM_CONDITIONAL([HAVE_MPICXX], [test "_$have_CXX_mpi" = '_yes'])
 
 
-# check for needed Boost libraries
+# check for needed Boost libraries 
 BOOST_REQUIRE([1.35]) # Boost.MPI released with Boost 1.35.0
 BOOST_STATIC
 BOOST_SERIALIZATION
-BOOST_MPI([], 
-    [], 
-    [# disable MPI/C++ altogether
-        have_CXX_mpi=no;
-        AC_MSG_WARN([Could not find a usable Boost.MPI library; not compiling MPI example C++ programs.])],
-    [$MPI_CXXFLAGS],
-    [$MPI_CXXFLAGS],
-    [$MPI_CXXLDFLAGS],
-    [$MPI_CXXLDFLAGS])
-BOOST_STATICASSERT
 BOOST_TEST([], 
-           [have_boost_test=yes], 
-           [have_boost_test=no;
-            AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])])
-AM_CONDITIONAL([HAVE_BOOST_TEST], [test "x$have_boost_test" != 'xno'])
+    [have_boost_test=yes], 
+    [have_boost_test=no;
+        AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])])
+AM_CONDITIONAL([HAVE_BOOST_TEST], [test "_$have_boost_test" = '_yes'])
+if test "_$have_CXX_mpi" = '_yes'; then
+    BOOST_MPI([], 
+        [], 
+        [# disable MPI/C++ altogether
+            have_CXX_mpi=no;
+            AC_MSG_WARN([Could not find a usable Boost.MPI library; not compiling MPI example C++ programs.])],
+        [$MPI_CXXFLAGS],
+        [$MPI_CXXFLAGS],
+        [$MPI_CXXLDFLAGS],
+        [$MPI_CXXLDFLAGS])
+    BOOST_STATICASSERT
+fi
 
 
 # Check for GMP/GMPXX
@@ -95,16 +97,16 @@ AC_ARG_WITH([gmp],
                 reside in <path>/lib.  If the argument is 'no', then
                 example programs that make use of GMP will not be built.])],
     [ # option '--with-gmp' given
-      if test "$withval" = yes ; then :
+      if test "_$withval" = _yes ; then :
           # require GMP and search for it in default system paths
           AX_CHECK_GMP
           AX_CHECK_GMPXX
-      elif test "$withval" != no ; then :
+      elif test "_$withval" != _no ; then :
           AX_CHECK_GMP([], "$withval")
           AX_CHECK_GMPXX
       fi
     ])
-AM_CONDITIONAL([HAVE_GMPXX], [test "x$have_gmpxx" != 'xno'])
+AM_CONDITIONAL([HAVE_GMPXX], [test "_$have_gmpxx" = '_yes'])
 
 
 # check for OpenMP
