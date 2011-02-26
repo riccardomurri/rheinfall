@@ -110,7 +110,7 @@ garbage_re = re.compile(r'(MPI process \(rank: \d+\) terminated unexpectedly|\[[
 def process_input_file(input_file_name, keys):
     result = { }
     input_file = open(input_file_name, 'r')
-    logger.log(1, "Processing file %s ...", input_file_name)
+    logger.log(2, "Processing file %s ...", input_file_name)
     for line in input_file.readlines():
         line = line.strip()
         if not rank_line_re.match(line):
@@ -173,7 +173,7 @@ else:
     filesets = [ [filename] for filename in args ]
 
 # process each fileset
-logger.log(1, "Comparing: %s (length %d)" 
+logger.log(2, "Comparing: %s (length %d)" 
            % (str.join(",", options.compare), len(options.compare)))
 results = [ process_set(fileset, options.compare) for fileset in filesets ]
 
@@ -259,3 +259,6 @@ for m in sorted(matrices, cmp=cmp_numerically):
     t.add_row(values)
 
 print(t.draw())
+if options.verbose > 0:
+    for n, fileset in enumerate(filesets):
+        print ("    (%d): %s" % (n+1, str.join(' ', fileset)))
