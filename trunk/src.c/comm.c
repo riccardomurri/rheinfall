@@ -265,8 +265,9 @@ comm_receive(const switchboard_t* sb)
   MPI_Status status;
   int flag = 0;
   MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+  if (status.MPI_ERROR != MPI_SUCCESS)
+    mpi_fatal(sb, &status, "Got error while receiving row");
   while(flag) { /* only execute the body if `flag` is true */
-    /* XXX: check `status` for errors! */
     int size;
     MPI_Get_count(&status, MPI_BYTE, &size);
     void* xa = xmalloc(size);
@@ -279,6 +280,11 @@ comm_receive(const switchboard_t* sb)
                &status);
       if (status.MPI_ERROR != MPI_SUCCESS)
         mpi_fatal(sb, &status, "Got error while receiving sparse row");
+# ifndef NDEBUG
+      int recv_size;
+      MPI_Get_count(&status, MPI_BYTE, &recv_size);
+      assert(size == recv_size);
+# endif
       assert(is_local(sb, new_row->starting_column_));
       vpu_recv_row(vpu_for_column(sb, new_row->starting_column_), new_row, ROW_SPARSE);
       break;
@@ -291,6 +297,11 @@ comm_receive(const switchboard_t* sb)
                &status);
       if (status.MPI_ERROR != MPI_SUCCESS)
         mpi_fatal(sb, &status, "Got error while receiving dense row");
+# ifndef NDEBUG
+      int recv_size;
+      MPI_Get_count(&status, MPI_BYTE, &recv_size);
+      assert(size == recv_size);
+# endif
       assert(is_local(sb, new_row->starting_column_));
       vpu_recv_row(vpu_for_column(sb, new_row->starting_column_), new_row, ROW_DENSE);
       break;
@@ -307,12 +318,19 @@ comm_receive(const switchboard_t* sb)
                &status);
       if (status.MPI_ERROR != MPI_SUCCESS)
         mpi_fatal(sb, &status, "Got error while receiving sparse END tag");
+# ifndef NDEBUG
+      int recv_size;
+      MPI_Get_count(&status, MPI_BYTE, &recv_size);
+      assert(size == recv_size);
+# endif
       assert(column >= 0 && is_local(sb, column));
       vpu_end_phase(vpu_for_column(sb, column));
       break;
     };
     }; // switch(status.MPI_TAG)
     MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+    if (status.MPI_ERROR != MPI_SUCCESS)
+      mpi_fatal(sb, &status, "Got error while receiving sparse row");
   }; // while(MPI_Iprobe)
 #endif
 }
