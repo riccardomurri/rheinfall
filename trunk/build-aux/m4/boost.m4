@@ -365,7 +365,8 @@ for boost_rtopt_ in $boost_rtopt '' -d; do
     boost_$1$boost_tag_$boost_mt_$boost_rtopt_$boost_ver_ \
     boost_$1$boost_tag_$boost_rtopt_$boost_ver_ \
     boost_$1$boost_tag_$boost_mt_$boost_ver_ \
-    boost_$1$boost_tag_$boost_ver_
+    boost_$1$boost_tag_$boost_ver_ \
+    boost_$1$boost_tag_
   do
     # Avoid testing twice the same lib
     case $boost_failed_libs in #(
@@ -417,7 +418,9 @@ rm -f conftest.$ac_objext
 case $Boost_lib in #(
   no) _AC_MSG_LOG_CONFTEST
     :
-    $7
+    ifelse([$7],[],
+            [AC_MSG_ERROR([Boost.$1 not found.])],
+            [$7])
     ;;
   yes)
     :
@@ -585,17 +588,33 @@ AC_DEFUN([BOOST_MATH],
 [BOOST_FIND_HEADER([boost/math/special_functions.hpp])])
 
 
-# BOOST_MPI([PREFERRED-RT-OPT], [action-if-found], [action-if-not-found])
-# -----------------------------
-# Look for Boost.MPI.  For the documentation of PREFERRED-RT-OPT, see
-# the documentation of BOOST_FIND_LIB above.
+# BOOST_MPI([PREFERRED-RT-OPT], [action-if-found], [action-if-not-found],
+#           [MPI_CPPFLAGS], [MPI_CXXFLAGS], [MPI_LDFLAGS], [MPI_LIBS])
+# -----------------------------------------------------------------------
+# Look for Boost.MPI.  Optional arguments MPI_CPPFLAGS, MPI_CXXFLAGS,
+# MPI_LDFLAGS and MPI_LIBS state *additional* compiler/linker flags to
+# use when searching for the Boost.MPI library.  For the documentation
+# of PREFERRED-RT-OPT, see the documentation of BOOST_FIND_LIB above.
 AC_DEFUN([BOOST_MPI],
-[BOOST_FIND_LIB([mpi], [$1], 
+[
+boost_mpi_outer_save_CPPFLAGS="$CPPFLAGS"
+boost_mpi_outer_save_CXXFLAGS="$CXXFLAGS"
+boost_mpi_outer_save_LDFLAGS="$LDFLAGS"
+boost_mpi_outer_save_LIBS="$LIBS"
+CPPFLAGS="$4 $CPPFLAGS"
+CXXFLAGS="$5 $CXXFLAGS"
+LDFLAGS="$6 $LDFLAGS"
+LIBS="$7 $LIBS"
+BOOST_FIND_LIB([mpi], [$1], 
                 [boost/mpi.hpp],
                 [boost::mpi::environment world],
                 [],
                 [$2],
                 [$3])
+CPPFLAGS="$boost_mpi_outer_save_CPPFLAGS"
+CXXFLAGS="$boost_mpi_outer_save_CXXFLAGS"
+LDFLAGS="$boost_mpi_outer_save_LDFLAGS"
+LIBS="$boost_mpi_outer_save_LIBS"
 ]) # BOOST_MPI
 
 
