@@ -1,13 +1,13 @@
 /**
  * @file   row.hpp
  *
- * The `rheinfall::row` class.
+ * The rheinfall::row class.
  *
  * @author  riccardo.murri@gmail.com
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -58,7 +58,10 @@ namespace rheinfall {
   class Row 
   {
   public:
+    /** The two Row subclasses uses in the Rheinfall algorithm. */
     typedef enum { sparse, dense } kind_t;
+    /** Discriminating field to tell whether an instance of a Row
+        subclass is a @ref SparseRow or a @ref DenseRow */
     const kind_t kind;
 
     /** Constructor. */
@@ -99,8 +102,12 @@ namespace rheinfall {
 
     //protected:
   public:
+    /** Index of the first column where a nonzero element is stored. */
     coord_t starting_column_; // would-be `const`: can only be modified by ctor and serialization
+    /** Index of the last column in the matrix. */
     coord_t ending_column_; // would-be `const`: can only be modified by ctor and serialization
+    /** Value of the first nonzero element. (Stored separately from
+        the rest for speed reasons.) */
     val_t leading_term_; // would-be `const`: can only be modified by ctor and serialization
 
     /** Print a textual representation of the row to stream @c out.
@@ -109,8 +116,8 @@ namespace rheinfall {
     virtual void print_on(std::ostream& out) const = 0;
 
 #ifdef WITH_MPI
-    // boost::serialization support
     friend class boost::serialization::access;
+    /// boost::serialization support
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version);
 #endif
