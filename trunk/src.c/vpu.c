@@ -178,12 +178,12 @@ void
 vpu_recv_row(struct vpu_s* self, void* row, row_kind_t kind)
 {
 #ifdef _OPENMP
-  omp_set_lock(&inbox_lock);
+  omp_set_lock(&(self->inbox_lock));
 #endif
   row_t* new_row = rows_list_extend1(&(self->inbox));
   new_row->data = row;
   new_row->kind = kind;
 #ifdef _OPENMP
-  omp_unset_lock(&inbox_lock);
+  omp_unset_lock(&(self->inbox_lock));
 #endif
 }
