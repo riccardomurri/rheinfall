@@ -46,6 +46,8 @@
 # include <mpi.h>
 #endif
 
+#include <stdbool.h>
+
 
 /** Phases of the VPU algorithm.  When in @c VPU_RUNNING state, rows
     are received and eliminated in the @c step() method.  The @c

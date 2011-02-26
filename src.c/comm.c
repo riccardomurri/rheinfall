@@ -168,8 +168,9 @@ int comm_send_row(const switchboard_t* sb, outbox_t* outbox, const row_t* cargo)
     return comm_send_sparse_row(sb, outbox, (sparse_row_t*)cargo->data);
   else if (ROW_DENSE == cargo->kind)
     return comm_send_dense_row(sb, outbox, (dense_row_t*)cargo->data);
-  else
-    assert (false); // should not happen!
+  // control should never get here!
+  assert (false); 
+  return -1; 
 }
 
 
@@ -257,7 +258,6 @@ outbox_t* comm_wait_all_and_then_free(outbox_t* outbox)
 }
 
 
-#include <stdio.h> // DEBUG
 void
 comm_receive(const switchboard_t* sb)
 {
@@ -274,7 +274,6 @@ comm_receive(const switchboard_t* sb)
     case TAG_ROW_SPARSE: {
       sparse_row_t* new_row = sparse_row_alloc_placed(xa, size);
       assert(NULL != new_row);
-      //fprintf(stderr, "DEBUG: MPI rank %d: about to receive sparse row with: MPI_Recv(%p, %d, MPI_BYTE, %d, %d, ...)\n", sb->me, new_row, size, status.MPI_SOURCE, status.MPI_TAG);
       MPI_Recv(new_row, size, MPI_BYTE,
                status.MPI_SOURCE, status.MPI_TAG, MPI_COMM_WORLD,
                &status);
@@ -287,7 +286,6 @@ comm_receive(const switchboard_t* sb)
     case TAG_ROW_DENSE: {
       dense_row_t* new_row = dense_row_alloc_placed(xa, size);
       assert(NULL != new_row);
-      //fprintf(stderr, "DEBUG: MPI rank %d: about to receive dense row with: MPI_Recv(%p, %d, MPI_BYTE, %d, %d, ...)\n", sb->me, new_row, size, status.MPI_SOURCE, status.MPI_TAG);
       MPI_Recv(new_row, size, MPI_BYTE,
                status.MPI_SOURCE, status.MPI_TAG, MPI_COMM_WORLD,
                &status);
@@ -304,7 +302,6 @@ comm_receive(const switchboard_t* sb)
       // pass anyway.  All this boils down to: set a flag,
       // make another iteration, and end the loop next time.
       coord_t column;
-      //fprintf(stderr, "DEBUG: MPI rank %d: about to receive END tag with: MPI_Recv(%p, %d, MPI_BYTE, %d, %d, ...)\n", sb->me, &column, 1, status.MPI_SOURCE, status.MPI_TAG);
       MPI_Recv(&column, 1, MPI_LONG,
                status.MPI_SOURCE, status.MPI_TAG, MPI_COMM_WORLD,
                &status);
