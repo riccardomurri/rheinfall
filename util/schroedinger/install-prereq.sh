@@ -267,7 +267,7 @@ if [ -n "$BOOST" ]; then
     #     -O "${boost_file}.tar.gz"
     set -x 
     tar -xzf  "${src_home}/${boost_file}.tar.gz"
-    patch -p0 -i $HOME/rheinfall/util/boost_1_45_0.patch
+    patch -p0 -i $HOME/rheinfall/util/boost_1_45_0.ssend.patch
     cd ${boost_file}
     # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
     #sed -e 's|^//#define BOOST_MPI_HOMOGENEOUS|#define BOOST_MPI_HOMOGENEOUS|' \

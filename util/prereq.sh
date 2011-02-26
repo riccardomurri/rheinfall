@@ -270,7 +270,7 @@ if [ -n "$BOOST" ]; then
         -O "${boost_file}.tar.gz"
     set -x 
     tar -xzf  "${boost_file}.tar.gz"
-    patch -p0 -i $(dirname $0)/boost_1_45_0.patch
+    patch -p0 -i $(dirname $0)/boost_1_45_0.ssend.patch
     cd ${boost_file}
     # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
     if [ "x$BOOST_MPI_HOMOGENEOUS" = "xyes" ]; then
