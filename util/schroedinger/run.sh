@@ -25,7 +25,9 @@ EOF
 
 exec="$1"; shift
 
-source $HOME/rheinfall/util/schroedinger/functions.sh \
+bindir=$HOME/rheinfall/util/schroedinger/
+
+source $bindir/functions.sh \
     || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
 
 spec="$(dirname "$exec")"
@@ -117,27 +119,27 @@ case "$exec" in
                 mpirun -np $np \
                     --bynode --nooversubscribe $gmca $hostfile \
                     -x LD_PRELOAD -x LD_LIBRARY_PATH -x PATH \
-                    $HOME/bin/_exec.sh $exec $opts $files 
+                    $bindir/_exec.sh $exec $opts $files 
                 ;;
             para*) 
                 # filter hostfile so that we only have one occurrence of each host
                 uniq < $TMPDIR/machines > $TMPDIR/machines.uniq
                 mpiexec -np $np --hostfile $TMPDIR/machines.uniq \
                     -e PATH,LD_LIBRARY_PATH,LD_PRELOAD --loopnodesfirst \
-                    $HOME/bin/_exec.sh $exec $opts $files 
+                    $bindir/_exec.sh $exec $opts $files 
                 ;;
             mvapich*) 
                 # filter hostfile so that we only have one occurrence of each host
                 uniq < $TMPDIR/machines > $TMPDIR/machines.uniq
                 mpirun_rsh -rsh -hostfile $TMPDIR/machines.uniq -np $np \
-                    $HOME/bin/_exec.sh $exec $opts $files 
+                    $bindir/_exec.sh $exec $opts $files 
                 ;;
             intel|impi) 
                 mpiexec  -perhost 1 \
                     -genvlist LD_PRELOAD,LD_LIBRARY_PATH,PATH \
                     -env I_MPI_DEVICE rdssm \
                     -n $np \
-                    $HOME/bin/_exec.sh $exec $opts $files
+                    $bindir/_exec.sh $exec $opts $files
                 ;;
         esac
         ;;
@@ -151,27 +153,33 @@ case "$exec" in
                 mpirun -np $NSLOTS --gmca btl tcp,sm,self \
                     --bynode --nooversubscribe --bind-to-core $gmca $hostfile \
                     -x LD_PRELOAD -x LD_LIBRARY_PATH -x PATH \
-                    $HOME/bin/_exec.sh $exec $opts $files 
+                    $bindir/_exec.sh $exec $opts $files 
                 ;;
             para*) 
                 mpiexec -np $NSLOTS --hostfile $TMPDIR/machines \
                     -e PATH,LD_LIBRARY_PATH,LD_PRELOAD --loopnodesfirst \
-                    $HOME/bin/_exec.sh $exec $opts $files 
+                    $bindir/_exec.sh $exec $opts $files 
                 ;;
             mvapich*) 
-                mpirun_rsh -rsh -hostfile $TMPDIR/machines -np $NSLOTS $HOME/bin/_exec.sh $exec $opts $files 
+                mpirun_rsh -rsh -hostfile $TMPDIR/machines -np $NSLOTS $bindir/_exec.sh $exec $opts $files 
                 ;;
             intel|impi) 
                 mpiexec -n $NSLOTS \
                     -genvlist LD_PRELOAD,LD_LIBRARY_PATH,PATH \
                     -env I_MPI_DEVICE rdssm \
-                    $HOME/bin/_exec.sh $exec $opts $files 
+                    $bindir/_exec.sh $exec $opts $files 
                 ;;
         esac
         ;;
-    *rank*) # no MPI... use poor man's parallelization with "xargs"
-        #$HOME/bin/_exec.sh $exec $opts $files
-        echo $files | xargs -n 1 -P 8 $HOME/bin/_exec.sh $exec $opts
+    *rank*) # no MPI... use poor man's parallelization
+        #$bindir/_exec.sh $exec $opts $files
+        echo $files \
+            | xargs -n1 echo \
+            | (c=0; NP=$cpus_per_node; \
+               while read file; do \
+                   taskset -c $(expr $c % $NP) $bindir/_exec.sh $exec $opts $file \
+                   c=$(expr $c + 1); \
+               done)
         ;;
 esac
 rc=$?
