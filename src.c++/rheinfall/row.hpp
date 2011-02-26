@@ -64,8 +64,7 @@ namespace rheinfall {
     /** Constructor. */
     Row(const kind_t kind_, 
         const coord_t starting_column, const coord_t ending_column, 
-        const val_t leading_term,
-        const bool valid);
+        const val_t leading_term);
 
     /** Virtual destructor (for actual use in subclasses). */
     virtual ~Row();
@@ -114,11 +113,6 @@ namespace rheinfall {
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version);
 #endif
-
-    /** Used in two-phase construction idioms, to signal that
-        construction is done and the object can now be used to full power. */
-    bool initialized_;
-
   }; // class Row
 
 }; // namespace rheinfall
@@ -136,13 +130,11 @@ namespace rheinfall {
   Row<val_t,coord_t>::Row(const kind_t kind_, 
                           const coord_t starting_column, 
                           const coord_t ending_column, 
-                          const val_t leading_term,
-                          const bool valid)
+                          const val_t leading_term)
     : kind(kind_), 
       starting_column_(starting_column), 
       ending_column_(ending_column),
-      leading_term_(leading_term),
-      initialized_(valid)
+      leading_term_(leading_term)
     { 
       // init-only ctor
     };
@@ -215,6 +207,12 @@ namespace rheinfall {
     // & operator is defined similar to <<.  Likewise, when the class Archive
     // is a type of input archive the & operator is defined similar to >>.
     ar & starting_column_ & ending_column_ & leading_term_;
+    // DEBUG
+    std::cerr << "DEBUG: in Row::serialize: "
+              << " starting_column_=" << starting_column_
+              << " ending_column_=" << ending_column_
+              << " leading_term_=" << leading_term_
+              << std::endl;
     assert(starting_column_ >= 0);
     assert(ending_column_ >= 0);
     assert (starting_column_ <= ending_column_);
