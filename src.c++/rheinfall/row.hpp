@@ -207,12 +207,6 @@ namespace rheinfall {
     // & operator is defined similar to <<.  Likewise, when the class Archive
     // is a type of input archive the & operator is defined similar to >>.
     ar & starting_column_ & ending_column_ & leading_term_;
-    // DEBUG
-    std::cerr << "DEBUG: in Row::serialize: "
-              << " starting_column_=" << starting_column_
-              << " ending_column_=" << ending_column_
-              << " leading_term_=" << leading_term_
-              << std::endl;
     assert(starting_column_ >= 0);
     assert(ending_column_ >= 0);
     assert (starting_column_ <= ending_column_);
