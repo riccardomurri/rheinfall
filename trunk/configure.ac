@@ -64,7 +64,7 @@ AM_CONDITIONAL([HAVE_MPICXX], [test "x$have_CXX_mpi" != no])
 
 
 # check for needed Boost libraries
-BOOST_REQUIRE
+BOOST_REQUIRE([1.35]) # Boost.MPI released with Boost 1.35.0
 BOOST_STATIC
 BOOST_SERIALIZATION
 BOOST_MPI([], 
