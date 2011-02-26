@@ -255,7 +255,6 @@ protected:
       /** Construct an invalid row; exists only for the purpose of
           calling @c serialize immediately after! */
       DenseRow(); // FIXME: make private?
-      ~DenseRow();
       /** Return number of allocated entries. */
       virtual size_t size() const;
       /** Return a reference to the element stored at column @c col */
@@ -265,10 +264,8 @@ protected:
       dense_row_ptr gaussian_elimination(const sparse_row_ptr other) const;
       dense_row_ptr gaussian_elimination(const dense_row_ptr other) const;
     protected:
-      /// Row length.  This is of course the number of elements in the @c storage array.
-      size_t size_;
-      /// Plain array of entries.
-      val_t* storage; 
+      /// array of entries.
+      std::vector<val_t> storage; 
       friend class SparseRow;
       // serialization support (needed for MPI)
       friend class boost::serialization::access;
@@ -916,17 +913,15 @@ Waterfall::Processor::SparseRow::size() const
 
 Waterfall::Processor::DenseRow::DenseRow(const sparse_row_ptr r) 
   : Row(dense, r->starting_column_, r->ending_column_, r->leading_term_),
-    size_(ending_column_ - starting_column_ + 1),
-    storage(new val_t[size_]) 
+    storage(ending_column_ - starting_column_ + 1, 0) 
 { 
-  assert(std::distance(r->storage.begin(), r->storage.end()) <= size_);
-  std::fill_n(storage, size_, 0);
+  assert(std::distance(r->storage.begin(), r->storage.end()) <= storage.size());
   for (SparseRow::storage_t::const_iterator it = r->storage.begin();
        it != r->storage.end();
        ++it) 
     {
       assert(it->first > starting_column_ and it->first <= ending_column_);
-      storage[size_ - (it->first - starting_column_)] = it->second;
+      storage[size() - (it->first - starting_column_)] = it->second;
     };
 };
 
@@ -935,25 +930,17 @@ inline
 Waterfall::Processor::DenseRow::DenseRow(const coord_t starting_column, 
                                          const size_t ending_column) 
   : Row(dense, starting_column, ending_column, 0),
-    size_(ending_column_ - starting_column_ + 1),
-    storage(new val_t[size_]) 
+    storage(ending_column_ - starting_column_ + 1, 0)
 { 
-  std::fill_n(storage, size_, 0);
+  // nothing to do
 };
 
 
 inline
 Waterfall::Processor::DenseRow::DenseRow() 
   : Row(dense, -1, -1, 0),
-    size_(0),
-    storage(NULL) 
+    storage() 
 { };
-
-
-Waterfall::Processor::DenseRow::~DenseRow() 
-{ 
-  delete [] storage; 
-};
 
 
 inline Waterfall::Processor::dense_row_ptr 
@@ -1004,7 +991,7 @@ Waterfall::Processor::DenseRow::operator[](const coord_t col)
   if (col == starting_column_)
     return leading_term_;
   else
-    return storage[size_ - col - 1];
+    return storage[size() - col - 1];
 };
 
 
@@ -1015,29 +1002,27 @@ Waterfall::Processor::DenseRow::operator[](const coord_t col) const
   if (col == starting_column_)
     return leading_term_;
   else
-    return storage[size_ - col - 1];
+    return storage[size() - col - 1];
 };
 
 
 inline size_t
 Waterfall::Processor::DenseRow::_resize()
 {
-  assert(size_ > 0);
-
   // compute new starting column
-  for (int j = size_-1; j >= 0; --j)
+  for (int j = size()-1; j >= 0; --j)
     if (storage[j] != 0) {
       leading_term_ = storage[j];
-      starting_column_ += (size_ - j);
-      size_ = j;
-      return size_;
+      starting_column_ += (size() - j);
+      storage.erase(storage.begin()+j, storage.end());
+      return storage.size();
     };
   // no nonzero element found in storage,
   // this is now a null row
-  size_ = 0;
+  storage.clear();
   leading_term_ = 0;
   starting_column_ = ending_column_;
-  return size_;
+  return 0;
 };
 
 
@@ -1049,20 +1034,14 @@ Waterfall::Processor::DenseRow::serialize(Archive& ar, const unsigned int versio
   // When the class Archive corresponds to an output archive, the
   // & operator is defined similar to <<.  Likewise, when the class Archive
   // is a type of input archive the & operator is defined similar to >>.
-  ar & boost::serialization::base_object<Row>(*this) & size_;
-  assert(size_ >= 0);
-  if (NULL == storage)
-    storage = new val_t[size_];
-  for (size_t j = 0; j < size_; ++j) {
-    ar & storage[j];
-  };
+  ar & boost::serialization::base_object<Row>(*this) & storage;
 };
 
 
 inline size_t 
 Waterfall::Processor::DenseRow::size() const 
 { 
-  return size_; 
+  return storage.size(); 
 };
 
 
