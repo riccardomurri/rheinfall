@@ -11,7 +11,7 @@
 #SWIG=1.3.35
 LINBOX=1.1.7rc0
 GMP=5.0.1
-GIVARO=3.3.1
+GIVARO=3.3.2
 ATLAS=3.8.3
 BOOST=1.44.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.44.0/boost_1_44_0.tar.gz
 TCMALLOC=1.5 # http://google-perftools.googlecode.com/files/google-perftools-1.5.tar.gz

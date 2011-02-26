@@ -96,9 +96,9 @@ namespace rheinfall {
     result = _gcd<val_t>(std::abs(n), std::abs(m));
   };
 
-  RF_TYPE_IS_GCD_RING(int,          pod_gcd<int>)
-  RF_TYPE_IS_GCD_RING(long,         pod_gcd<long>)
-  RF_TYPE_IS_GCD_RING(long long,    pod_gcd<long long>)
+  RF_TYPE_IS_GCD_RING(int,       pod_gcd<int>)
+  RF_TYPE_IS_GCD_RING(long,      pod_gcd<long>)
+  RF_TYPE_IS_GCD_RING(long long, pod_gcd<long long>)
 
 #ifdef HAVE_GMPXX
   /** Adapt GMPXX's @c mpz_gcd function to our calling convention. */
