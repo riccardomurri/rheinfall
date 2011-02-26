@@ -26,6 +26,14 @@
  *
  */
 
+// TODO:
+//   - serialization support for SparseRow / DenseRow
+//   - add a way to actually populate SparseRow / DenseRow with data
+//   - store leading_{column,term}
+//   - have read_*() return the number of nonzero entries
+//   - check Processor phases to optimize communication/computation overlap
+
+
 #include <cassert>
 #include <iostream>
 #include <list>
@@ -33,9 +41,11 @@
 #include <vector>
 
 #include <boost/mpi.hpp>
+#include <boost/optional.hpp>
 #include <boost/variant.hpp>
 namespace mpi = boost::mpi;
 
+enum { TAG_END=0, TAG_ROW_SPARSE=1, TAG_ROW_DENSE=2 };
 
 typedef int coord_t;
 typedef long long val_t;
@@ -43,13 +53,13 @@ typedef long long val_t;
 
 /* Needed arithmetic operations */
 static inline
-entry_t gcd(long long const n, long long const m) 
+val_t gcd(long long const n, long long const m) 
 { 
   return _gcd(std::abs(n), std::abs(m)); 
 }
 
 static inline
-entry_t _gcd(long long const n, long long const m) 
+val_t _gcd(long long const n, long long const m) 
 { 
   return m==0? n : _gcd(m, n%m)    
 };
@@ -78,16 +88,17 @@ public:
   /** Read a matrix stream into the processors. Assumes that entries
       belonging to one row are not interleaved with entries from other
       rows; i.e., that it can consider reading row @i i complete as
-      soon as it finds a row index @i j != i. */
-  read(std::istream& input) {
+      soon as it finds a row index @i j != i. Return number of nonzero
+      entries _read_. */
+  size_t read(std::istream& input) {
     // only read rows whose leading column falls in our domain
     throw "not implemented";
   };
 
   /** Read a matrix stream into the processors. This should be run
       from one MPI rank only: it will then distribute the data to
-      other MPI ranks. */
-  read_and_distribute(std::istream& input) {
+      other MPI ranks. Return total number of nonzero entries read. */
+  size_t read_and_distribute(std::istream& input) {
     throw "not implemented";
   };
 
@@ -110,13 +121,20 @@ public:
       };
       // manage arrival of messages
       while (boost::optional<mpi::status> status = mpi::iprobe()) { 
-        if (TAG_ROW == status.tag()) {
-          row_t *new_row = new row_t;
+        switch(status.tag()) {
+        case TAG_ROW_SPARSE:
+          row_ptr new_row = new SparseRow();
           mpi::recv(status.source(), status.tag(), *new_row);
           assert(is_local(new_row->first_nonzero_column()));
           local_owner(new_row->first_nonzero_column()).recv_row(new_row);
-        }
-        else if (TAG_END == status.tag()) {
+          break;
+        case TAG_ROW_DENSE:
+          row_ptr new_row = new DenseRow();
+          mpi::recv(status.source(), status.tag(), *new_row);
+          assert(is_local(new_row->first_nonzero_column()));
+          local_owner(new_row->first_nonzero_column()).recv_row(new_row);
+          break;
+        case TAG_END:
           // "end" message received; no new rows will be coming.
           // But some other rows could have arrived or could
           // already be in the `inbox`, so we need to make another
@@ -126,7 +144,7 @@ public:
           mpi::recv(status.source(), status.tag(), column);
           assert(column >= 0 and is_local(column));
           local_owner(column).end_phase();
-        };
+        }; // switch(status.tag())
       };
     };
 
@@ -174,8 +192,8 @@ protected:
     
     class SparseRow;
     class DenseRow;
-    typedef auto_ptr<SparseRow> sparse_row_ptr;
-    typedef auto_ptr<DenseRow> dense_row_ptr;
+    typedef SparseRow* sparse_row_ptr;
+    typedef DenseRow* dense_row_ptr;
     typedef boost::variant< sparse_row_ptr,dense_row_ptr > row_ptr;
 
     class SparseRow 
@@ -184,22 +202,99 @@ protected:
       SparseRow(const coord_t leading_column_) 
         : leading_column(leading_column_), storage() { };
       /** Return index of first column that has a nonzero entry. */
-      virtual coord_t first_nonzero_column() {
+      coord_t first_nonzero_column() {
         assert(storage.size() > 0);
         return storage.back().first;
       } const;
       /** Return number of allocated (i.e., non-zero) entries. */
-      virtual size_t size() { return storage.size(); } const;
+      size_t size() { return storage.size(); } const;
       /** Perform Gaussian elimination: sum a multiple of this row and
-          (a multiple of) row @c r0 so that the combination has its
+          (a multiple of) row @c r so that the combination has its
           first nonzero entry at a column index strictly larger than
           the one of both rows. Return pointer to the combined row, which
           could possibly be this row if in-place update took place. */
-      virtual row_ptr merge(const sparse_row_ptr r0) = 0;
-      virtual row_ptr merge(const dense_row_ptr r0) = 0;
+      sparse_row_ptr merge(sparse_row_ptr other) {
+        assert(this->leading_column == other->leading_column);
+
+        sparse_row_ptr result = new SparseRow(leading_column);
+        // XXX: is it worth to compute the exact size here?
+        result->storage.reserve(storage.size() + other->storage.size());
+
+        // compute:
+        //   `a`: multiplier for `this` row
+        //   `b`: multiplier for `other` row
+        const val_t GCD = gcd(leading_term, other->leading_term);
+        a = - (other->leading_term / GCD);
+        b = leading_term / GCD;
+
+        size_t ix = 0;
+        size_t iy = 0;
+        // loop while one of the two indexes is still valid
+        while(ix < storage.size() or iy < other->storage.size()) {
+          coord_t jx;
+          if (ix < storage.size()) {
+            jx = storage[ix].first;
+            assert (jx > leading_column);
+          }
+          else // ix reached end of vector
+            jx = -1;
+
+          coord_t jy;
+          if (iy < other->storage.size()) {
+            jy = other->storage[iy].first;
+            assert (jy > other->leading_column);
+          }
+          else 
+            jy = -1;
+
+          if (jy > jx) {
+            result->storage.push_back(std::make_pair(jy, b*other->storage[iy].second));
+            ++iy;
+          }
+          else if (jy == jx) {
+            result->storage.push_back(std::make_pair(jx, a*storage[ix].second 
+                                                         + b*other->storage[iy].second));
+            ++ix;
+            ++iy;
+          }
+          else if (jy < jx) {
+            result->storage.push_back(std::make_pair(jx, a*storage[ix].second));
+            ++ix;
+          };
+        };
+        delete r; // release old storage
+        return result;
+      }; // sparse_row_ptr merge(sparse_row_ptr r)
+      /** Perform Gaussian elimination: sum a multiple of this row and
+          (a multiple of) row @c r so that the combination has its
+          first nonzero entry at a column index strictly larger than
+          the one of both rows. Return pointer to the combined row, which
+          could possibly be this row if in-place update took place. 
+          Elimination on a dense row returns a dense row. */
+      dense_row_ptr merge(dense_row_ptr other) {
+        // compute:
+        //   `a`: multiplier for `this` row
+        //   `b`: multiplier for `other` row
+        const val_t GCD = gcd(leading_term, other->leading_term);
+        a = - (other->leading_term / GCD);
+        b = leading_term / GCD;
+
+        for (size_t j = 0; j < other->size(); ++j) 
+          other->storage[j] *= b;
+
+        for (typename storage_t::const_iterator it = storage.begin();
+             it != storage.end();
+             ++it)
+          {
+            assert(it->first > leading_column);
+            other->storage[it->first] += a*it->second;
+          };
+        return other;
+      }; // dense_row_ptr merge(dense_row_ptr other)
     protected:
       const coord_t leading_column; 
-      typedef std::vector< std::pair<coord_t,entry_t> > storage_t;
+      const val_t leading_term;
+      typedef std::vector< std::pair<coord_t,val_t> > storage_t;
       storage_t storage;
       friend class DenseRow;
     }; // class SparseRow
@@ -211,7 +306,7 @@ protected:
       DenseRow(const sparse_row_ptr r) 
         : leading_column(r->leading_column), 
           _size(ncols - r->leading_column),
-          storage(new entry_t[_size]) { 
+          storage(new val_t[_size]) { 
         assert(std::distance(r->storage.begin(), r->storage.end()) <= _size);
         std::fill_n(storage, _size, 0);
         for (typename SparseRow::storage_t::const_iterator it = r.storage.begin();
@@ -224,14 +319,14 @@ protected:
       DenseRow(const coord_t leading_columns, const size_t length) 
         : leading_column(r->leading_column), 
           _size(length),
-          storage(new entry_t[_size]) { 
+          storage(new val_t[_size]) { 
         std::fill_n(storage, _size, 0);
       };
       ~DenseRow() { 
         delete [] storage;
       };
       /** Return index of first column that has a nonzero entry. */
-      virtual coord_t first_nonzero_column() {
+      coord_t first_nonzero_column() {
         assert(_size > 0);
         for (size_t j = 0; j < _size; ++j)
           if (storage[j] != 0)
@@ -239,15 +334,31 @@ protected:
         assert(false); // `first_nonzero_column` should not be called on zero rows
       } const;
       /** Return number of allocated entries. */
-      virtual size_t size() { return _size; } const;
-      virtual dense_row_ptr merge(const sparse_row_ptr r0) = 0;
-      virtual dense_row_ptr merge(const dense_row_ptr r0) = 0;
+      size_t size() { return _size; } const;
+      dense_row_ptr merge(const sparse_row_ptr other) {
+        // convert `other` to dense storage upfront: adding the
+        // non-zero entries from `this` would made it pretty dense
+        // anyway
+        dense_row_ptr dense_other(new DenseRow(other));
+        delete other;
+        return this->merge(dense_other);
+      }; // dense_row_ptr merge(sparse_row_ptr other)
+      dense_row_ptr merge(const dense_row_ptr other) {
+        assert(this->size() == other->size());
+        for (size_t j = 0; j < size(); ++j) {
+          // XXX: is it faster to allocate new storage and fill it with `a*x+b*y`?
+          other->storage[j] *= a;
+          other->storage[j] += b * storage[j];
+        };
+        return other;
+      }; // dense_row_ptr merge(dense_row_ptr other)
     protected:
       const coord_t leading_column; 
+      const val_t leading_term; 
       /// Row length.  This is of course the number of elements in the @c storage array.
       const size_t _size;
       /// Plain array of entries.
-      entry_t* storage; 
+      val_t* storage; 
     }; // class DenseRow
 
 
@@ -288,19 +399,29 @@ protected:
     const double dense_threshold;
 
   public: 
-    void recv_row(row_ptr const new_row) {
+    void recv_row(row_ptr& new_row) {
       // FIXME: requires locking for MT operation
       inbox.push_back(new_row);
     };
 
     /** Send the row data pointed by @c row to the processor owning the
         block starting at @c col. */
-    void send_row(const coord_t column, row_ptr const row) {
+    void send_row(const coord_t column, row_ptr& row) {
       assert(NULL != row);
       if (is_local(column))
-        local_owner(column).recv(TAG_ROW, new_row);
+        local_owner(column).recv_row(row);
       else { // ship to remote process
-        mpi::request req = mpi::isend(remote_owner(column), TAG_ROW, *new_row);
+        class _do_send : public boost::static_visitor<mpi::request> {
+          template <>
+          mpi::request operator() (sparse_row_ptr r) {
+            return mpi::isend(remote_owner(column), TAG_ROW_SPARSE, r);
+          };
+          template <>
+          mpi::request operator() (dense_row_ptr r) {
+            return mpi::isend(remote_owner(column), TAG_ROW_DENSE, r);
+          };
+        } do_send;
+        mpi::request req = boost::apply_visitor(do_send, new_row);
         outbox.push_back(req, new_row);
       };
     };
@@ -408,28 +529,29 @@ protected:
           // just test `second` for too much fill-in
           const double fill_in = 100.0 * second.size() / (ncols - leading_column);
           if (fill_in > dense_threshold) {
-            dense_row_ptr result(new DenseRow(second));
-            return result->merge(first);
+            // FIXME: could merge ctor+elimination in one funcall
+            dense_row_ptr dense_second(new DenseRow(second));
+            delete second;
+            return first->merge(dense_second);
           }
           else {
-            return second->merge(first);
+            return first->merge(second);
           }; // if (fill_in > dense_threshold)
         };
 
         template <>
         row_ptr operator() (dense_row_ptr first, sparse_row_ptr second) const {
-          dense_row_ptr result = new DenseRow(second);
-          return result->merge(first);
+          return first->merge(second);
         };
 
         template <>
         row_ptr operator() (sparse_row_ptr first, dense_row_ptr second) const {
-          return second->merge(first);
+          return first->merge(second);
         };
 
         template <>
         row_ptr operator() (dense_row_ptr first, dense_row_ptr second) const {
-          return second->merge(first);
+          return first->merge(second);
         };
       } ge_op;
       return boost::apply_visitor(ge_op, first, second);
