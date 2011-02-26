@@ -1,16 +1,5 @@
 // Hey Emacs, this is -*- c++ -*-
 
-#define BOOST_TEST_MODULE rheinfall
-#include <boost/test/unit_test.hpp>
-
-#include <rheinfall.hpp>
-
-#include <cassert>
-#include <fstream>
-#include <sstream>
-#include <stdexcept>
-
-
 rheinfall::Rheinfall<val_t, coord_t>*
 matrix_from_file(const std::string& filename)
 {

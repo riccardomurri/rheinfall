@@ -36,4 +36,18 @@
 typedef long long val_t;
 typedef long coord_t;
 
+#include <rheinfall.hpp>
+
+#include <cassert>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+
+
+#define BOOST_TEST_MODULE rheinfall
+#include <boost/test/unit_test.hpp>
+
+BOOST_AUTO_TEST_SUITE( test_rank_int );
 #include "test_rank.cpp.inc"
+BOOST_AUTO_TEST_SUITE_END()

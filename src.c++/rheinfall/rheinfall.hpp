@@ -431,12 +431,12 @@ public:
     while (not input.eof()) {
       // `read_value` ugliness to circumvent lack of operator>> for `int128_t`
       input >> i >> j; read_value(input, value);
-      if (0 == i and 0 == j and 0 == value)
+      if (0 == i and 0 == j and value == 0)
         break; // end of matrix stream
       if (transpose)
         std::swap(i, j);
       // ignore zero entries in matrix -- they shouldn't be there in the first place
-      if (0 == value) 
+      if (value == 0)
         continue; 
       ++nnz;
       assert(0 <= i and i <= nrows);
