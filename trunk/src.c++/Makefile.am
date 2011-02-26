@@ -31,9 +31,9 @@ EXTRA_PROGRAMS += rank-int-mpi-omp rank-mod-mpi-omp  rank-mpq-mpi-omp rank-mpz-m
 EXTRA_PROGRAMS += rank-int32-mpi rank-int32-mpi-omp
 EXTRA_PROGRAMS += rank-int64-mpi rank-int64-mpi-omp
 if HAVE_MPICXX
-  bin_PROGRAMS += rank-int-mpi rank-double-mpi #rank-mod-mpi rank-mpq-mpi rank-mpz-mpi
+  bin_PROGRAMS += rank-int-mpi rank-double-mpi rank-mod-mpi #rank-mpq-mpi rank-mpz-mpi
 if HAVE_OPENMP_CXX
-    bin_PROGRAMS += rank-int-mpi-omp rank-double-mpi-omp #rank-mod-mpi-omp rank-mpq-mpi-omp rank-mpz-mpi-omp
+    bin_PROGRAMS += rank-int-mpi-omp rank-double-mpi-omp rank-mod-mpi-omp #rank-mpq-mpi-omp rank-mpz-mpi-omp
 endif
 if HAVE_INT32_T
   bin_PROGRAMS += rank-int32-mpi
