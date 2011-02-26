@@ -264,9 +264,10 @@ comm_receive(const switchboard_t* sb)
 #ifdef WITH_MPI
   MPI_Status status;
   int flag = 0;
+  status.MPI_ERROR = MPI_SUCCESS;
   MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
   if (status.MPI_ERROR != MPI_SUCCESS)
-    mpi_fatal(sb, &status, "Got error while receiving row");
+    mpi_fatal(sb, &status, "Got error while probing for messages");
   while(flag) { /* only execute the body if `flag` is true */
     int size;
     MPI_Get_count(&status, MPI_BYTE, &size);
@@ -330,7 +331,7 @@ comm_receive(const switchboard_t* sb)
     }; // switch(status.MPI_TAG)
     MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
     if (status.MPI_ERROR != MPI_SUCCESS)
-      mpi_fatal(sb, &status, "Got error while receiving sparse row");
+      mpi_fatal(sb, &status, "Got error while probing for messages");
   }; // while(MPI_Iprobe)
 #endif
 }
