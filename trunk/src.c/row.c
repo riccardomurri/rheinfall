@@ -26,14 +26,19 @@
  */
 
 
-#include <row.h>
+#ifdef HAVE_CONFIG_H
+# include <config.h>
+#endif
+
+#include "row.h"
 
 #include <assert.h>
 
 
 /********************** sparse row implementation **************************/
 
-sparse_row_t* sparse_row_adjust(sparse_row_t const* row)
+sparse_row_t* 
+sparse_row_adjust(sparse_row_t* row)
 {
   if (sparse_row_size(row) > 0) {
     row->starting_column_ = row->storage[0].column;
@@ -41,8 +46,8 @@ sparse_row_t* sparse_row_adjust(sparse_row_t const* row)
            && row->starting_column_ < row->ending_column_);
     row->leading_term_ = row->storage[0].value;
     assert(0 != row->leading_term_);
-    sparse_row_erase(row, 1);
-    //assert(sparse_row_ok(row));
+    sparse_row_erase(&row, 0);
+    assert(sparse_row_ok(row));
     return row;
   }
   else {
@@ -55,7 +60,7 @@ sparse_row_t* sparse_row_adjust(sparse_row_t const* row)
 
 #ifndef NDEBUG
 bool
-sparse_row_ok(sparse_row_t *row)
+sparse_row_ok(sparse_row_t* const row)
 {
   assert(0 <= row->starting_column_);
   assert(row->starting_column_ <= row->ending_column_);
@@ -73,7 +78,8 @@ sparse_row_ok(sparse_row_t *row)
 #endif
 
 
-val_t sparse_row_get(const sparse_row_t const* row, const coord_t col)
+val_t 
+sparse_row_get(const sparse_row_t* const row, const coord_t col)
 {
   assert((col >= row->starting_column_ && col <= row->ending_column_));
   if (col == row->starting_column_) 
@@ -96,32 +102,35 @@ val_t sparse_row_get(const sparse_row_t const* row, const coord_t col)
 }; // sparse_row_get(...)
 
 
-void sparse_row_set(sparse_row_t const* row, const coord_t col, const val_t value) 
+void 
+sparse_row_set(sparse_row_t** rowp, const coord_t col, const val_t value) 
 {
-  assert((col >= row->starting_column_ && col <= row->ending_column_));
-  if (col == row->starting_column_) {
-    row->leading_term_ = value;
+  // XXX: `sparse_row_set` is called only from `read_sms_file`, so no checks can be done...
+  //assert((col >= (*rowp)->starting_column_ && col <= (*rowp)->ending_column_));
+  if (col == (*rowp)->starting_column_) {
+    (*rowp)->leading_term_ = value;
     return;
   };
   // else, fast-forward to place where element is/would be stored
   size_t jj = 0;
-  while (jj < sparse_row_size(row) && row->storage[jj].column < col)
+  while (jj < sparse_row_size((*rowp)) && sparse_row_at((*rowp), jj)->column < col)
     ++jj;
   // set element accordingly
-  if (sparse_row_size(row) == jj) {
+  if (sparse_row_size((*rowp)) == jj) {
     // end of list reached, `col` is larger than any index in this row
-    entry_t *new_entry = sparse_row_extend1(row);
+    entry_t *new_entry = sparse_row_extend1(rowp);
     new_entry->column = col;
     new_entry->value = value;
   }
-  else if (col == storage[jj].column) 
-    storage[jj].value = value;
+  else if (col == sparse_row_at((*rowp), jj)->column) 
+    sparse_row_at((*rowp), jj)->value = value;
   else { // storage[jj].first > col, insert new pair before `jj`
-    entry_t *new_entry = sparse_row_insert(row, jj+1);
+    entry_t *new_entry = sparse_row_insert(rowp, jj+1);
     new_entry->column = col;
     new_entry->value = value;
   };
-  assert(sparse_row_ok(row));
+  // XXX: `sparse_row_set` is called only from `read_sms_file`, so no checks can be done...
+  //assert(sparse_row_ok((*rowp));
 }; // SparseRow::set(...)
 
 
@@ -129,15 +138,15 @@ void sparse_row_set(sparse_row_t const* row, const coord_t col, const val_t valu
 /********************** dense row implementation **************************/
 
 dense_row_t*
-dense_row_new_from_sparse_row(sparse_row_t* const row)
+dense_row_new_from_sparse_row(sparse_row_t* row)
 {
   const size_t result_size = row->ending_column_ - row->starting_column_ + 1;
-  dense_row_t* result = dense_row_new(result_size);
+  dense_row_t* result = dense_row_alloc(result_size);
   result->starting_column_ = row->starting_column_;
   result->ending_column_ = row->ending_column_;
   result->leading_term_ = row->leading_term_;
 
-  val_t *values = dense_row_extend(result, result_size);
+  val_t *values = dense_row_extend(&result, result_size);
   for (size_t n = 0; n < result_size; ++n)
     values[n] = 0;
 
@@ -147,18 +156,20 @@ dense_row_new_from_sparse_row(sparse_row_t* const row)
              && row->storage[n].column <= result->ending_column_);
       values[result_size - (row->storage[n].column - result->starting_column_)] = row->storage[n].value;
     };
+
+  return result;
 }
 
 
 dense_row_t* 
-dense_row_adjust(dense_row_t* const row)
+dense_row_adjust(dense_row_t* row)
 {
   // compute new starting column
   for (int j = dense_row_size(row)-1; j >= 0; --j)
     if (row->storage[j] != 0) {
       row->leading_term_ = row->storage[j];
       row->starting_column_ += (dense_row_size(row) - j);
-      dense_row_shorten(row, (dense_row_size(row) - j)); // XXX
+      dense_row_shorten(&row, (dense_row_size(row) - j));
       return row;
     };
   // no nonzero element found in storage,
@@ -169,11 +180,11 @@ dense_row_adjust(dense_row_t* const row)
 
 
 void
-dense_row_set(dense_row_t* const row, const coord_t col, const val_t value) 
+dense_row_set(dense_row_t** rowp, const coord_t col, const val_t value) 
 {
-  assert(col >= row->starting_column_ and col <= row->ending_column_);
-  if (col == row->starting_column_)
-    row->leading_term_ = value;
+  assert(col >= (*rowp)->starting_column_ && col <= (*rowp)->ending_column_);
+  if (col == (*rowp)->starting_column_)
+    (*rowp)->leading_term_ = value;
   else
-    row->storage[dense_row_size(row) - col - 1] = value;
+    (*rowp)->storage[dense_row_size((*rowp)) - col - 1] = value;
 };
