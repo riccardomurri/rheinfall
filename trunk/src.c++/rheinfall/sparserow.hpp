@@ -337,8 +337,8 @@ namespace rheinfall {
     assert(0 != other->leading_term_);
 
     val_t a, b;
-    rheinfall::get_row_multipliers(this->Row_::leading_term_, 
-                                   other->Row_::leading_term_, 
+    rheinfall::get_row_multipliers(this->Row_::leading_term_,
+                                   other->Row_::leading_term_,
                                    a, b);
 
     for (size_t j = 0; j < other->size(); ++j) 

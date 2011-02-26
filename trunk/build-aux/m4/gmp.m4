@@ -133,9 +133,9 @@ AC_DEFUN([AX_CHECK_GMPXX],
         gmp_save_CPPFLAGS="${CPPFLAGS}"
         gmp_save_LDFLAGS="${LDFLAGS}"
         gmp_save_LIBS="${LIBS}"
-        gmp_save_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
 
-        CPPFLAGS="${gmp_save_CXXFLAGS} ${GMP_CPPFLAGS}"
+        CPPFLAGS="${gmp_save_CPPFLAGS} ${GMP_CPPFLAGS}"
+        LDFLAGS="${gmp_save_LDFLAGS} ${GMP_LDFLAGS}"
         LIBS="${gmp_save_LIBS} -lgmpxx ${GMP_LIBS}"
         
         # See if GMP was compiled with --enable-cxx
@@ -155,12 +155,12 @@ AC_DEFUN([AX_CHECK_GMPXX],
         AC_LANG_POP([C++])
 
         AC_MSG_RESULT([$have_gmpxx])
-        if test "x$have_gmpxx" = 'yes'; then :
+        if test "x$have_gmpxx" = 'xyes'; then :
             AC_DEFINE(HAVE_GMPXX,1,
                 [Define if GMP C++ bindings are available])
             AC_SUBST([GMPXX_CPPFLAGS], [${GMP_CPPFLAGS}])
             AC_SUBST([GMPXX_LDFLAGS], [${GMP_LDFLAGS}])
-            AC_SUBST([GMPXX_LIBS], [-lgmpxx ${GMP_LIBS}])
+            AC_SUBST([GMPXX_LIBS], ["-lgmpxx ${GMP_LIBS}"])
             ifelse([$1], , :, [$1])
         else
             ifelse([$2], , :, [$2])
