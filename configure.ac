@@ -2,7 +2,7 @@
 ##   aclocal -I build-aux/m4 && autoheader && autoconf && automake
 ##
 
-#AC_PREREQ([2.65])
+AC_PREREQ([2.63])
 AC_INIT([rheinfall], [0.10.15], [riccardo.murri@gmail.com])
 AC_CONFIG_SRCDIR([src.c++/rheinfall/rheinfall.hpp])
 AC_CONFIG_AUX_DIR([build-aux])
