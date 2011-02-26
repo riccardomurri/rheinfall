@@ -146,7 +146,7 @@ coord_t rank(switchboard_t* sb)
       sb->vpu[n0] = NULL;
       ++n0;
     };
-    if (sb->nvpus >= n0)
+    if (sb->nvpus <= n0)
       break; // exit `while(n0 < nvpus)` loop
     for (coord_t n = n0; n < sb->nvpus; ++n) {
       r[n] = vpu_step(sb->vpu[n], sb);
