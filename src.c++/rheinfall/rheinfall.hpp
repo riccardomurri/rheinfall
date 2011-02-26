@@ -569,10 +569,9 @@ protected:
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_set_lock(& mpi_send_lock_);
 # endif
-    if (row->kind == Row<val_t,coord_t>::sparse) {
-        req = comm_.isend(remote_owner(column), TAG_ROW_SPARSE, 
-                          *(static_cast<SparseRow<val_t,coord_t>*>(row)));
-    }
+    if (row->kind == Row<val_t,coord_t>::sparse)
+      req = comm_.isend(remote_owner(column), TAG_ROW_SPARSE, 
+                        *(static_cast<SparseRow<val_t,coord_t>*>(row)));
     else if (row->kind == Row<val_t,coord_t>::dense)
       req = comm_.isend(remote_owner(column), TAG_ROW_DENSE, 
                         *(static_cast<DenseRow<val_t,coord_t>*>(row)));
@@ -686,18 +685,41 @@ Rheinfall<val_t,coord_t>::Processor::step()
   omp_unset_lock(&inbox_lock_);
 #endif
 
-  // ensure there is one row for elimination
-  if (NULL == u and rows.size() > 0) {
-    u = rows.front();
-    rows.pop_front();
-  }
-          
   if (not rows.empty()) {
+    // ensure there is one row for elimination
+    if (NULL == u) {
+      u = rows.front();
+      rows.pop_front();
+    }
+
     assert (NULL != u);
     for (typename row_list::iterator it = rows.begin(); it != rows.end(); ++it) {
-      if ((*it)->size() < u->size())
-        // row with less entries is pivot
-        std::swap(u, *it);
+      // swap `u` and the new row if the new row is shorter, or has < leading term
+      if (Row<val_t,coord_t>::sparse == (*it)->kind) {
+        SparseRow<val_t,coord_t>* s = static_cast<SparseRow<val_t,coord_t>*>(*it);
+        if (Row<val_t,coord_t>::sparse == u->kind) {
+          // if `*it` (new row) is shorter, it becomes the new pivot row
+          if (s->size() < u->size())
+            std::swap(u, *it);
+        }
+        else if (Row<val_t,coord_t>::dense == u->kind)
+          std::swap(u, *it);
+        else 
+          assert(false); // forgot one kind in chained `if`s?
+      }
+      else if (Row<val_t,coord_t>::dense == (*it)->kind) {
+        if (Row<val_t,coord_t>::dense == u->kind) {
+          // swap `u` and `row` iff `row`'s leading term is less
+          if (std::abs(static_cast<DenseRow<val_t,coord_t>*>(*it)->leading_term_)
+              < std::abs(static_cast<DenseRow<val_t,coord_t>*>(u)->leading_term_))
+            // swap `u` and `row`
+            std::swap(u, *it);
+        };
+        // else, if `u` is a sparse row, no need to check further
+      }
+      else
+        assert(false); // forgot a row kind in `if` chain?
+
       // perform elimination -- return NULL in case resulting row is full of zeroes
       Row<val_t,coord_t>* new_row = u->gaussian_elimination(*it, dense_threshold_);
       // ship reduced rows to other processors
