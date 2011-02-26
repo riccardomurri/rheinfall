@@ -67,7 +67,7 @@ gaussian_elimination_sparse_with_sparse_pivot(sparse_row_t* const pivot_row,
   // compute:
   //   `a`: multiplier for `this` row
   //   `b`: multiplier for `other_row` row
-  const val_t GCD = gcd(pivot_row->leading_term_, other_row->leading_term_);
+  const val_t GCD = gcd(other_row->leading_term_, pivot_row->leading_term_);
   val_t a = - (other_row->leading_term_ / GCD);
   val_t b = pivot_row->leading_term_ / GCD;
   assert (0 != a && 0 != b);

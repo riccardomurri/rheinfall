@@ -55,7 +55,7 @@
 #include <unistd.h>
 
 
-#ifdef WITH_MPI
+#if defined(WITH_MPI_SERIALIZED) || defined(WITH_MPI_MULTIPLE)
 static const char const*
 mpi_threading_model_name(const int provided)
 {
@@ -70,7 +70,9 @@ mpi_threading_model_name(const int provided)
   else 
     return "an unknown threading model";
 }
+#endif
 
+#ifdef WITH_MPI
 int mpi_init(int* argc_p, char*** argv_p)
 {
 #ifdef _OPENMP
