@@ -12,10 +12,17 @@ import os.path
 import re
 import sys
 
+# patch sys.path to include likely locations for the `namedtuple` and
+# `texttable` modules
+p = os.path.dirname(sys.argv[0])
+sys.path.append(p)
+sys.path.append(os.path.join(p, 'util'))
+
 try:
     from collections import namedtuple
 except ImportError:
     from namedtuple import namedtuple
+from texttable import Texttable
 
 
 cmdline = OptionParser()
@@ -153,54 +160,45 @@ def process_set(input_files, keys):
 
 ## main 
 
-if len(args) == 2:
-    set1 = [ args[0] ]
-    set2 = [ args[1] ]
+# ':' separates sets of files
+if ':' in args:
+    filesets = []
+    while ':' in args:
+        brk = args.index(':')
+        filesets.append(args[:brk])
+        del args[:brk]
+    filesets.append(args)
 else:
-    # ':' separates the two sets of files
-    brk = args.index(':')
-    set1 = args[:brk]
-    set2 = args[(brk+1):]
+    # each file is a set
+    filesets = [ [filename] for filename in args ]
 
+# process each fileset
 logger.log(1, "Comparing: %s (length %d)" 
            % (str.join(",", options.compare), len(options.compare)))
-result1 = process_set(set1, options.compare)
-result2 = process_set(set2, options.compare)
+results = [ process_set(fileset, options.compare) for fileset in filesets ]
 
 # build list of processed matrices
 matrices = set()
-for m in result1:
-    matrices.add(m)
-for m in result2:
-    matrices.add(m)
+for result in results:
+    for m in result:
+        matrices.add(m)
 
-
-def center(text, width):
-    if len(text) > width:
-        return text
+# create output table
+t = Texttable(0)
+t.set_deco(Texttable.BORDER | Texttable.HEADER)
+hdr = ["Matrix"]
+for feature in options.compare:
+    if 2 == len(filesets):
+        hdr += [feature, "", "(var%)"]
     else:
-        padding = ((width - len(text)) / 2) * " "
-        return  padding + text + padding
+        hdr_ = [feature] + ["..."] * (len(filesets)-1)
+        for n in range(len(hdr_)):
+            hdr_[n] += "(%d)" % (n+1)
+        hdr += hdr_
+t.header(hdr)
+t.set_cols_align(['l'] + (['l'] * max(len(filesets), 3) * len(options.compare)))
+t.set_cols_align(['m'] + (['m'] * max(len(filesets), 3) * len(options.compare)))
 
-hdr = ("=" * 24) + " " + (" " + ("=" * 8) + " " + ("=" * 8) + " " + ("=" * 7) + " ") * len(options.compare)
-print(hdr)
-print(("%-24s " % center("Matrix", 24))
-      + str.join('', [(" %25s " % center(k, 25)) for k in options.compare]))
-print(('-' * 24) + " " + (" " + ('-' * 25) + " ") * len(options.compare))
-print((" " * 24) + " " 
-      + (" %8s %8s %7s " % (center("A", 8), center("B", 8), center("var%", 7))) * len(options.compare))
-print(hdr)
-
-def has_valid_value(d, k):
-    return d.has_key(k) and d[k] is not None
-
-def variation(v1, v2):
-    if v1 == 0 or v2 == 0:
-        return ""
-    elif v1 == v2:
-        return ""
-    else:
-        return "%+.2f" % (100 * ((v2 / v1) - 1.0))
 
 # hack to get M06-D10 come after M06-D9
 digits_re = re.compile(r'(\d+)')
@@ -220,34 +218,44 @@ def cmp_numerically(a,b):
     return cmp(parts_a, parts_b)
 
 
-for m in sorted(matrices, cmp=cmp_numerically):
-    if has_valid_value(result1, m) and has_valid_value(result2, m):
-        r1 = result1[m]
-        r2 = result2[m]
-        values = [ m ]
-        for k in options.compare:
-            if has_valid_value(r1, k) and has_valid_value(r2, k):
-                values += ["%.2f" % r1[k], 
-                           "%.2f" % r2[k], 
-                           variation(r1[k], r2[k])]
-            elif has_valid_value(r1, k):
-                values += ["%.2f" % r1[k], "***", ""]
-            elif has_valid_value(r2, k):
-                values += ["***", "%.2f" % r2[k], ""]
-    elif has_valid_value(result1, m):
-        values = [ m ]
-        r1 = result1[m]
-        for k in options.compare:
-            values += ["%.2f" % r1[k], "***", ""]
-    elif has_valid_value(result2, m):
-        values = [ m ]
-        r2 = result2[m]
-        for k in options.compare:
-            values += ["***", "%.2f" % r2[k], ""]
+def variation(v1, v2, fmt="%+.2f"):
+    if v1 == 0 or v2 == 0:
+        return ""
+    elif v1 == v2:
+        return ""
     else:
-        # should not happen!
-        sys.stderr.write("Could not extract valid values for matrix '%s' - skipping!\n" % m)
-        continue
-    print(("%-24s " + (" %8s %8s %7s ") * len(options.compare)) % tuple(values))
+        return fmt % (100 * ((v2 / v1) - 1.0))
 
-print(hdr)
+def has_valid_value(d, k):
+    return d.has_key(k) and d[k] is not None
+
+def value(d, k, fmt="%.2f"):
+    if has_valid_value(d, k):
+        return fmt % d[k]
+    else:
+        return "***"
+
+def pprint_values(m, k, rs):
+    all_valid_values = True
+    values = [ ]
+    for r in rs:
+        values.append(value(r[m], k))
+        if not has_valid_value(r[m], k):
+            all_valid_values = False
+    if len(values) == 2:
+        if all_valid_values:
+            values.append(variation(rs[0][m][k], rs[1][m][k]))
+        else:
+            values.append("")
+    return values
+
+for m in sorted(matrices, cmp=cmp_numerically):
+    for result in results:
+        if not has_valid_value(result, m):
+            result[m] = dict() # simulate empty result set
+    values = [ m ]
+    for k in options.compare:
+        values += pprint_values(m, k, results)
+    t.add_row(values)
+
+print(t.draw())
