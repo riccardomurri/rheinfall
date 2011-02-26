@@ -134,7 +134,7 @@ zrank_mpi_omp_LDADD = $(zrank_mpi_LDADD) # openmp?
 
 
 # unit tests
-check_PROGRAMS = test-sparserow test-denserow
+check_PROGRAMS = test-sparserow test-denserow test-rank-int test-rank-double
 
 test_sparserow_SOURCES = test/test_sparserow.cpp
 test_sparserow_CXXFLAGS = $(BOOST_CPPFLAGS)
@@ -145,5 +145,15 @@ test_denserow_SOURCES = test/test_denserow.cpp
 test_denserow_CXXFLAGS = $(BOOST_CPPFLAGS)
 test_denserow_LDFLAGS= $(BOOST_UNIT_TEST_FRAMEWORK_LDFLAGS)
 test_denserow_LDADD = $(BOOST_UNIT_TEST_FRAMEWORK_LIBS)
+
+test_rank_int_SOURCES = test/test_rank_int.cpp
+test_rank_int_CXXFLAGS = $(BOOST_CPPFLAGS)
+test_rank_int_LDFLAGS= $(BOOST_UNIT_TEST_FRAMEWORK_LDFLAGS)
+test_rank_int_LDADD = $(BOOST_UNIT_TEST_FRAMEWORK_LIBS)
+
+test_rank_double_SOURCES = test/test_rank_double.cpp
+test_rank_double_CXXFLAGS = $(BOOST_CPPFLAGS)
+test_rank_double_LDFLAGS= $(BOOST_UNIT_TEST_FRAMEWORK_LDFLAGS)
+test_rank_double_LDADD = $(BOOST_UNIT_TEST_FRAMEWORK_LIBS)
 
 TESTS = $(check_PROGRAMS)
