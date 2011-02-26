@@ -75,10 +75,12 @@ namespace rheinfall {
               const coord_t ending_column, 
               const val_t leading_term);
 
-    /** Constructor initializing row with coordinate/value pairs
+    /** Make a @a SparseRow instance from coordinate/value pairs
         gotten from interval [p0, p1). */
     template <typename ForwardIter>
-    SparseRow(ForwardIter p0, ForwardIter p1, const coord_t ending_column);
+    static
+    SparseRow<val_t,coord_t>* new_from_range(ForwardIter p0, ForwardIter p1, 
+                                             const coord_t ending_column);
 
 #ifdef WITH_MPI
     /** Make a @a SparseRow instance from an MPI message payload.
@@ -137,16 +139,18 @@ namespace rheinfall {
     friend class Rheinfall<val_t,coord_t>; // read*() needs to call the above ctor
     friend class DenseRow<val_t,coord_t>;
 
-#ifdef WITH_MPI
     /** Default constructor, needed by boost::serialize.
         Initializes the row with invalid values; should call
         serialize immediately after!  */
     SparseRow();
+
+#ifdef WITH_MPI
     // serialization support
     friend class boost::serialization::access;
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version);
 #endif
+
 #ifndef NDEBUG
   private:
     bool __ok() const;
@@ -174,15 +178,27 @@ namespace rheinfall {
     // init-only ctor
   };
 
+
+  template <typename val_t, typename coord_t>
+  inline
+  SparseRow<val_t,coord_t>::SparseRow() 
+    : Row_::Row(Row_::sparse, -1, -1, 0),
+      storage() 
+  { 
+    // init-only ctor
+  };
+
+
   template <typename val_t, typename coord_t>
   template <typename ForwardIter>
   inline
-  SparseRow<val_t,coord_t>::SparseRow(ForwardIter p0,
-                                      ForwardIter p1,
-                                      const coord_t ending_column) 
-    : Row_::Row(Row_::sparse, 0, ending_column, 0),
-      storage() 
+  SparseRow<val_t,coord_t>*
+  SparseRow<val_t,coord_t>::new_from_range(ForwardIter p0,
+                                           ForwardIter p1,
+                                           const coord_t ending_column) 
   { 
+    SparseRow<val_t,coord_t>* row = new SparseRow();
+    row->ending_column_ = ending_column;
     coord_t starting_column = ending_column;
     val_t leading_term = 0;
     for (; p0 != p1; ++p0) {
@@ -191,17 +207,25 @@ namespace rheinfall {
       assert(0 != value);
       if (coord < starting_column) {
         if (0 != leading_term)
-          this->set(starting_column, leading_term);
+          row->set(starting_column, leading_term);
         starting_column = coord;
         leading_term = value;
       }
       else {
-        this->set(coord, value);
+        row->set(coord, value);
       };
     };
-    this->Row_::starting_column_ = starting_column;
-    this->Row_::leading_term_ = leading_term;
-    assert(this->__ok());
+    row->Row_::starting_column_ = starting_column;
+    row->Row_::leading_term_ = leading_term;
+
+    if (row->starting_column_ == row->ending_column_) {
+      delete row;
+      return NULL;
+    } 
+    else {
+      assert(row->__ok());
+      return row;
+    };
   };
 
 
@@ -215,15 +239,6 @@ namespace rheinfall {
     SparseRow<val_t,coord_t>* row = new  SparseRow<val_t,coord_t>();
     comm.recv(source, tag, *row);
     return row;
-  };
-
-  template <typename val_t, typename coord_t>
-  inline
-  SparseRow<val_t,coord_t>::SparseRow() 
-    : Row_::Row(Row_::sparse, -1, -1, 0),
-      storage() 
-  { 
-    // init-only ctor
   };
 #endif // WITH_MPI
 

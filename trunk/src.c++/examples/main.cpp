@@ -265,16 +265,18 @@ main(int argc, char** argv)
   static struct option long_options[] = {
     {"help",    0, 0, 'h'},
     {"memory",  1, 0, 'm'},
+    {"tranpose",0, 0, 't'},
     {"verbose", 0, 0, 'v'},
     {"width",   1, 0, 'w'},
     {0, 0, 0, 0}
   };
 
   coord_t width = 1;
+  bool transpose = false;
 
   int c;
   while (true) {
-    c = getopt_long(argc, argv, "hm:vw:",
+    c = getopt_long(argc, argv, "hm:tvw:",
                     long_options, NULL);
     if (-1 == c)
       break;
@@ -328,6 +330,9 @@ main(int argc, char** argv)
       limit.rlim_cur = required_memory;
       limit.rlim_max = required_memory;
       setrlimit(RLIMIT_AS, &limit);
+    }
+    else if ('t' == c) {
+      transpose = true;
     }
     else {
       std::cerr << "Unknown option; type '" << argv[0] << " --help' to get usage help."
@@ -384,14 +389,8 @@ main(int argc, char** argv)
         std::cout << " rows:" << rows;
         std::cout << " cols:" << cols;
       };
-
-      // possibly transpose matrix so that rows = min(rows, cols)
-      // i.e., minimize the number of eliminations to perform
-      bool transpose = false;
-      if (rows > cols) {
+      if (transpose)
         std::swap(rows, cols);
-        transpose = true;
-      };
 
 #ifdef WITH_MPI
       rheinfall::Rheinfall<val_t, coord_t> w(world, cols, width);

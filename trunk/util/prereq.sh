@@ -15,6 +15,7 @@ GIVARO=3.3.2
 ATLAS=3.8.3
 BOOST=1.43.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.43.0/boost_1_43_0.tar.gz
 TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
+#TBB=20100915oss # http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_lin.tgz
 
 # undefine when running on a non-homogeneous cluster
 # (i.e., nodes may have different arch and/or memory size)
@@ -282,11 +283,26 @@ if [ -n "$TCMALLOC" ]; then
 fi
 
 
-# finally, make ranks
-#_ Making "rank_mpi" binaries
-#cd ${sw}/..
-#set -x
-#make rank_mpi
-#set +x
+# Intel TBB
+if [ -n "$TBB" ]; then
+    _ Installing Intel TBB $TBB ...
+    cd ${sw}/src/
+    set -x 
+    case "$TBB" in
+        20100915oss) # TBB download URL changes with release ...
+            wget -N "http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_lin.tgz"
+            wget -N "http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_src.tgz"
+            ;;
+        *)
+            die 1 "Unknown download URL for Intel TBB ${TBB}"
+            ;;
+    esac
+    mkdir -p ${sw}/opt
+    for tgz in tbb*.tgz; do
+        tar -xzf "$tgz" -C "${sw}/opt"
+    done
+    set +x
+fi
+
 
 _ All done.

@@ -48,3 +48,5 @@ do
         inputs/M06-D{5,6,7,8,11,10}.txt \
         ;
 done
+done
+done
