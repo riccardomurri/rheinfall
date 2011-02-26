@@ -79,9 +79,9 @@ namespace rheinfall {
    */
 #define RF_TYPE_IS_GCD_RING(T, GCD)                 \
   template <>                                       \
-  void get_row_multipliers(T const& lead_x,         \
-                           T const& lead_y,         \
-                           T& a, T& b)              \
+  void get_row_multipliers<T>(T const& lead_x,      \
+                              T const& lead_y,      \
+                              T& a, T& b)           \
   {                                                 \
     assert(lead_x != 0);                            \
     T c;                                            \
@@ -92,8 +92,8 @@ namespace rheinfall {
   };                                                \
                                                     \
   template <>                                       \
-  bool first_is_better_pivot(T const& lead_x,       \
-                             T const& lead_y)       \
+  bool first_is_better_pivot<T>(T const& lead_x,    \
+                                T const& lead_y)    \
   {                                                 \
      /* Keep absolute value low,                    \
       * so GCD is quicker to find.                  \
@@ -165,8 +165,8 @@ namespace rheinfall {
   };                                                \
                                                     \
   template <>                                       \
-  bool first_is_better_pivot(T const& lead_x,       \
-                             T const& lead_y)       \
+  bool first_is_better_pivot<T>(T const& lead_x,    \
+                                T const& lead_y)    \
   {                                                 \
      /* Keep absolute value as high as possible,    \
       * to reduce numeric error.                    \
@@ -194,7 +194,6 @@ namespace rheinfall {
   RF_TYPE_IS_DIVISION_RING(mpq_class)
   RF_TYPE_IS_DIVISION_RING(mpf_class)
 #endif 
-
 }; // namespace rheinfall
 
 
