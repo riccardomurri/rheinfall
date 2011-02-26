@@ -6,6 +6,25 @@
 #$ -j y
 #$ -N compile
 
+PROG="$(basename $0)"
+
+usage () {
+cat <<EOF
+Usage: $PROG [COMPILER]-[MPILIB]-[REVNO]
+
+Setup the correct modules and paths for compiling 'Rheinfall' with the
+given COMPILER and MPILIB.  Compile the code and store the results in
+'~/sw/COMPILER-MPILIB-REVNO'.
+
+The COMPILER tag selects the compiler type (gcc412, gcc441, gcc443,
+gcc450, intel; default: gcc443); second tag MPILIB selects which MPI
+library will be used (ompi, mvapich, intel, or none; default:
+openmpi).  Third argument REVNO defaults to the current Bazaar
+repository revno, but can be overridden to tag variants of the code.
+
+EOF
+}
+
 flavor="$1"; shift
 compiler="$(echo $flavor | cut -d- -f1)"
 if [ -z "$compiler" ]; then
@@ -20,8 +39,36 @@ if [ -z "$rev" ]; then
     rev="$( cat .bzr/branch/last-revision | (read revno rest; echo r$revno) )"
 fi
 
-# load modules
+## helper functions
+die () {
+  rc="$1"
+  shift
+  (echo -n "$PROG: ERROR: ";
+      if [ $# -gt 0 ]; then echo "$@"; else cat; fi) 1>&2
+  exit $rc
+}
+
+have_command () {
+  type "$1" >/dev/null 2>/dev/null
+}
+
+require_command () {
+  if ! have_command "$1"; then
+    die 1 "Could not find required command '$1' in system PATH. Aborting."
+  fi
+}
+
+_ () {
+    echo
+    echo ==== "$@" ...;
+}
+
+
+## load modules
 source /panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/Modules/default/init/sh
+
+supported_compilers='gcc412 gcc441 gcc443 gcc450 icc'
+supported_mpilibs='openmpi mvapich intel none'
 
 # load MPI - must match what the binary was compiled with!
 case "$mpi" in
@@ -33,9 +80,18 @@ case "$mpi" in
         esac
         ;;
     mvapich) # MVAPICH is not supported by modules, apparently
-        export PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc-4.4.1/mvapich2-1.4rc2/bin:$PATH
-        export LD_LIBRARY_PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc-4.4.1/mvapich2-1.4rc2/lib:$LD_LIBRARY_PATH
-        export LD_RUN_PATH=$LD_LIBRARY_PATH
+        case "$compiler" in
+            gcc412)
+                export PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc/mvapich2-1.4rc2/bin:$PATH
+                export LD_LIBRARY_PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc/mvapich2-1.4rc2/lib:$LD_LIBRARY_PATH
+                export LD_RUN_PATH=$LD_LIBRARY_PATH
+                ;;
+            gcc*)
+                export PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc-4.4.1/mvapich2-1.4rc2/bin:$PATH
+                export LD_LIBRARY_PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/gcc-4.4.1/mvapich2-1.4rc2/lib:$LD_LIBRARY_PATH 
+                export LD_RUN_PATH=$LD_LIBRARY_PATH
+                ;;
+        esac
         ;;
     impi|intel) # Intel MPI is not supported by modules, apparently
         export PATH=/panfs/panfs0.ften.es.hpcn.uzh.ch/mpi-libs/intel_mpi/3.2.1.009/bin64:$PATH
@@ -93,6 +149,8 @@ case "$compiler" in
 esac
 
 
+## environment information
+
 echo === running info ===
 echo flavor: $flavor
 echo compiler: $compiler
@@ -103,8 +161,11 @@ echo === compiler information ===
 which ${CXX}
 ${CXX} --version
 
-which mpicxx
-echo
+if [ "x$mpi" != 'xnone' ]; then
+    which mpicxx
+    mpicxx --version
+    echo
+fi
 
 which as
 as --version
@@ -127,6 +188,7 @@ sw="$HOME/sw/${compiler}-${mpi}"
 build_dir="/lustre/ESPFS/scratch/oci/murri/rheinfall.${flavor}"
 
 set -e
+rm -rf "$build_dir"
 mkdir -p "$build_dir"
 cd "$build_dir"
 $top_src_dir/configure CXXFLAGS="-O3 -DNDEBUG $cxxflags" --with-boost=$sw --with-gmp=$sw

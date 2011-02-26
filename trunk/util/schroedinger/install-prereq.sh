@@ -187,7 +187,7 @@ set -e # exit on error here, in case the compiler does not have enough licences
 ${CXX} --version
 set +e
 
-if [ "x${mpi}" != 'none' ]; then
+if [ "x${mpi}" != 'xnone' ]; then
     which mpicxx
     mpicxx --version
     echo
