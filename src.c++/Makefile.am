@@ -70,7 +70,7 @@ rank_int_mpi_LDFLAGS = $(rank_int_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZ
 rank_int_mpi_LDADD = $(rank_int_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS) $(MPI_CXXLIBS)
 
 rank_int_mpi_omp_SOURCES = $(rank_int_mpi_SOURCES)
-rank_int_mpi_omp_CPPFLAGS= $(rank_int_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+rank_int_mpi_omp_CPPFLAGS= $(rank_int_mpi_CPPFLAGS) $(RF_MPI_CPPFLAGS) $(OPENMP_CPPFLAGS)
 rank_int_mpi_omp_CXXFLAGS= $(rank_int_mpi_CXXFLAGS) $(OPENMP_CXXFLAGS)
 rank_int_mpi_omp_LDFLAGS= $(rank_int_mpi_LDFLAGS) # openmp?
 rank_int_mpi_omp_LDADD = $(rank_int_mpi_LDADD) # openmp?
@@ -94,7 +94,7 @@ rank_int32_mpi_LDFLAGS = $(rank_int32_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERI
 rank_int32_mpi_LDADD = $(rank_int32_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS) $(MPI_CXXLIBS)
 
 rank_int32_mpi_omp_SOURCES = $(rank_int32_mpi_SOURCES)
-rank_int32_mpi_omp_CPPFLAGS= $(rank_int32_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+rank_int32_mpi_omp_CPPFLAGS= $(rank_int32_mpi_CPPFLAGS) $(RF_MPI_CPPFLAGS) $(OPENMP_CPPFLAGS)
 rank_int32_mpi_omp_CXXFLAGS= $(rank_int32_mpi_CXXFLAGS) $(OPENMP_CXXFLAGS)
 rank_int32_mpi_omp_LDFLAGS= $(rank_int32_mpi_LDFLAGS) # openmp?
 rank_int32_mpi_omp_LDADD = $(rank_int32_mpi_LDADD) # openmp?
@@ -118,7 +118,7 @@ rank_int64_mpi_LDFLAGS = $(rank_int64_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERI
 rank_int64_mpi_LDADD = $(rank_int64_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS) $(MPI_CXXLIBS)
 
 rank_int64_mpi_omp_SOURCES = $(rank_int64_mpi_SOURCES)
-rank_int64_mpi_omp_CPPFLAGS= $(rank_int64_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+rank_int64_mpi_omp_CPPFLAGS= $(rank_int64_mpi_CPPFLAGS) $(RF_MPI_CPPFLAGS) $(OPENMP_CPPFLAGS)
 rank_int64_mpi_omp_CXXFLAGS= $(rank_int64_mpi_CXXFLAGS) $(OPENMP_CXXFLAGS)
 rank_int64_mpi_omp_LDFLAGS= $(rank_int64_mpi_LDFLAGS) # openmp?
 rank_int64_mpi_omp_LDADD = $(rank_int64_mpi_LDADD) # openmp?
@@ -143,7 +143,7 @@ rank_mod_mpi_LDFLAGS = $(rank_mod_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZ
 rank_mod_mpi_LDADD = $(rank_mod_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS) $(MPI_CXXLIBS)
 
 rank_mod_mpi_omp_SOURCES = $(rank_mod_mpi_SOURCES)
-rank_mod_mpi_omp_CPPFLAGS= $(rank_mod_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+rank_mod_mpi_omp_CPPFLAGS= $(rank_mod_mpi_CPPFLAGS) $(RF_MPI_CPPFLAGS) $(OPENMP_CPPFLAGS)
 rank_mod_mpi_omp_CXXFLAGS= $(rank_mod_mpi_CXXFLAGS) $(OPENMP_CXXFLAGS)
 rank_mod_mpi_omp_LDFLAGS= $(rank_mod_mpi_LDFLAGS) # openmp?
 rank_mod_mpi_omp_LDADD = $(rank_mod_mpi_LDADD) # openmp?
@@ -168,7 +168,7 @@ rank_double_mpi_LDFLAGS = $(rank_double_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SE
 rank_double_mpi_LDADD = $(rank_double_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS) $(MPI_CXXLIBS)
 
 rank_double_mpi_omp_SOURCES = $(rank_double_mpi_SOURCES)
-rank_double_mpi_omp_CPPFLAGS= $(rank_double_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+rank_double_mpi_omp_CPPFLAGS= $(rank_double_mpi_CPPFLAGS) $(RF_MPI_CPPFLAGS) $(OPENMP_CPPFLAGS)
 rank_double_mpi_omp_CXXFLAGS= $(rank_double_mpi_CXXFLAGS) $(OPENMP_CXXFLAGS)
 rank_double_mpi_omp_LDFLAGS= $(rank_double_mpi_LDFLAGS) # openmp?
 rank_double_mpi_omp_LDADD = $(rank_double_mpi_LDADD) # openmp?
@@ -193,7 +193,7 @@ rank_mpq_mpi_LDFLAGS = $(rank_mpq_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZ
 rank_mpq_mpi_LDADD = $(rank_mpq_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS) $(MPI_CXXLIBS)
 
 rank_mpq_mpi_omp_SOURCES = $(rank_mpq_mpi_SOURCES)
-rank_mpq_mpi_omp_CPPFLAGS= $(rank_mpq_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+rank_mpq_mpi_omp_CPPFLAGS= $(rank_mpq_mpi_CPPFLAGS) $(RF_MPI_CPPFLAGS) $(OPENMP_CPPFLAGS)
 rank_mpq_mpi_omp_CXXFLAGS= $(rank_mpq_mpi_CXXFLAGS) $(OPENMP_CXXFLAGS)
 rank_mpq_mpi_omp_LDFLAGS= $(rank_mpq_mpi_LDFLAGS) # openmp?
 rank_mpq_mpi_omp_LDADD = $(rank_mpq_mpi_LDADD) # openmp?
@@ -218,7 +218,7 @@ rank_mpz_mpi_LDFLAGS = $(rank_mpz_LDFLAGS) $(BOOST_MPI_LDFLAGS) $(BOOST_SERIALIZ
 rank_mpz_mpi_LDADD = $(rank_mpz_LDADD) $(BOOST_MPI_LIBS) $(BOOST_SERIALIZATION_LIBS) $(MPI_CXXLIBS)
 
 rank_mpz_mpi_omp_SOURCES = $(rank_mpz_mpi_SOURCES)
-rank_mpz_mpi_omp_CPPFLAGS= $(rank_mpz_mpi_CPPFLAGS) -DWITH_MPI_SERIALIZED $(OPENMP_CPPFLAGS)
+rank_mpz_mpi_omp_CPPFLAGS= $(rank_mpz_mpi_CPPFLAGS) $(RF_MPI_CPPFLAGS) $(OPENMP_CPPFLAGS)
 rank_mpz_mpi_omp_CXXFLAGS= $(rank_mpz_mpi_CXXFLAGS) $(OPENMP_CXXFLAGS)
 rank_mpz_mpi_omp_LDFLAGS= $(rank_mpz_mpi_LDFLAGS) # openmp?
 rank_mpz_mpi_omp_LDADD = $(rank_mpz_mpi_LDADD) # openmp?
