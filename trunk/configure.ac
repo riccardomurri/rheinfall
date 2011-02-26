@@ -63,8 +63,6 @@ if test "_$with_mpi" != '_no'; then :
     LX_FIND_MPI()
     AC_LANG_POP([C++])
 fi
-AM_CONDITIONAL([HAVE_MPICC], [test "_$have_C_mpi" = '_yes'])
-AM_CONDITIONAL([HAVE_MPICXX], [test "_$have_CXX_mpi" = '_yes'])
 case "_$with_mpi" in #(
      _s*) AC_SUBST([RF_MPI_CPPFLAGS], [-DWITH_MPI_SERIALIZED]) ;; #(
      _m*) AC_SUBST([RF_MPI_CPPFLAGS], [-DWITH_MPI_MULTIPLE]) ;; #(
@@ -76,11 +74,13 @@ esac
 BOOST_REQUIRE([1.45]) # Boost.MPI has issend support only starting 1.46
 BOOST_STATIC
 BOOST_SERIALIZATION
+BOOST_STATICASSERT
 BOOST_TEST([], 
     [have_boost_test=no;
         AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])],
     [have_boost_test=yes])
 AM_CONDITIONAL([HAVE_BOOST_TEST], [test "_$have_boost_test" = '_yes'])
+
 if test "_$have_CXX_mpi" = '_yes'; then
     BOOST_MPI([], 
         [# disable MPI/C++ altogether
@@ -110,12 +110,14 @@ int main(int argc, char** argv)
          CXXFLAGS="$save_CXXFLAGS"
          AC_LANG_POP([C++])
         ], 
-        [$MPI_CXXFLAGS],
-        [$MPI_CXXFLAGS],
-        [$MPI_CXXLDFLAGS],
-        [$MPI_CXXLDFLAGS])
+        [$MPI_CXXFLAGS $BOOST_CPPFLAGS],
+        [$MPI_CXXFLAGS $BOOST_CPPFLAGS],
+        [$MPI_CXXLDFLAGS $BOOST_SERIALIZATION_LDFLAGS],
+        [$MPI_CXXLDFLAGS $BOOST_SERIALIZATION_LIBS])
 fi
-BOOST_STATICASSERT
+
+AM_CONDITIONAL([HAVE_MPICC], [test "_$have_C_mpi" = '_yes'])
+AM_CONDITIONAL([HAVE_MPICXX], [test "_$have_CXX_mpi" = '_yes'])
 
 
 # Check for GMP/GMPXX
