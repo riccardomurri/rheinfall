@@ -60,14 +60,19 @@ import sys
 import random
 import shutil
 import tarfile
+import tempfile
 import time
 
 
 # patch sys.path to include likely locations for the
 # `texttable` module
 p = os.path.realpath(os.path.dirname(sys.argv[0]))
-sys.path.append(p)
-sys.path.append(os.path.join(p, 'util'))
+if os.path.exists(os.path.join(p, 'texttable.py')):
+    sys.path.append(p)
+elif os.path.exists(os.path.join(p, 'util/texttable.py')):
+    sys.path.append(os.path.join(p, 'util'))
+elif os.path.exists(os.path.join(p, '../texttable.py')):
+    sys.path.append(os.path.realpath(os.path.join(p, '../texttable.py')))
 
 from texttable import Texttable
 
@@ -305,64 +310,105 @@ session.close()
 
 old_batches = set([ task.batch_file_path for task in tasks ])
 
-new_batches = set()
-for path in args:
-    if os.path.exists(path):
-        batch = os.path.realpath(path)
-        if batch not in old_batches:
-            new_batches.add(batch)
-    else:
-        logger.error("Cannot access input path '%s' - ignoring it.", path)
-logger.info("New batch files: '%s'" % str.join("', '", new_batches))
+if exe is not None:
+    new_batches = set()
+    for path in args:
+        if os.path.exists(path):
+            batch = os.path.realpath(path)
+            if batch not in old_batches:
+                new_batches.add(batch)
+        else:
+            logger.error("Cannot access input path '%s' - ignoring it.", path)
+    logger.info("New batch files: '%s'" % str.join("', '", new_batches))
+else:
+    logger.info("No executable specified, not adding any batch to process.")
 
 
 ## compute job list
-            
-# pre-allocate Job IDs
-if len(new_batches) > 0:
-    gc3libs.persistence.Id.reserve(len(new_batches))
 
-# add new jobs to the session
-def files_in_batch(path_to_batch_file):
-    b = open(path_to_batch_file, 'r')
-    dir = os.path.dirname(path_to_batch_file)
-    result = [ ]
-    for line in b.readlines():
-        line = line.strip()
-        if line == '':
-            continue
-        if os.path.isabs(line):
-            result.append(line)
-        else:
-            result.append(os.path.join(dir, line))
-    b.close()
-    return result
+if exe is not None:
 
-random.seed()
-for batch in new_batches:
-    inputs = files_in_batch(batch)
-    tasks.append(Application(
-        executable = os.path.basename(exe),
-        arguments = opts + [ os.path.basename(path) for path in inputs ],
-        inputs = [exe] + inputs,
-        outputs = [ ],
-        stdout = "output.txt",
-        join = True,
-        # set computational requirements
-        requested_memory = options.memory_per_core,
-        requested_cores = options.ncores,
-        requested_walltime = options.walltime,
-        # set job output directory
-        output_dir = (
-            options.output
-            .replace('PATH', os.path.dirname(batch) or os.getcwd())
-            .replace('NAME', os.path.basename(batch))
-            .replace('DATE', time.strftime('%Y-%m-%d', time.localtime(time.time())))
-            .replace('TIME', time.strftime('%H:%M', time.localtime(time.time())))
-            ),
-        # smscg-run-specific data
-        batch_file_path = batch,
-        ))
+    # pre-allocate Job IDs
+    if len(new_batches) > 0:
+        gc3libs.persistence.Id.reserve(len(new_batches))
+
+    # add new jobs to the session
+    def files_in_batch(path_to_batch_file):
+        b = open(path_to_batch_file, 'r')
+        dir = os.path.dirname(path_to_batch_file)
+        result = [ ]
+        for line in b.readlines():
+            line = line.strip()
+            if line == '':
+                continue
+            if os.path.isabs(line):
+                result.append(line)
+            else:
+                result.append(os.path.join(dir, line))
+        b.close()
+        return result
+
+    # create wrapper script
+    (fd, script_path) = tempfile.mkstemp(suffix='.sh', 
+                                         prefix=(os.path.basename(exe) + '.'),
+                                         text=True)
+    os.write(fd, """#!/bin/sh
+    # usage: $0 exe [opts] -- [files]
+
+    # extract executable and options from cmd line
+    exe="$1"; shift
+    chmod +x "$exe"
+
+    opts=''
+    while [ $# -gt 0 ]; do
+      if [ "-$1" = '---' ]; then
+        shift
+        break
+      fi
+      opts="$opts '$1'"
+    done
+
+    # decompress matrix files before processing them
+    files=''
+    for file in "$@"; do
+      case "$file" in
+        *.gz)  gunzip  -v "$file"; file=$(basename "$file" .gz) ;;
+        *.bz2) bunzip2 -v "$file"; file=$(basename "$file" .bz2);;
+        *)     true ;;
+      esac
+      files="$files '$file'"
+    done
+
+    eval exec ./$exe $opts $files
+    """)
+    os.fchmod(fd, 0755)
+
+    # add new jobs to the list
+    random.seed()
+    for batch in new_batches:
+        inputs = files_in_batch(batch)
+        tasks.append(Application(
+            executable = os.path.basename(script_path),
+            arguments = [os.path.basename(exe)] + opts + ['--'] + [ os.path.basename(path) for path in inputs ],
+            inputs = [script_path, exe] + inputs,
+            outputs = [ ],
+            stdout = "output.txt",
+            join = True,
+            # set computational requirements
+            requested_memory = options.memory_per_core,
+            requested_cores = options.ncores,
+            requested_walltime = options.walltime,
+            # set job output directory
+            output_dir = (
+                options.output
+                .replace('PATH', os.path.dirname(batch) or os.getcwd())
+                .replace('NAME', os.path.basename(batch))
+                .replace('DATE', time.strftime('%Y-%m-%d', time.localtime(time.time())))
+                .replace('TIME', time.strftime('%H:%M', time.localtime(time.time())))
+                ),
+            # smscg-run-specific data
+            batch_file_path = batch,
+            ))
 
 
 ## iterate through job list, updating state and acting accordingly

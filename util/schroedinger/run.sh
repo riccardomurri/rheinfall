@@ -36,6 +36,10 @@ if expr "$spec" : 'run/' >/dev/null 2>&1; then
 fi
 set_mpi_and_compiler_flavor "$spec"
 
+# ensure $exec is an absolute path
+if ! expr match "$exec" '/' >/dev/null 2>&1; then
+  exec="$(pwd)/$exec"
+fi
 
 ## detect array jobs and act accordingly
 
@@ -171,16 +175,14 @@ case "$exec" in
                 ;;
         esac
         ;;
-    *rank*) # no MPI... use poor man's parallelization
-        #$bindir/_exec.sh $exec $opts $files
-        echo $files \
-            | xargs -n1 echo \
-            | (c=0; NP=$cpus_per_node; \
-               while read file; do \
-                   taskset -c $(expr $c % $NP) $bindir/_exec.sh $exec $opts $file; \
-                   c=$(expr $c + 1); \
-               done)
-        ;;
+    *rank*) # no MPI... 
+        if type -a parallel >/dev/null 2>&1; then
+            # use GNU parallel to run jobs
+            parallel --jobs -1 $exec $opts ::: $files
+        else
+            # no 'parallel' available, execute jobs sequentially
+            $exec $opts $files
+        fi
 esac
 rc=$?
 
