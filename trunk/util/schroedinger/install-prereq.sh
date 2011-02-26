@@ -321,7 +321,7 @@ if [ -n "$GMP" ]; then
     ${src_home}/gmp-${GMP}/configure --prefix=${sw} \
         --enable-cxx \
         CC=${CC} CXX=${CXX} CFLAGS="${cflags}"
-    make -k uninstall # avoid `libtool` errors
+    rm -rf ${sw}/include/gmp* ${sw}/lib/libgmp* # avoid `libtool` errors
     $concurrent_make
     make install
     set +x
@@ -345,7 +345,7 @@ if [ -n "$GIVARO" ]; then
     ./configure --prefix=${sw} \
         --enable-shared ${GMP:+"--with-gmp=${sw}"} \
         CC=${CC} CXX=${CXX} CFLAGS="${cflags}"
-    make -k uninstall # avoid `libtool` errors
+    rm -rf ${sw}/include/givaro* ${sw}/lib/libgivaro* # avoid `libtool` errors
     $concurrent_make
     make install
     set +x
@@ -393,7 +393,7 @@ if [ -n "$LINBOX" ]; then
         ${GMP:+"--with-gmp=${sw}"} \
         ${GIVARO:+"--with-givaro=${sw}"} \
         CC=${CC} CXX=${CXX} CFLAGS="${cflags}";
-    make -k uninstall # avoid `libtool` errors
+    rm -rf ${sw}/include/linbox* ${sw}/lib/liblinbox* # avoid `libtool` errors
     $concurrent_make
     make install
     set +x
