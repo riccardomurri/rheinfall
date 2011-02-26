@@ -66,7 +66,9 @@ int comm_send_end(const switchboard_t* sb, coord_t dest)
   if (sb->ncols == dest)
     return 0;
   if (is_local(sb, dest)) {
-    vpu_end_phase(vpu_for_column(sb, dest));
+    vpu_t* vpu = vpu_for_column(sb, dest);
+    assert(NULL != vpu);
+    vpu_end_phase(vpu);
     return 0;
   }
 #ifdef WITH_MPI
@@ -104,7 +106,9 @@ int comm_send_sparse_row(const switchboard_t* sb, outbox_t* outbox, sparse_row_t
 {
   coord_t column = row->starting_column_;
   if (is_local(sb, column)) {
-    vpu_recv_row(vpu_for_column(sb, column), row, ROW_SPARSE);
+    vpu_t* vpu = vpu_for_column(sb, column);
+    assert(NULL != vpu);
+    vpu_recv_row(vpu, row, ROW_SPARSE);
     return 0;
   }
 #ifdef WITH_MPI
@@ -117,9 +121,9 @@ int comm_send_sparse_row(const switchboard_t* sb, outbox_t* outbox, sparse_row_t
     omp_set_lock(&mpi_send_lock_);
 # endif
     /* XXX: send row as a byte string - assume homogeneous arch here */
-    const int rc = MPI_Isend(row, sparse_row_ub(row) - sparse_row_lb(row), MPI_BYTE,
-                             owner(sb, column), TAG_ROW_SPARSE, MPI_COMM_WORLD,
-                             req_p);
+    const int rc = MPI_Issend(row, sparse_row_ub(row) - sparse_row_lb(row), MPI_BYTE,
+                              owner(sb, column), TAG_ROW_SPARSE, MPI_COMM_WORLD,
+                              req_p);
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(&mpi_send_lock_);
 # endif
@@ -135,7 +139,9 @@ int comm_send_dense_row(const switchboard_t* sb, outbox_t* outbox, dense_row_t* 
 {
   coord_t column = row->starting_column_;
   if (is_local(sb, column)) {
-    vpu_recv_row(vpu_for_column(sb, column), row, ROW_DENSE);
+    vpu_t* vpu = vpu_for_column(sb, column);
+    assert(NULL != vpu);
+    vpu_recv_row(vpu, row, ROW_DENSE);
     return 0;
   }
 #ifdef WITH_MPI
@@ -148,9 +154,9 @@ int comm_send_dense_row(const switchboard_t* sb, outbox_t* outbox, dense_row_t* 
     omp_set_lock(&mpi_send_lock_);
 # endif
     /* XXX: send row as a byte string - assume homogeneoys arch here */
-    const int rc = MPI_Isend(row, dense_row_ub(row) - dense_row_lb(row), MPI_BYTE,
-                             owner(sb, column), TAG_ROW_DENSE, MPI_COMM_WORLD,
-                             req_p);
+    const int rc = MPI_Issend(row, dense_row_ub(row) - dense_row_lb(row), MPI_BYTE,
+                              owner(sb, column), TAG_ROW_DENSE, MPI_COMM_WORLD,
+                              req_p);
 # if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(&mpi_send_lock_);
 # endif
@@ -263,8 +269,8 @@ comm_receive(const switchboard_t* sb)
 {
 #ifdef WITH_MPI
   MPI_Status status;
-  int flag = 0;
   status.MPI_ERROR = MPI_SUCCESS;
+  int flag = 0;
   MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
   if (status.MPI_ERROR != MPI_SUCCESS)
     mpi_fatal(sb, &status, "Got error while probing for messages");
@@ -287,7 +293,9 @@ comm_receive(const switchboard_t* sb)
       assert(size == recv_size);
 # endif
       assert(is_local(sb, new_row->starting_column_));
-      vpu_recv_row(vpu_for_column(sb, new_row->starting_column_), new_row, ROW_SPARSE);
+      vpu_t* vpu = vpu_for_column(sb, new_row->starting_column_);
+      assert(vpu != NULL);
+      vpu_recv_row(vpu, new_row, ROW_SPARSE);
       break;
     };
     case TAG_ROW_DENSE: {
@@ -304,7 +312,9 @@ comm_receive(const switchboard_t* sb)
       assert(size == recv_size);
 # endif
       assert(is_local(sb, new_row->starting_column_));
-      vpu_recv_row(vpu_for_column(sb, new_row->starting_column_), new_row, ROW_DENSE);
+      vpu_t* vpu = vpu_for_column(sb, new_row->starting_column_);
+      assert(NULL != vpu);
+      vpu_recv_row(vpu, new_row, ROW_DENSE);
       break;
     };
     case TAG_END: {
@@ -325,7 +335,9 @@ comm_receive(const switchboard_t* sb)
       assert(size == recv_size);
 # endif
       assert(column >= 0 && is_local(sb, column));
-      vpu_end_phase(vpu_for_column(sb, column));
+      vpu_t* vpu = vpu_for_column(sb, column);
+      assert(NULL != vpu);
+      vpu_end_phase(vpu);
       break;
     };
     }; // switch(status.MPI_TAG)

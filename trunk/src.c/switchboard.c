@@ -38,7 +38,7 @@
 switchboard_t* 
 switchboard_new(const int ncols
 #ifdef WITH_MPI
-                , const int w
+                , const int width
                 , MPI_Comm comm
 #endif
                 ) {
@@ -47,7 +47,7 @@ switchboard_new(const int ncols
   sb->comm = comm;
   MPI_Comm_rank(sb->comm, &(sb->me));
   MPI_Comm_size(sb->comm, &(sb->comm_size));
-  sb->w = w;
+  sb->w = width;
 #else
   // simulate running with just 1 MPI rank
   sb->me = 0;
@@ -55,20 +55,20 @@ switchboard_new(const int ncols
   sb->w = 1;
 #endif
   sb->ncols = ncols;
-  sb->nvpus = 0;
+  // initialize `vpu` array and its count `nvpus`
 #ifdef WITH_MPI
-  sb->vpu = xcalloc(sb->w * (1 + ((ncols / sb->w) / sb->comm_size)),
-                    sizeof(vpu_t*));
+  const int nmemb = sb->w * (1 + ((ncols / sb->w) / sb->comm_size));
 #else
-  sb->vpu = xcalloc(ncols, sizeof(vpu_t*));
+  const int nmemb = ncols;
 #endif
+  sb->vpu = xcalloc(nmemb, sizeof(vpu_t*));
   int n = 0;
   for (int c = 0; c < ncols; ++c)
-    if (is_local(sb, c)) {
-      sb->vpu[n] = vpu_new(c);
-      sb->nvpus += 1;
-      ++n;
-    };
+    if (is_local(sb, c))
+      sb->vpu[n++] = vpu_new(c);
+  sb->nvpus = n;
+  // check that the VPUs actually fit in the array allocated for them
+  assert(sb->nvpus <= nmemb);
   return sb;
 };
 
