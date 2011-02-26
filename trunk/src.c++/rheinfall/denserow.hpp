@@ -145,8 +145,7 @@ namespace rheinfall {
   template <typename val_t, typename coord_t>
   inline
   DenseRow<val_t,coord_t>::DenseRow(const SparseRow<val_t,coord_t>* r) 
-    : Row_::Row(Row_::dense, r->starting_column_, 
-                r->ending_column_, r->leading_term_, true),
+    : Row_::Row(Row_::dense, r->starting_column_, r->ending_column_, r->leading_term_),
       storage(Row_::ending_column_ - Row_::starting_column_, 0) 
   { 
     assert(std::distance(r->storage.begin(), r->storage.end()) <= storage.size());
@@ -163,7 +162,7 @@ namespace rheinfall {
   inline
   DenseRow<val_t,coord_t>::DenseRow(const coord_t starting_column, 
                                     const size_t ending_column) 
-    : Row_::Row(Row_::dense, starting_column, ending_column, 0, true),
+    : Row_::Row(Row_::dense, starting_column, ending_column, 0),
       storage(ending_column - starting_column, 0)
   { 
     // nothing to do
@@ -184,7 +183,7 @@ namespace rheinfall {
   template <typename val_t, typename coord_t>
   inline
   DenseRow<val_t,coord_t>::DenseRow() 
-    : Row_::Row(Row_::dense, -1, -1, 0, false), storage() 
+    : Row_::Row(Row_::dense, -1, -1, 0), storage() 
   { 
     // nothing to do
   };

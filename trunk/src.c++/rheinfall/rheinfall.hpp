@@ -384,7 +384,7 @@ protected:
     coord_t nnz = 0;
     
     // need to keep rows in memory until we reach end of file
-    _rowmap_t rows;
+    std::map< coord_t, std::map< coord_t,val_t > > m;
     
     coord_t i, j;
     val_t value;
@@ -403,19 +403,18 @@ protected:
       // SMS indices are 1-based
       --i;
       --j;
-      // new row?
-      if (rows.end() == rows.find(i))
-        rows[i] = new SparseRow<val_t,coord_t>(ncols_-1);
-      rows[i]->set(j, value);
+      m[i][j] = value;
     }; // while(not eof)
 
 #ifdef WITH_MPI
     std::list< mpi::request > outbox;
 #endif
-    for (typename _rowmap_t::const_iterator it = rows.begin(); it != rows.end(); ++it) {
-      // set correct starting columns and leading term
-      SparseRow<val_t,coord_t>* row = it->second->adjust();
-      if (NULL != row) {
+    for (typename std::map< coord_t, std::map< coord_t,val_t > >::iterator it = m.begin(); 
+         it != m.end(); 
+         ++it) {
+      if (it->second.begin() != it->second.end()) { // non-null matrix row
+        SparseRow<val_t,coord_t>* row = new SparseRow<val_t,coord_t>(it->second.begin(), it->second.end(), 
+                                                                     ncols-1);
         const coord_t starting_column = row->first_nonzero_column();
         // commit row
         if (is_local(starting_column))
@@ -437,8 +436,8 @@ protected:
           // discard non-local and null rows
           delete row;
         }; // ! is_local(starting_column)
-      }; // row != NULL 
-    }; // for (it = rows.begin(); ...)
+      }; // it->second.begin() != it->second.end() 
+    }; // for (it = m.begin(); ...)
     
 #ifdef WITH_MPI
     // wait for all sent rows to arrive
@@ -570,9 +569,17 @@ protected:
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_set_lock(& mpi_send_lock_);
 # endif
-    if (row->kind == Row<val_t,coord_t>::sparse)
-      req = comm_.isend(remote_owner(column), TAG_ROW_SPARSE, 
-                        *(static_cast<SparseRow<val_t,coord_t>*>(row)));
+    if (row->kind == Row<val_t,coord_t>::sparse) {
+      SparseRow<val_t,coord_t> *s = static_cast<SparseRow<val_t,coord_t>*>(row);
+      // DEBUG
+      std::cerr << "DEBUG: MPI rank " << comm_.rank()
+                << " about to send SparseRow:"
+                << " starting_column_=" << row->starting_column_
+                << " ending_column_=" << row->ending_column_
+                << " leading_term_=" << row->leading_term_
+                << std::endl;
+      req = comm_.isend(remote_owner(column), TAG_ROW_SPARSE, *s);
+    }
     else if (row->kind == Row<val_t,coord_t>::dense)
       req = comm_.isend(remote_owner(column), TAG_ROW_DENSE, 
                         *(static_cast<DenseRow<val_t,coord_t>*>(row)));

@@ -46,6 +46,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -73,6 +74,11 @@ namespace rheinfall {
     SparseRow(const coord_t starting_column, 
               const coord_t ending_column, 
               const val_t leading_term);
+
+    /** Constructor initializing row with coordinate/value pairs
+        gotten from interval [p0, p1). */
+    template <typename ForwardIter>
+    SparseRow(ForwardIter p0, ForwardIter p1, const coord_t ending_column);
 
 #ifdef WITH_MPI
     /** Make a @a SparseRow instance from an MPI message payload.
@@ -128,10 +134,6 @@ namespace rheinfall {
     /** Print a textual representation of the row to stream @c o. */
     virtual void print_on(std::ostream& o) const;
 
-    /** Constructor initializing an invalid row; should fill the row
-        with values and then call @c adjust(). */
-    SparseRow(const coord_t ending_column);
-
     friend class Rheinfall<val_t,coord_t>; // read*() needs to call the above ctor
     friend class DenseRow<val_t,coord_t>;
 
@@ -166,20 +168,40 @@ namespace rheinfall {
   SparseRow<val_t,coord_t>::SparseRow(const coord_t starting_column, 
                                       const coord_t ending_column, 
                                       const val_t leading_term) 
-    : Row_::Row(Row_::sparse, 
-                              starting_column, ending_column, leading_term, true),
+    : Row_::Row(Row_::sparse, starting_column, ending_column, leading_term),
       storage() 
   { 
     // init-only ctor
   };
 
   template <typename val_t, typename coord_t>
+  template <typename ForwardIter>
   inline
-  SparseRow<val_t,coord_t>::SparseRow(const coord_t ending_column) 
-    : Row_::Row(Row_::sparse, -1, ending_column, 0, false),
+  SparseRow<val_t,coord_t>::SparseRow(ForwardIter p0,
+                                      ForwardIter p1,
+                                      const coord_t ending_column) 
+    : Row_::Row(Row_::sparse, 0, ending_column, 0),
       storage() 
   { 
-    // init-only ctor
+    coord_t starting_column = ending_column;
+    val_t leading_term = 0;
+    for (p0; p0 != p1; ++p0) {
+      const coord_t coord = p0->first;
+      const val_t value = p0->second;
+      assert(0 != value);
+      if (coord < starting_column) {
+        if (0 != leading_term)
+          this->set(starting_column, leading_term);
+        starting_column = coord;
+        leading_term = value;
+      }
+      else {
+        this->set(coord, value);
+      };
+    };
+    this->Row_::starting_column_ = starting_column;
+    this->Row_::leading_term_ = leading_term;
+    assert(this->__ok());
   };
 
 
@@ -190,7 +212,10 @@ namespace rheinfall {
   SparseRow<val_t,coord_t>::new_from_mpi_message(mpi::communicator& comm, 
                                                  const int source, const int tag)
   {
-    SparseRow<val_t,coord_t>* row = new   SparseRow<val_t,coord_t>();
+    SparseRow<val_t,coord_t>* row = new  SparseRow<val_t,coord_t>();
+    // DEBUG
+    std::cerr << "DEBUG: MPI rank " << comm.rank()
+              << " about to receive SparseRow..." << std::endl;
     comm.recv(source, tag, row);
     return row;
   };
@@ -198,7 +223,7 @@ namespace rheinfall {
   template <typename val_t, typename coord_t>
   inline
   SparseRow<val_t,coord_t>::SparseRow() 
-    : Row_::Row(Row_::sparse, -1, -1, 0, false),
+    : Row_::Row(Row_::sparse, -1, -1, 0),
       storage() 
   { 
     // init-only ctor
@@ -211,13 +236,11 @@ namespace rheinfall {
   inline bool
   SparseRow<val_t,coord_t>::__ok() const
   {
-    if (Row_::initialized_) {
-      assert(0 <= Row_::starting_column_);
-      assert(Row_::starting_column_ <= Row_::ending_column_);
-      assert(0 != Row_::leading_term_);
-    };
+    assert(0 <= Row_::starting_column_);
+    assert(Row_::starting_column_ <= Row_::ending_column_);
+    assert(0 != Row_::leading_term_);
     // entries in `this->storage` are *always* ordered by increasing column index
-    coord_t s1 = (Row_::initialized_? Row_::starting_column_ : -1);
+    coord_t s1 = Row_::starting_column_;
     for (typename storage_t::const_iterator it = storage.begin(); 
          it < storage.end(); 
          ++it) {
@@ -241,7 +264,6 @@ namespace rheinfall {
       Row_::leading_term_ = storage.front().second;
       assert(0 != Row_::leading_term_);
       storage.erase(storage.begin());
-      Row_::initialized_ = true;
       assert(this->__ok());
       return this;
     }
@@ -388,8 +410,7 @@ namespace rheinfall {
   inline val_t
   SparseRow<val_t,coord_t>::get(const coord_t col) const
   {
-    assert((not Row_::initialized_) or 
-           (col >= Row_::starting_column_ and col <= Row_::ending_column_));
+    assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
     if (col == Row_::starting_column_) 
       return Row_::leading_term_;
     if (storage.size() == 0)
@@ -436,6 +457,11 @@ namespace rheinfall {
     // & operator is defined similar to <<.  Likewise, when the class Archive
     // is a type of input archive the & operator is defined similar to >>.
     ar & boost::serialization::base_object<Row_>(*this) & storage;
+    std::cerr << "DEBUG: in SparseRow::serialize: "
+              << " starting_column_=" << Row_::starting_column_
+              << " ending_column_=" << Row_::ending_column_
+              << " leading_term_=" << Row_::leading_term_
+              << std::endl;
     assert(this->__ok());
   }; // SparseRow::serialize(...)
 #endif // WITH_MPI
@@ -445,8 +471,7 @@ namespace rheinfall {
   inline void
   SparseRow<val_t,coord_t>::set(const coord_t col, const val_t value) 
   {
-    assert((not Row_::initialized_) or 
-           (col >= Row_::starting_column_ and col <= Row_::ending_column_));
+    assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
     if (col == Row_::starting_column_) {
       Row_::leading_term_ = value;
       return;
