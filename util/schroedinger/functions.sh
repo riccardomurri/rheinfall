@@ -11,18 +11,22 @@ fi
 set_mpi_and_compiler_flavor () {
     flavor="$1"; shift
 
+    if test -d .bzr; then
+        current_rev=$( cat .bzr/branch/last-revision | (read revno rest; echo r$revno) );
+    elif test -d .svn; then
+        current_rev=r$( env LC_ALL=C svn info | grep '^Revision:' | cut -d' ' -f2 );
+    elif bzr revno >/dev/null; then
+        current_rev=r$( bzr revno );
+    else
+        current_rev=UNKNOWN
+    fi
+
     rev="$(echo $flavor | cut -d/ -f1)"
     compiler_and_mpilib="$(echo $flavor | cut -d/ -f2)"
     if [ -z "$compiler_and_mpilib" -o "x$compiler_and_mpilib" = "x$rev" ]; then
-        # rev can be omitted - try to get it from the BZR repository
+        # rev can be omitted - try to get it from the BZR/SVN repository
         compiler_and_mpilib="$rev"
-        if test -d .bzr; then
-            rev=$( cat .bzr/branch/last-revision | (read revno rest; echo r$revno) );
-        elif bzr revno >/dev/null; then
-            rev=r$(bzr revno);
-        else
-            rev=UNKNOWN
-        fi
+        rev="$current_rev"
     fi
 
     compiler="$(echo $compiler_and_mpilib | (IFS=- read one two; echo $one) )"
@@ -61,9 +65,9 @@ set_mpi_and_compiler_flavor () {
             export PATH=/opt/parastation/mpi2/bin:/opt/parastation/bin:$PATH
             export LD_LIBRARY_PATH=/opt/parastation/mpi2/lib:$LD_LIBRARY_PATH
             export LD_RUN_PATH=$LD_LIBRARY_PATH
-	    # apparently required for PSMPI to run,
-	    # see ChriBo's email to hpcnlist on 2011-02-09
-	    export PBS_NODEFILE=$TMPDIR/machines
+            # apparently required for PSMPI to run,
+            # see ChriBo's email to hpcnlist on 2011-02-09
+            export PBS_NODEFILE=$TMPDIR/machines
             ;;
         para*mt) # systemwide Parastation w/ threads support
             pe=parastation

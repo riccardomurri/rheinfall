@@ -57,8 +57,8 @@ extra=$(echo $rev | cut -d+ -f2)
 if [ "_r$revno" = "_$extra" ]; then
     extra=''
 fi
-if [ -n "$extra" -a "$revno" -ne "$(bzr revno)" ]; then
-    die 1 "Cannot tag non-current revision: request for '$rev' but sources are at BZR revno $(bzr revno)"
+if [ -n "$extra" -a "$revno" -ne "$current_rev" ]; then
+    die 1 "Cannot tag non-current revision: request for '$rev' but sources are at revision $current_rev"
 fi
 
 echo === Compiling Rheinfall r$revno ... ===
@@ -69,13 +69,19 @@ build_dir="$HOME/data/tmp/rheinfall.${flavor}"
 
 set -e
 rm -rf "$build_dir"
-# check out BZR sources or compile from working directory
+# check out sources or compile from working directory
 if [ -n "$extra" ]; then
     mkdir -p "$build_dir"
     src_dir="$top_src_dir"
 else
-    bzr co ./ "$build_dir" -r $revno
     src_dir="$build_dir"
+    if test -d .bzr; then
+        bzr checkout -r $revno ./ "$build_dir"
+    elif test -d .svn; then
+        svn export -r $revno ./ "$build_dir"
+    else
+        die 1 "Cannot determine SCM used in directory '$(pwd)'"
+    fi
     cd "$build_dir"
     autoreconf -i -s
 fi
