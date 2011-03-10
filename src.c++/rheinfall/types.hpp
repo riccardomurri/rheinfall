@@ -31,7 +31,6 @@
 #define RF_TYPES_HPP
 
 
-
 #include <boost/mpl/bool.hpp>
 namespace mpl = boost::mpl;
 #include <boost/static_assert.hpp>
@@ -85,9 +84,9 @@ namespace rheinfall {
    */
 #define RF_TYPE_IS_GCD_RING(T, GCD)                 \
   template <>                                       \
-  void get_row_multipliers<T>(T const& lead_x,      \
-                              T const& lead_y,      \
-                              T& a, T& b)           \
+  void get_row_multipliers< T >(T const& lead_x,    \
+                                T const& lead_y,    \
+                                T& a, T& b)         \
   {                                                 \
     assert(lead_x != 0);                            \
     T c;                                            \
@@ -203,9 +202,9 @@ namespace rheinfall {
    */
 #define RF_TYPE_IS_UNORDERED_DIVISION_RING(T)       \
   template <>                                       \
-  void get_row_multipliers<T>(T const& lead_x,      \
-                              T const& lead_y,      \
-                              T& a, T& b)           \
+  void get_row_multipliers< T >(T const& lead_x,    \
+                                T const& lead_y,    \
+                                T& a, T& b)         \
   {                                                 \
     assert(lead_x != 0);                            \
     a = - lead_y / lead_x;                          \
@@ -222,15 +221,14 @@ namespace rheinfall {
    */
 #define RF_TYPE_IS_MODULAR_RING(T)                  \
   template <>                                       \
-  void get_row_multipliers<T>(T const& lead_x,      \
-                              T const& lead_y,      \
-                              T& a, T& b)           \
+  void get_row_multipliers< T >(T const& lead_x,    \
+                                T const& lead_y,    \
+                                T& a, T& b)         \
   {                                                 \
     assert(lead_x != 0);                            \
     a = - lead_y;                                   \
     b = lead_x;                                     \
   };                                                \
-
 
 
   /** Tag class to determine whether to update DenseRow storage

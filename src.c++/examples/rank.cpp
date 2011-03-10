@@ -34,7 +34,7 @@ typedef long coord_t;
 // Select what type will be used for the matrix coefficients.
 #if defined(WITH_MODULAR_VALUES)
 
-# include <modular.hpp>
+# include <types/modular.hpp>
 # if defined(HAVE_LONG_LONG_INT)
 typedef long long mod_int_t;
 # else
@@ -44,7 +44,7 @@ typedef modular::Modular<mod_int_t> val_t;
 
 #elif defined(WITH_MODULAR_INT64_VALUES)
 
-# include <modular.hpp>
+# include <types/modular.hpp>
 typedef int64_ mod_int_t;
 typedef modular::Modular<mod_int_t> val_t;
 
@@ -82,6 +82,7 @@ typedef double val_t;
 #  define WITH_GMPXX
 # endif
 # include <gmpxx.h>
+# include <types/gmpxx.h>
 typedef mpq_class val_t;
 
 #elif defined(WITH_MPZ_VALUES)
@@ -92,6 +93,7 @@ typedef mpq_class val_t;
 #  define WITH_GMPXX
 # endif
 # include <gmpxx.h>
+# include <types/gmpxx.h>
 typedef mpz_class val_t;
 
 #else
