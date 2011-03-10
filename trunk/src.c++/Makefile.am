@@ -5,8 +5,12 @@ nobase_include_HEADERS = rheinfall/rheinfall.hpp rheinfall/row.hpp rheinfall/spa
 
 # build example programs
 bin_PROGRAMS = rank-int rank-double rank-mod 
+EXTRA_PROGRAMS = rank-xint
+if HAVE_BOOST_XINT
+  bin_PROGRAMS += rank-xint
+endif
 
-EXTRA_PROGRAMS = rank-int32 rank-int64
+EXTRA_PROGRAMS += rank-int32 rank-int64
 if HAVE_INT32_T
   bin_PROGRAMS += rank-int32
 endif
@@ -230,6 +234,14 @@ rank_mpz_mpi_omp_CPPFLAGS= $(rank_mpz_mpi_CPPFLAGS) $(RF_MPI_CPPFLAGS) $(OPENMP_
 rank_mpz_mpi_omp_CXXFLAGS= $(rank_mpz_mpi_CXXFLAGS) $(OPENMP_CXXFLAGS)
 rank_mpz_mpi_omp_LDFLAGS= $(rank_mpz_mpi_LDFLAGS) # openmp?
 rank_mpz_mpi_omp_LDADD = $(rank_mpz_mpi_LDADD) # openmp?
+
+# example program using Boost.XInt infinite-precision integer values
+rank_xint_SOURCES = examples/rank.cpp
+rank_xint_CPPFLAGS= $(AM_CPPFLAGS)  -DWITH_XINT_VALUES
+rank_xint_CXXFLAGS= $(AM_CXXFLAGS)
+rank_xint_LDFLAGS= $(AM_LDFLAGS) $(BOOST_XINT_LDFLAGS)
+rank_xint_LDADD = $(AM_LIBS) $(BOOST_XINT_LIBS)
+
 
 
 # unit tests

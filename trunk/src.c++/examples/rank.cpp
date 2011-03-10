@@ -96,6 +96,11 @@ typedef mpq_class val_t;
 # include <types/gmpxx.h>
 typedef mpz_class val_t;
 
+#elif defined(WITH_XINT_VALUES)
+
+# include <boost/xint/integer.hpp>
+# include <types/xint.hpp>
+typedef boost::xint::integer val_t;
 #else
 
 # error Please define one of: WITH_INT_VALUES, WITH_MODULAR_VALUES, WITH_DOUBLE_VALUES, WITH_MPZ_VALUES or WITH_MPQ_VALUES
