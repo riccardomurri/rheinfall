@@ -35,32 +35,34 @@
 
 #include <rheinfall/types.hpp>
 
+namespace rheinfall {
+  // mpz_t -- Integer ring
+  
+  /** Adapt GMPXX's @c mpz_gcd function to our calling convention. */
+  static inline
+  void rf_mpz_gcd(mpz_class &result, mpz_class const &p, mpz_class const &q)
+  {
+    mpz_gcd(result.get_mpz_t(), p.get_mpz_t(), q.get_mpz_t());
+  };
+  RF_TYPE_IS_GCD_RING(mpz_class, rf_mpz_gcd)
+  
+  // use in-place update in Row::gaussian_elimination()
+  template<> class use_inplace_update<mpz_class> : public mpl::bool_<true> { };
+  
+  
+  // mpq_t -- Rational field (representation as integer quotient)
+  
+  RF_TYPE_IS_DIVISION_RING(mpq_class)
+  
+  template<> class use_inplace_update<mpq_class> : public mpl::bool_<true> { };
+  
+  
+  // mpf_t -- Rational field (representation as infinite-precision decimal fractional number)
+  RF_TYPE_IS_DIVISION_RING(mpf_class)
+  
+  template<> class use_inplace_update<mpf_class> : public mpl::bool_<true> { };
+  
+}; // namespace rheinfall
 
-// mpz_t -- Integer ring
-
-/** Adapt GMPXX's @c mpz_gcd function to our calling convention. */
-static inline
-void rf_mpz_gcd(mpz_class &result, mpz_class const &p, mpz_class const &q)
-{
-  mpz_gcd(result.get_mpz_t(), p.get_mpz_t(), q.get_mpz_t());
-};
-RF_TYPE_IS_GCD_RING(mpz_class, rf_mpz_gcd)
-
-// use in-place update in Row::gaussian_elimination()
-template<> class use_inplace_update<mpz_class> : public mpl::bool_<true> { };
-
-
-// mpq_t -- Rational field (representation as integer quotient)
-
-RF_TYPE_IS_DIVISION_RING(mpq_class)
-
-template<> class use_inplace_update<mpq_class> : public mpl::bool_<true> { };
-
-
-// mpf_t -- Rational field (representation as infinite-precision decimal fractional number)
-RF_TYPE_IS_DIVISION_RING(mpf_class)
-
-template<> class use_inplace_update<mpf_class> : public mpl::bool_<true> { };
-
-
+  
 #endif // RF_TYPES_GMPXX_HPP
