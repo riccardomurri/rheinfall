@@ -13,8 +13,8 @@
 #GMP=5.0.1
 #GIVARO=3.3.2
 #ATLAS=3.8.3
-#BOOST=1.45.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.45.0/boost_1_45_0.tar.gz
-TCMALLOC=1.6 # http://google-perftools.googlecode.com/files/google-perftools-1.6.tar.gz
+BOOST=1.46.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.46.0/boost_1_46_0.tar.gz
+TCMALLOC=1.7 # http://google-perftools.googlecode.com/files/google-perftools-1.7.tar.gz
 #TBB=20100915oss # http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_lin.tgz
 
 # undefine when running on a non-homogeneous cluster
@@ -276,8 +276,8 @@ if [ -n "$BOOST" ]; then
         -O "${boost_file}.tar.gz"
     set -x 
     tar -xzf  "${boost_file}.tar.gz"
-    patch -p0 -i ${etc_dir}/boost_1_45_0.ssend.patch
     cd ${boost_file}
+    patch -p1 -i ${etc_dir}/boost_1_45_0.ssend.patch
     # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
     if [ "x$BOOST_MPI_HOMOGENEOUS" = "xyes" ]; then
         sed -e 's|^//#define BOOST_MPI_HOMOGENEOUS|#define BOOST_MPI_HOMOGENEOUS|' \
@@ -303,7 +303,7 @@ if [ -n "$TCMALLOC" ]; then
     _ Installing Google PerfTools $TCMALLOC ...
     cd ${sw}/src
     set -x
-    #wget -N http://google-perftools.googlecode.com/files/google-perftools-${TCMALLOC}.tar.gz
+    wget -N http://google-perftools.googlecode.com/files/google-perftools-${TCMALLOC}.tar.gz
     tar -xzf "google-perftools-${TCMALLOC}.tar.gz"
     cd google-perftools-${TCMALLOC}
     ./configure --prefix=${sw} \
