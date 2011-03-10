@@ -74,7 +74,7 @@ esac
 
 
 # check for needed Boost libraries 
-BOOST_REQUIRE([1.45]) # Boost.MPI has issend support only starting 1.46
+BOOST_REQUIRE([1.45]) # issend patch only tested starting 1.45.0
 BOOST_STATIC
 BOOST_SERIALIZATION
 BOOST_STATICASSERT
@@ -83,6 +83,8 @@ BOOST_TEST([],
         AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])],
     [have_boost_test=yes])
 AM_CONDITIONAL([HAVE_BOOST_TEST], [test "_$have_boost_test" = '_yes'])
+BOOST_XINT
+AM_CONDITIONAL([HAVE_BOOST_XINT], [test "_$have_boost_xint" = '_yes'])
 
 if test "_$have_CXX_mpi" = '_yes'; then
     BOOST_MPI([], 
