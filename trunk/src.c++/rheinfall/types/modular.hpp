@@ -136,11 +136,14 @@ BOOST_IS_MPI_DATATYPE(modular::Modular<long long>)
 //BOOST_CLASS_IMPLEMENTATION(val_t, boost::serialization::object_serializable);
 #endif
 
-// inform Rheinfall how Modolar<> classes should be treated
+namespace rheinfall {
+  // inform Rheinfall how Modolar<> classes should be treated
   RF_TYPE_IS_MODULAR_RING(modular::Modular<int>)
   RF_TYPE_IS_MODULAR_RING(modular::Modular<long>)
 #ifdef HAVE_LONG_LONG_INT
   RF_TYPE_IS_MODULAR_RING(modular::Modular<long long>)
 #endif
+}; // namespace rheinfall
+
 
 #endif // RF_TYPES_MODULAR_HPP
