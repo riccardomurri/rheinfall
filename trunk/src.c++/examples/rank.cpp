@@ -103,7 +103,7 @@ typedef mpz_class val_t;
 typedef boost::xint::integer val_t;
 #else
 
-# error Please define one of: WITH_INT_VALUES, WITH_MODULAR_VALUES, WITH_DOUBLE_VALUES, WITH_MPZ_VALUES or WITH_MPQ_VALUES
+# error Please define one of: WITH_INT_VALUES, WITH_MODULAR_VALUES, WITH_DOUBLE_VALUES, WITH_MPZ_VALUES, WITH_MPQ_VALUES or WITH_XINT_VALUES
 
 #endif // WITH_..._VALUES 
 
