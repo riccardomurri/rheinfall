@@ -31,15 +31,11 @@
 #define RF_TYPES_HPP
 
 
-#include "modular.hpp"
 
 #include <boost/mpl/bool.hpp>
 namespace mpl = boost::mpl;
 #include <boost/static_assert.hpp>
 
-#ifdef HAVE_GMPXX
-# include <gmpxx.h>
-#endif
 
 #include <algorithm>
 #include <cassert>
@@ -65,9 +61,9 @@ namespace rheinfall {
   /** Given the leading entries of two rows X and Y, set @a a and @a b
       so that a*X+b*Y is a row whose first non-zero entry is strictly
       to the right of the leading entries of X and Y. The generic
-      templated definition errors out, you have to provide a
-      specialization for any type you wish to use. See macros
-      RF_TYPE_IS_DIVISION_RING and RF_TYPE_IS_GCD_RING */
+      templated definition will error out at compile time: you have to
+      provide a specialization for any type you wish to use. See
+      macros RF_TYPE_IS_DIVISION_RING and RF_TYPE_IS_GCD_RING */
   template <typename val_t>
   static inline
   void get_row_multipliers(val_t const& lead_x, val_t const& lead_y,
@@ -76,6 +72,7 @@ namespace rheinfall {
     // see http://www.boost.org/doc/libs/1_43_0/doc/html/boost_staticassert.html
     BOOST_STATIC_ASSERT(sizeof(val_t) == 0);
   };
+
 
 
   /** @def RF_TYPE_IS_GCD_RING
@@ -148,15 +145,6 @@ namespace rheinfall {
   RF_TYPE_IS_GCD_RING(long long, pod_gcd<long long>)
 #endif
 
-#ifdef HAVE_GMPXX
-  /** Adapt GMPXX's @c mpz_gcd function to our calling convention. */
-  static inline
-  void rf_mpz_gcd(mpz_class &result, mpz_class const &p, mpz_class const &q)
-  {
-    mpz_gcd(result.get_mpz_t(), p.get_mpz_t(), q.get_mpz_t());
-  };
-  RF_TYPE_IS_GCD_RING(mpz_class, rf_mpz_gcd)
-#endif 
 
 
   /** @def RF_TYPE_IS_DIVISION_RING
@@ -203,10 +191,7 @@ namespace rheinfall {
   RF_TYPE_IS_DIVISION_RING(long double)
 #endif
 
-#ifdef HAVE_GMPXX
-  RF_TYPE_IS_DIVISION_RING(mpq_class)
-  RF_TYPE_IS_DIVISION_RING(mpf_class)
-#endif 
+
 
   /** @def RF_TYPE_IS_UNORDERED_DIVISION_RING
    * 
@@ -227,6 +212,8 @@ namespace rheinfall {
     b = 1;                                          \
   };                                                \
 
+
+
   /** @def RF_TYPE_IS_MODULAR_RING
    * 
    * Declare template specializations for instances of a type
@@ -244,11 +231,6 @@ namespace rheinfall {
     b = lead_x;                                     \
   };                                                \
 
-  RF_TYPE_IS_MODULAR_RING(modular::Modular<int>)
-  RF_TYPE_IS_MODULAR_RING(modular::Modular<long>)
-#ifdef HAVE_LONG_LONG_INT
-  RF_TYPE_IS_MODULAR_RING(modular::Modular<long long>)
-#endif
 
 
   /** Tag class to determine whether to update DenseRow storage
@@ -257,12 +239,6 @@ namespace rheinfall {
       to an instance of @c boost::mpl::true_ to enable in-place update. */
   template<typename T> class use_inplace_update : public mpl::bool_<false> { };
 
-#ifdef HAVE_GMPXX
-  // use in-place update with GMP types
-  template<> class use_inplace_update<mpf_class> : public mpl::bool_<true> { };
-  template<> class use_inplace_update<mpq_class> : public mpl::bool_<true> { };
-  template<> class use_inplace_update<mpz_class> : public mpl::bool_<true> { };
-#endif 
 
 
   /** Compare a value to zero; by default this is an exact comparison. */
