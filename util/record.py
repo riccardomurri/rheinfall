@@ -232,7 +232,7 @@ elif options.sql_file:
 
 ## main 
 
-rank_line_re = re.compile(r'^[^ ]+/(?P<program>[idqz]?rank(-int|-mod|-double)?([_-]mpi|[_-]omp){0,2}|lbrank_(?:bb|se_linear|se_none)) file:[^ ]+ ([a-z]+:[0-9]+ *)+ *((cpu|wc)?time:[0-9]+\.[0-9]+ *)+ *$')
+rank_line_re = re.compile(r'^[^ ]+/(?P<program>[icdqz]?rank(-int(32|64)?|-mod|-double|-mp[fqz]|-xint)?([_-]mpi|[_-]omp){0,2}|lbrank_(?:bb|se_linear|se_none)):? file:[^ ]+ ([a-z]+:[0-9]+ *)+ *((cpu|wc)?time:[0-9]+\.[0-9]+ *)+ *$')
 jobid_re = re.compile(r'.[eo](?P<jobid>[0-9]+)')
 whitespace_re = re.compile(r'\s+', re.X)
 garbage_re = re.compile(r'(MPI process \(rank: \d+\) terminated unexpectedly|\[[0-9a-z]+:\d+\] \[ *\d+\]|.*SIG[A-Z]+[0-9]*|/[/a-z0-9_]+: line [0-9]+: [0-9]+ Aborted|\[[a-z0-9]+:[0-9]+\] \*\*\* Process received signal).*')
