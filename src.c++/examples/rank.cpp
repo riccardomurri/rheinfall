@@ -82,7 +82,7 @@ typedef double val_t;
 #  define WITH_GMPXX
 # endif
 # include <gmpxx.h>
-# include <types/gmpxx.h>
+# include <types/gmpxx.hpp>
 typedef mpq_class val_t;
 
 #elif defined(WITH_MPZ_VALUES)
@@ -93,7 +93,7 @@ typedef mpq_class val_t;
 #  define WITH_GMPXX
 # endif
 # include <gmpxx.h>
-# include <types/gmpxx.h>
+# include <types/gmpxx.hpp>
 typedef mpz_class val_t;
 
 #elif defined(WITH_XINT_VALUES)
