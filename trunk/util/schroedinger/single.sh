@@ -5,18 +5,17 @@ if expr match "$flavor" 'run/' >/dev/null; then
     flavor=$(echo $flavor | cut -c5-)
 fi
 
-libdir=$(pwd)/util/schroedinger
-source $libdir/functions.sh \
-    || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
-alias module=true # work around lack of "modules" on idesl4-g
-setup_mpi_and_compiler_flavor "$flavor"
-
-
 bindir="run/${flavor}"
 if test ! -d "$bindir"; then
     echo 1>&2 "Cannot read directory: '$bindir'"
     exit 1
 fi
+
+libdir=$(pwd)/util/schroedinger
+source $libdir/functions.sh \
+    || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
+alias module=true # work around lack of "modules" on idesl4-g
+set_mpi_and_compiler_flavor "$flavor"
 
 flavor="${rev}-${compiler}-${mpi}"
 
