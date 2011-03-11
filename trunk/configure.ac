@@ -161,7 +161,7 @@ AM_CONDITIONAL([WITH_GE], [test "_$with_ge" = '_yes'])
 
 
 # Checks for header files.
-AC_CHECK_HEADERS([inttypes.h malloc.h stdlib.h string.h sys/time.h unistd.h])
+AC_CHECK_HEADERS([inttypes.h malloc.h stdint.h stdlib.h string.h sys/time.h sys/types.h unistd.h])
 
 
 # Checks for typedefs, structures, and compiler characteristics.

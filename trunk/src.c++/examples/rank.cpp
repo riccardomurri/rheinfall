@@ -59,10 +59,36 @@ typedef long val_t;
 
 #elif defined(WITH_INT32_VALUES)
 
+// we do not know where int32_t is defined; we just know that is, somewhere...
+# if defined(HAVE_STDINT_H)
+#  include <stdint.h>
+# endif
+# if defined(HAVE_INTTYPES_H)
+#  include <inttypes.h>
+# endif
+# if defined(HAVE_SYS_TYPES_H)
+#  include <sys/types.h>
+# endif
+# if defined(HAVE_STDLIB_H)
+#  include <stdlib.h>
+# endif
 typedef int32_t val_t;
 
 #elif defined(WITH_INT64_VALUES)
 
+// we do not know where int32_t is defined; we just know that is, somewhere...
+# if defined(HAVE_STDINT_H)
+#  include <stdint.h>
+# endif
+# if defined(HAVE_INTTYPES_H)
+#  include <inttypes.h>
+# endif
+# if defined(HAVE_SYS_TYPES_H)
+#  include <sys/types.h>
+# endif
+# if defined(HAVE_STDLIB_H)
+#  include <stdlib.h>
+# endif
 typedef int64_t val_t;
 
 #elif defined(WITH_DOUBLE_VALUES)
