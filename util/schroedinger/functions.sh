@@ -24,8 +24,8 @@ set_mpi_and_compiler_flavor () {
     rev="$(echo $flavor | cut -d/ -f1)"
     compiler_and_mpilib="$(echo $flavor | cut -d/ -f2)"
     if [ -z "$compiler_and_mpilib" -o "x$compiler_and_mpilib" = "x$rev" ]; then
-        # rev can be omitted - try to get it from the BZR/SVN repository
         compiler_and_mpilib="$rev"
+        # rev can be omitted - try to get it from the BZR/SVN repository
         rev="$current_rev"
     fi
 

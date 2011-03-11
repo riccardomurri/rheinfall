@@ -25,9 +25,10 @@ EOF
 
 exec="$1"; shift
 
-bindir=$HOME/rheinfall/util/schroedinger/
-
-source $bindir/functions.sh \
+# attempt to determine the directory where this script really resides
+realpath=$(readlink $0)
+libdir=$( (cd $(dirname "$realpath") && pwd -P) )
+source $libdir/functions.sh \
     || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
 
 spec="$(dirname "$exec")"
@@ -123,27 +124,27 @@ case "$exec" in
                 mpirun -np $np \
                     --bynode --nooversubscribe $gmca $hostfile \
                     -x LD_PRELOAD -x LD_LIBRARY_PATH -x PATH \
-                    $bindir/_exec.sh $exec $opts $files 
+                    $libdir/_exec.sh $exec $opts $files 
                 ;;
             para*) 
                 # filter hostfile so that we only have one occurrence of each host
                 uniq < $TMPDIR/machines > $TMPDIR/machines.uniq
                 mpiexec -np $np --hostfile $TMPDIR/machines.uniq \
                     -e PATH,LD_LIBRARY_PATH,LD_PRELOAD --loopnodesfirst \
-                    $bindir/_exec.sh $exec $opts $files 
+                    $libdir/_exec.sh $exec $opts $files 
                 ;;
             mvapich*) 
                 # filter hostfile so that we only have one occurrence of each host
                 uniq < $TMPDIR/machines > $TMPDIR/machines.uniq
                 mpirun_rsh -rsh -hostfile $TMPDIR/machines.uniq -np $np \
-                    $bindir/_exec.sh $exec $opts $files 
+                    $libdir/_exec.sh $exec $opts $files 
                 ;;
             intel|impi) 
                 mpiexec  -perhost 1 \
                     -genvlist LD_PRELOAD,LD_LIBRARY_PATH,PATH \
                     -env I_MPI_DEVICE rdssm \
                     -n $np \
-                    $bindir/_exec.sh $exec $opts $files
+                    $libdir/_exec.sh $exec $opts $files
                 ;;
         esac
         ;;
@@ -157,21 +158,21 @@ case "$exec" in
                 mpirun -np $NSLOTS --gmca btl tcp,sm,self \
                     --bynode --nooversubscribe --bind-to-core $gmca $hostfile \
                     -x LD_PRELOAD -x LD_LIBRARY_PATH -x PATH \
-                    $bindir/_exec.sh $exec $opts $files 
+                    $libdir/_exec.sh $exec $opts $files 
                 ;;
             para*) 
                 mpiexec -np $NSLOTS --hostfile $TMPDIR/machines \
                     -e PATH,LD_LIBRARY_PATH,LD_PRELOAD --loopnodesfirst \
-                    $bindir/_exec.sh $exec $opts $files 
+                    $libdir/_exec.sh $exec $opts $files 
                 ;;
             mvapich*) 
-                mpirun_rsh -rsh -hostfile $TMPDIR/machines -np $NSLOTS $bindir/_exec.sh $exec $opts $files 
+                mpirun_rsh -rsh -hostfile $TMPDIR/machines -np $NSLOTS $libdir/_exec.sh $exec $opts $files 
                 ;;
             intel|impi) 
                 mpiexec -n $NSLOTS \
                     -genvlist LD_PRELOAD,LD_LIBRARY_PATH,PATH \
                     -env I_MPI_DEVICE rdssm \
-                    $bindir/_exec.sh $exec $opts $files 
+                    $libdir/_exec.sh $exec $opts $files 
                 ;;
         esac
         ;;

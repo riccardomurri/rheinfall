@@ -5,21 +5,14 @@ if expr match "$flavor" 'run/' >/dev/null; then
     flavor=$(echo $flavor | cut -c5-)
 fi
 
-rev="$(echo $flavor | cut -d/ -f1)"
-compiler_and_mpilib="$(echo $flavor | cut -d/ -f2)"
-if [ -z "$compiler_and_mpilib" ]; then
-    compiler_and_mpilib="$rev"
-    rev="$( cat .bzr/branch/last-revision | (read revno rest; echo r$revno) )"
-fi
+# attempt to determine the directory where this script really resides
+realpath=$(readlink $0)
+libdir=$( (cd $(dirname "$realpath") && pwd -P) )
+source $libdir/functions.sh \
+    || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
+alias module=true # work around lack of "modules" on idesl4-g
+setup_mpi_and_compiler_flavor "$flavor"
 
-compiler=$(echo $compiler_and_mpilib | cut -d- -f1)
-if [ -z "$compiler" ]; then
-    compiler=gcc443
-fi
-mpi="$(echo $compiler_and_mpilib | cut -d- -f2)"
-if [ -z "$mpi" ]; then
-    mpi=ompi
-fi
 
 bindir="run/${flavor}"
 if test ! -d "$bindir"; then
