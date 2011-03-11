@@ -42,9 +42,7 @@ case `hostname` in
         *) : ;;
 esac
 
-# attempt to determine the directory where this script really resides
-realpath=$(readlink $0)
-libdir=$( (cd $(dirname "$realpath") && pwd -P) )
+libdir=$(pwd)/util/schroedinger
 source $libdir/functions.sh \
     || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
 
