@@ -3,7 +3,7 @@
 ##
 
 AC_PREREQ([2.65])
-AC_INIT([rheinfall],[0.14.26],[riccardo.murri@gmail.com])
+AC_INIT([rheinfall],[0.15.10],[riccardo.murri@gmail.com])
 AC_CONFIG_SRCDIR([src.c++/rheinfall/rheinfall.hpp])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
@@ -80,10 +80,13 @@ BOOST_SERIALIZATION
 BOOST_STATICASSERT
 BOOST_TEST([], 
     [have_boost_test=no;
-        AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])],
+     AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])],
     [have_boost_test=yes])
 AM_CONDITIONAL([HAVE_BOOST_TEST], [test "_$have_boost_test" = '_yes'])
-BOOST_XINT
+BOOST_XINT(
+    [have_boost_xint=no;
+     AC_MSG_WARN([Did not find Boost.XInt headers; not compiling example programs programs using the Boost.XInt value type.])],
+    [have_boost_xint=yes])
 AM_CONDITIONAL([HAVE_BOOST_XINT], [test "_$have_boost_xint" = '_yes'])
 
 if test "_$have_CXX_mpi" = '_yes'; then
@@ -172,8 +175,8 @@ AC_TYPE_LONG_LONG_INT
 AC_TYPE_LONG_DOUBLE
 AC_TYPE_INT32_T
 AC_TYPE_INT64_T
-AM_CONDITIONAL([HAVE_INT32_T], [test "_$ac_cv_type_int32_t" = '_yes'])
-AM_CONDITIONAL([HAVE_INT64_T], [test "_$ac_cv_type_int64_t" = '_yes'])
+AM_CONDITIONAL([HAVE_INT32_T], [test "_$ac_cv_c_int32_t" = '_yes'])
+AM_CONDITIONAL([HAVE_INT64_T], [test "_$ac_cv_c_int64_t" = '_yes'])
 AM_CONDITIONAL([HAVE_LONG_LONG_INT], [test "_$ac_cv_type_long_long_int" = '_yes'])
 AM_CONDITIONAL([HAVE_LONG_DOUBLE], [test "_$ac_cv_type_long_double" = '_yes'])
 
