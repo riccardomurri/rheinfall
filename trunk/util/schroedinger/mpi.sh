@@ -11,8 +11,12 @@ if test ! -d "$bindir"; then
     exit 1
 fi
 
-source $HOME/rheinfall/util/schroedinger/functions.sh \
+# attempt to determine the directory where this script really resides
+realpath=$(readlink $0)
+libdir=$( (cd $(dirname "$realpath") && pwd -P) )
+source $libdir/functions.sh \
     || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
+alias module=true # work around lack of "modules" on idesl4-g
 set_mpi_and_compiler_flavor "$flavor"
 
 flavor="${rev}-${compiler}-${mpi}"

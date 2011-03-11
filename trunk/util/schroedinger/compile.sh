@@ -30,7 +30,10 @@ case `hostname` in
         *) : ;;
 esac
 
-source $HOME/rheinfall/util/schroedinger/functions.sh \
+# attempt to determine the directory where this script really resides
+realpath=$(readlink $0)
+libdir=$( (cd $(dirname "$realpath") && pwd -P) )
+source $libdir/functions.sh \
     || { echo 1>&2 "Cannot load 'functions.sh' - aborting."; exit 1; }
 
 
@@ -67,7 +70,7 @@ fi
 
 echo === Compiling Rheinfall r$revno ... ===
 
-top_src_dir="$HOME/rheinfall"
+top_src_dir="$(pwd)"
 #build_dir="/lustre/ESPFS/scratch/oci/murri/rheinfall.${flavor}"
 build_dir="$HOME/data/tmp/rheinfall.${flavor}"
 
