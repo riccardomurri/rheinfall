@@ -57,8 +57,12 @@ extra=$(echo $rev | cut -d+ -f2)
 if [ "_r$revno" = "_$extra" ]; then
     extra=''
 fi
-if [ -n "$extra" -a "$revno" -ne "$current_rev" ]; then
-    die 1 "Cannot tag non-current revision: request for '$rev' but sources are at revision $current_rev"
+if [ -n "$extra" ]; then
+    if [  "$current_rev" = 'UNKNOWN' \
+        -o "$revno" -ne "$(echo $current_rev | cut -c2-)" ]; 
+    then
+        die 1 "Cannot tag non-current revision: request for '$rev' but sources are at revision $current_rev"
+    fi
 fi
 
 echo === Compiling Rheinfall r$revno ... ===
