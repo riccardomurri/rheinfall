@@ -83,11 +83,9 @@ BOOST_TEST([],
      AC_MSG_WARN([Could not find a usable Boost.Test library; not compiling test programs.])],
     [have_boost_test=yes])
 AM_CONDITIONAL([HAVE_BOOST_TEST], [test "_$have_boost_test" = '_yes'])
-BOOST_XINT(
-    [have_boost_xint=no;
-     AC_MSG_WARN([Did not find Boost.XInt headers; not compiling example programs programs using the Boost.XInt value type.])],
-    [have_boost_xint=yes])
-AM_CONDITIONAL([HAVE_BOOST_XINT], [test "_$have_boost_xint" = '_yes'])
+BOOST_XINT
+AM_CONDITIONAL([HAVE_BOOST_XINT], 
+               [test "_$ac_cv_header_boost_xint_integer_hpp" = '_yes'])
 
 if test "_$have_CXX_mpi" = '_yes'; then
     BOOST_MPI([], 
