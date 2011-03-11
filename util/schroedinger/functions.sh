@@ -11,12 +11,14 @@ fi
 set_mpi_and_compiler_flavor () {
     flavor="$1"; shift
 
-    if test -d .bzr; then
+    if test -d .bzr -a -e .bzr/branch/last-revision; then
         current_rev=$( cat .bzr/branch/last-revision | (read revno rest; echo r$revno) );
-    elif test -d .svn; then
-        current_rev=r$( env LC_ALL=C svn info | grep '^Revision:' | cut -d' ' -f2 );
-    elif bzr revno >/dev/null; then
+    elif test -d .svn -a -e .svn/entries; then
+        current_rev=r$( head -n 4 .svn/entries | tail -n 1 );
+    elif bzr revno >/dev/null 2>&1; then
         current_rev=r$( bzr revno );
+    elif svn info >/dev/null 2>&1; then
+        current_rev=r$( env LC_ALL=C svn info | grep ^Revision: | cut -d' ' -f2 )
     else
         current_rev=UNKNOWN
     fi
