@@ -60,6 +60,10 @@ require_command () {
   fi
 }
 
+is_absolute_path () {
+  expr "$1" : '/' >/dev/null 2>/dev/null
+}
+
 _ () {
     echo
     echo ==== "$@" ...;
@@ -95,7 +99,10 @@ elif [ -e ${PROG} ]; then
 fi
 
 # target directory
-sw="${1:-`pwd`/sw}"; shift
+sw="${1:-sw}"; shift
+if ! is_absolute_path "$sw"; then 
+    sw="$(pwd)/${sw}"
+fi
 mkdir -p "${sw}"
 mkdir -p "${sw}/src"
 cd "${sw}"
