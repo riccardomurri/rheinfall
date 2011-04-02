@@ -33,7 +33,7 @@
 # undef HAVE_GMPXX
 #endif
 
-#include <modular.hpp>
+#include <types/modular.hpp>
 
 typedef long mod_int_t;
 typedef modular::Modular<mod_int_t> val_t;
