@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,6 +48,7 @@ namespace mpl = boost::mpl;
 
 #include <cassert>
 #include <iostream>
+#include <memory> // std::allocator
 #include <stdexcept>
 #include <vector>
 
@@ -55,19 +56,20 @@ namespace mpl = boost::mpl;
 namespace rheinfall {
 
   // forward declarations to avoid circular dependency
-  template <typename val_t, typename coord_t> class Rheinfall;
-  template <typename val_t, typename coord_t> class Row;
-  template <typename val_t, typename coord_t> class SparseRow;
-  template <typename val_t, typename coord_t> class DenseRow;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class Rheinfall;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class Row;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class SparseRow;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class DenseRow;
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator = std::allocator>
     /** Store a matrix row in a linear vector of consecutive entries. */
-  class DenseRow : public Row<val_t,coord_t>
+  class DenseRow : public Row<val_t,coord_t,allocator>
     {
     public:
       /** Constructor, copying entries from a @c SparseRow instance. */
-      DenseRow(const SparseRow<val_t,coord_t>* r);
+      DenseRow(const SparseRow<val_t,coord_t,allocator>* r);
 
 #ifdef WITH_MPI
       /** Make a @a DenseRow instance from an MPI message payload.
@@ -75,8 +77,8 @@ namespace rheinfall {
           communicator/source/tag, that is passed unchanged to @c
           boost::mpi::communicator::recv(). */
       static
-      DenseRow<val_t,coord_t>* new_from_mpi_message(mpi::communicator& comm, 
-                                                    const int source, const int tag);
+      DenseRow<val_t,coord_t,allocator>* new_from_mpi_message(mpi::communicator& comm, 
+                                                              const int source, const int tag);
 #endif
 
       /** Construct a null row. */
@@ -96,23 +98,23 @@ namespace rheinfall {
         first nonzero entry at a column index strictly larger than
         the one of both rows. Return pointer to the combined row, which
         could possibly be this row if in-place update took place. */
-      DenseRow<val_t,coord_t>* gaussian_elimination(const SparseRow<val_t,coord_t>* other) const;
+      DenseRow<val_t,coord_t,allocator>* gaussian_elimination(const SparseRow<val_t,coord_t,allocator>* other) const;
 
     /** Perform Gaussian elimination: sum a multiple of this row to (a
         multiple of) row @c r so that the combination has its first
         nonzero entry at a column index strictly larger than the one
         of both rows. Return pointer to the combined row, which could
         possibly be the @p other row if in-place update took place. */
-      DenseRow<val_t,coord_t>* gaussian_elimination(DenseRow<val_t,coord_t>* other) const;
+      DenseRow<val_t,coord_t,allocator>* gaussian_elimination(DenseRow<val_t,coord_t,allocator>* other) const;
 
     protected:
-      typedef Row<val_t,coord_t> Row_; //< Nickname for base class; used to shorten templatized expressions
+      typedef Row<val_t,coord_t,allocator> Row_; //< Nickname for base class; used to shorten templatized expressions
 
-      friend class Rheinfall<val_t,coord_t>;
-      friend class SparseRow<val_t,coord_t>;
+      friend class Rheinfall<val_t,coord_t,allocator>;
+      friend class SparseRow<val_t,coord_t,allocator>;
 
       /// array of entries.
-      typedef std::vector<val_t> storage_t; 
+      typedef std::vector<val_t, allocator<val_t> > storage_t; 
       storage_t storage;
 
       /** Print a textual representation of the row to stream @c o. */
@@ -121,17 +123,17 @@ namespace rheinfall {
       /** Adjust @c size_ and @c starting_column to reflect the actual
           contents of the stored row.  Return pointer to adjusted row.
           If this is a null row, then delete it and return NULL. */
-      DenseRow<val_t,coord_t>* adjust();
+      DenseRow<val_t,coord_t,allocator>* adjust();
 
       /** Perform Gaussian Elimination, adding a suitable multiple of
           @a this to @p other, in-place.  Return pointer to @p other. */
-      DenseRow<val_t,coord_t>* gaussian_elimination_impl(mpl::true_ inplace_update, 
-                                                         DenseRow<val_t,coord_t>* restrict other) const; 
+      DenseRow<val_t,coord_t,allocator>* gaussian_elimination_impl(mpl::true_ inplace_update, 
+                                                                   DenseRow<val_t,coord_t,allocator>* restrict other) const; 
       /** Perform Gaussian Elimination, storing a suitable linear
           combination of @a this and @p other into a newly-allocated
           @c DenseRow.  Return pointer the new row and delete @p other. */
-      DenseRow<val_t,coord_t>* gaussian_elimination_impl(mpl::false_ inplace_update, 
-                                                         const DenseRow<val_t,coord_t>* restrict other) const;
+      DenseRow<val_t,coord_t,allocator>* gaussian_elimination_impl(mpl::false_ inplace_update, 
+                                                                   const DenseRow<val_t,coord_t,allocator>* restrict other) const;
 
 #ifdef WITH_MPI
       /** Default constructor, needed by boost::serialize.
@@ -161,14 +163,16 @@ namespace rheinfall {
 
 namespace rheinfall {
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline
-  DenseRow<val_t,coord_t>::DenseRow(const SparseRow<val_t,coord_t>* restrict r) 
+  DenseRow<val_t,coord_t,allocator>::
+  DenseRow(const SparseRow<val_t,coord_t,allocator>* restrict r) 
     : Row_::Row(Row_::dense, r->starting_column_, r->ending_column_, r->leading_term_),
       storage(Row_::ending_column_ - Row_::starting_column_, 0) 
   { 
     assert(std::distance(r->storage.begin(), r->storage.end()) <= storage.size());
-    for (typename SparseRow<val_t,coord_t>::storage_t::const_iterator it = r->storage.begin();
+    for (typename SparseRow<val_t,coord_t,allocator>::storage_t::const_iterator it = r->storage.begin();
          it != r->storage.end();
          ++it) 
       {
@@ -178,10 +182,12 @@ namespace rheinfall {
     assert(this->__ok());
   };
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline
-  DenseRow<val_t,coord_t>::DenseRow(const coord_t starting_column, 
-                                    const size_t ending_column) 
+  DenseRow<val_t,coord_t,allocator>::
+  DenseRow(const coord_t starting_column, 
+           const size_t ending_column) 
     : Row_::Row(Row_::dense, starting_column, ending_column, 0),
       storage(ending_column - starting_column, 0)
   { 
@@ -189,21 +195,25 @@ namespace rheinfall {
   };
 
 #ifdef WITH_MPI
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline
-  DenseRow<val_t,coord_t>* 
-  DenseRow<val_t,coord_t>::new_from_mpi_message(mpi::communicator& comm, 
-                                                const int source, const int tag)
+  DenseRow<val_t,coord_t,allocator>* 
+  DenseRow<val_t,coord_t,allocator>::
+  new_from_mpi_message(mpi::communicator& comm, 
+                       const int source, const int tag)
   {
-    DenseRow<val_t,coord_t>* row = new DenseRow<val_t,coord_t>();
+    DenseRow<val_t,coord_t,allocator>* row = new DenseRow<val_t,coord_t,allocator>();
     comm.recv(source, tag, *row);
     assert(row->__ok());
     return row;
   };
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline
-  DenseRow<val_t,coord_t>::DenseRow() 
+  DenseRow<val_t,coord_t,allocator>::
+  DenseRow() 
     : Row_::Row(Row_::dense, -1, -1, 0), storage() 
   { 
     // nothing to do
@@ -212,9 +222,11 @@ namespace rheinfall {
 
 
 #ifndef NDEBUG
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline bool
-  DenseRow<val_t,coord_t>::__ok() const
+  DenseRow<val_t,coord_t,allocator>::
+  __ok() const
   {
     assert(0 <= Row_::starting_column_);
     assert(Row_::starting_column_ <= Row_::ending_column_);
@@ -225,9 +237,11 @@ namespace rheinfall {
 #endif
 
 
-  template <typename val_t, typename coord_t>
-  inline DenseRow<val_t,coord_t>*
-  DenseRow<val_t,coord_t>::adjust()
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline DenseRow<val_t,coord_t,allocator>*
+  DenseRow<val_t,coord_t,allocator>::
+  adjust()
   {
     if (is_zero(Row_::leading_term_)) {
       // compute new starting column
@@ -251,9 +265,11 @@ namespace rheinfall {
   };
 
 
-  template <typename val_t, typename coord_t>
-  inline DenseRow<val_t,coord_t>* 
-  DenseRow<val_t,coord_t>::gaussian_elimination(const SparseRow<val_t,coord_t>* restrict other) 
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline DenseRow<val_t,coord_t,allocator>* 
+  DenseRow<val_t,coord_t,allocator>::
+  gaussian_elimination(const SparseRow<val_t,coord_t,allocator>* restrict other) 
     const restrict_this
   {
     assert(this->starting_column_ == other->starting_column_);
@@ -264,15 +280,17 @@ namespace rheinfall {
     // convert `other` to dense storage upfront: adding the
     // non-zero entries from `this` would made it pretty dense
     // anyway
-    DenseRow<val_t,coord_t>* dense_other(new DenseRow<val_t,coord_t>(other));
+    DenseRow<val_t,coord_t,allocator>* dense_other(new DenseRow<val_t,coord_t,allocator>(other));
     delete other;
     return this->gaussian_elimination(dense_other);
-  }; // DenseRow<val_t,coord_t>* gaussian_elimination(SparseRow<val_t,coord_t>* other)
+  }; // DenseRow<val_t,coord_t,allocator>* gaussian_elimination(SparseRow<val_t,coord_t,allocator>* other)
 
 
-  template <typename val_t, typename coord_t>
-  inline DenseRow<val_t,coord_t>*
-  DenseRow<val_t,coord_t>::gaussian_elimination(DenseRow<val_t,coord_t>* restrict other) 
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline DenseRow<val_t,coord_t,allocator>*
+  DenseRow<val_t,coord_t,allocator>::
+  gaussian_elimination(DenseRow<val_t,coord_t,allocator>* restrict other) 
     const restrict_this
   {
     assert(this->Row_::starting_column_ == other->Row_::starting_column_);
@@ -285,10 +303,12 @@ namespace rheinfall {
   }; // dense_row_ptr gaussian_elimination(dense_row_ptr other)
 
 
-  template <typename val_t, typename coord_t>
-  inline DenseRow<val_t,coord_t>*
-  DenseRow<val_t,coord_t>::gaussian_elimination_impl(mpl::true_ inplace_update, 
-                                                     DenseRow<val_t,coord_t>* restrict other) 
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline DenseRow<val_t,coord_t,allocator>*
+  DenseRow<val_t,coord_t,allocator>::
+  gaussian_elimination_impl(mpl::true_ inplace_update, 
+                            DenseRow<val_t,coord_t,allocator>* restrict other) 
     const restrict_this
   {
     val_t a, b;
@@ -302,7 +322,7 @@ namespace rheinfall {
     };
     other->Row_::leading_term_ = 0;
 
-    DenseRow<val_t,coord_t>* const result = 
+    DenseRow<val_t,coord_t,allocator>* const result = 
       other->adjust(); // update done, adjust size and starting column
     assert(NULL == result 
            or result->Row_::starting_column_ > this->Row_::starting_column_);
@@ -310,10 +330,12 @@ namespace rheinfall {
   }; // dense_row_ptr gaussian_elimination_impl(mpl::true_, dense_row_ptr other)
 
 
-  template <typename val_t, typename coord_t>
-  inline DenseRow<val_t,coord_t>*
-  DenseRow<val_t,coord_t>::gaussian_elimination_impl(mpl::false_ inplace_update, 
-                                                     const DenseRow<val_t,coord_t>* restrict other)
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline DenseRow<val_t,coord_t,allocator>*
+  DenseRow<val_t,coord_t,allocator>::
+  gaussian_elimination_impl(mpl::false_ inplace_update, 
+                            const DenseRow<val_t,coord_t,allocator>* restrict other)
     const restrict_this
   {
     val_t a, b;
@@ -321,7 +343,7 @@ namespace rheinfall {
                                other->Row_::leading_term_, 
                                a, b);
 
-    DenseRow<val_t,coord_t>* restrict result = 
+    DenseRow<val_t,coord_t,allocator>* restrict result = 
       new DenseRow(1 + this->Row_::starting_column_, this->Row_::ending_column_);
     assert(result->size() == this->size() - 1);
     size_t j = 0;
@@ -337,9 +359,11 @@ namespace rheinfall {
   }; // dense_row_ptr gaussian_elimination_impl(mpl::false_, dense_row_ptr other)
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline val_t
-  DenseRow<val_t,coord_t>::get(const coord_t col) const
+  DenseRow<val_t,coord_t,allocator>::
+  get(const coord_t col) const
   {
     assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
     if (col == Row_::starting_column_)
@@ -349,9 +373,11 @@ namespace rheinfall {
   };
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline void
-  DenseRow<val_t,coord_t>::print_on(std::ostream& out) const 
+  DenseRow<val_t,coord_t,allocator>::
+  print_on(std::ostream& out) const 
   {
     out << "["
         << Row_::starting_column_ <<":"<< Row_::leading_term_;
@@ -362,10 +388,12 @@ namespace rheinfall {
 
 
 #ifdef WITH_MPI
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   template<class Archive>
   inline void 
-  DenseRow<val_t,coord_t>::serialize(Archive& ar, const unsigned int version) 
+  DenseRow<val_t,coord_t,allocator>::
+  serialize(Archive& ar, const unsigned int version) 
   {
     assert(version == 0);
     // When the class Archive corresponds to an output archive, the
@@ -376,9 +404,11 @@ namespace rheinfall {
 #endif // WITH_MPI
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline void
-  DenseRow<val_t,coord_t>::set(const coord_t col, const val_t value) 
+  DenseRow<val_t,coord_t,allocator>::
+  set(const coord_t col, const val_t value) 
   {
     assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
     if (col == Row_::starting_column_)
@@ -388,9 +418,11 @@ namespace rheinfall {
   };
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline size_t 
-  DenseRow<val_t,coord_t>::size() const 
+  DenseRow<val_t,coord_t,allocator>::
+  size() const 
   { 
     return storage.size(); 
   };

@@ -188,6 +188,17 @@ typedef boost::xint::integer val_t;
 #include <stdexcept>
 #include <utility>
 
+#if defined(HAVE_EXT_MALLOC_ALLOCATOR_H) && defined(USE_MALLOC_ALLOCATOR)
+# include <ext/malloc_allocator.h>
+# define allocator __gnu_cxx::malloc_allocator
+#else
+# ifdef USE_MALLOC_ALLOCATOR
+#  warning Requested use of malloc allocator, but header file was not found by configure -- falling back to std::allocator
+# endif 
+# include <memory>
+# define allocator std::allocator
+#endif
+
 #include <getopt.h> // getopt_long
 #include <signal.h> // sigaltstack, sigaction, sig*set
 #include <string.h> // memcpy
@@ -515,9 +526,9 @@ main(int argc, char** argv)
 #endif
 
 #ifdef WITH_MPI
-      rheinfall::Rheinfall<val_t, coord_t> rf(world, cols, width);
+      rheinfall::Rheinfall<val_t, coord_t, allocator> rf(world, cols, width);
 #else
-      rheinfall::Rheinfall<val_t, coord_t> rf(cols, width);
+      rheinfall::Rheinfall<val_t, coord_t, allocator> rf(cols, width);
 #endif
 
       coord_t nnz = rf.read(input, rows, cols, true, transpose);
