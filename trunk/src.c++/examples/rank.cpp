@@ -218,7 +218,7 @@ usage(std::ostream& out, const int argc, char const* const* argv)
       << std::endl
       << "Options:" << std::endl
 #ifdef WITH_MODULAR_VALUES
-      << "  -p NUM  Perform computations modulo NUM (default: 2038076783)." << std::endl
+      << "  -p NUM  Perform computations modulo NUM (default: 2'147'483'647)." << std::endl
 #endif
 #if defined(WITH_MPI) or defined(_OPENMP)
       << "  -w NUM  Divide matrix in bands of NUM columns each and distribute" << std::endl
@@ -411,7 +411,7 @@ main(int argc, char** argv)
   bool transpose = false;
 
 #ifdef WITH_MODULAR_VALUES
-  modular::Modular<mod_int_t>::global_set_modulus(2038076783);
+  modular::Modular<mod_int_t>::global_set_modulus(2147483647);
 #endif
 
   int c;
