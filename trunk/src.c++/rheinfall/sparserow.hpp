@@ -324,21 +324,19 @@ namespace rheinfall {
     typename storage_t::const_iterator other_i = other->storage.begin();
     // loop while one of the two indexes is still valid
     while(this_i != this->storage.end() or other_i != other->storage.end()) {
-      coord_t this_col;
-      if (this_i != this->storage.end()) {
-        this_col = this_i->first;
-        assert (this_col > this->starting_column_);
-      }
-      else // this_i reached end of vector, use out-of-range value
-        this_col = this->ending_column_ + 1;
+      const coord_t this_col =
+        (this_i != this->storage.end())?
+        // use coord from row element
+        this_i->first
+        // this_i reached end of vector, use out-of-range value
+        : this->ending_column_ + 1;
 
-      coord_t other_col;
-      if (other_i != other->storage.end()) {
-        other_col = other_i->first;
-        assert (other_col > other->starting_column_);
-      }
-      else 
-        other_col = other->ending_column_ + 1;
+      const coord_t other_col = 
+        (other_i != other->storage.end())?
+        // use coord from row element
+        other_i->first
+        // else, other_i reached end of vector, use out-of-range value
+        : other->ending_column_ + 1;
 
       bool nonzero_found = false;
       coord_t coord;
