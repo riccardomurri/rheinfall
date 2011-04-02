@@ -42,18 +42,20 @@
 
 #include <cassert>
 #include <iostream>
+#include <memory> // std::allocator
 #include <stdexcept>
 
 
 namespace rheinfall {
 
   // declaration of Row-based classes
-  template <typename val_t, typename coord_t> class Row;
-  template <typename val_t, typename coord_t> class SparseRow;
-  template <typename val_t, typename coord_t> class DenseRow;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class Row;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class SparseRow;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class DenseRow;
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator = std::allocator>
   /** Abstract base class for matrix rows. */
   class Row 
   {
@@ -95,7 +97,7 @@ namespace rheinfall {
     /** Print a textual representation of the row to stream @c o.
         See http://www.parashift.com/c++-faq-lite/input-output.html#faq-15.11 */
     friend std::ostream& operator<< (std::ostream& out, 
-                                     Row< val_t,coord_t > const& row) {
+                                     Row<val_t,coord_t,allocator> const& row) {
       row.print_on(out);
       return out;
     };
@@ -133,12 +135,14 @@ namespace rheinfall {
 
 namespace rheinfall {
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline
-  Row<val_t,coord_t>::Row(const kind_t kind_, 
-                          const coord_t starting_column, 
-                          const coord_t ending_column, 
-                          const val_t leading_term)
+  Row<val_t,coord_t,allocator>::
+  Row(const kind_t kind_, 
+      const coord_t starting_column, 
+      const coord_t ending_column, 
+      const val_t leading_term)
     : kind(kind_), 
       starting_column_(starting_column), 
       ending_column_(ending_column),
@@ -148,35 +152,41 @@ namespace rheinfall {
     };
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline
-  Row<val_t,coord_t>::~Row()
+  Row<val_t,coord_t,allocator>::
+  ~Row()
   {
     // override in sub-classes
   };
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline coord_t 
-  Row<val_t,coord_t>::first_nonzero_column() const 
+  Row<val_t,coord_t,allocator>::
+  first_nonzero_column() const 
   {
     assert(not is_zero(leading_term_));
     return starting_column_;
   };
 
 
-  template <typename val_t, typename coord_t>
-  inline Row<val_t,coord_t>*
-  Row<val_t,coord_t>::gaussian_elimination(Row<val_t,coord_t>* restrict other, 
-                                           const float dense_threshold) 
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline Row<val_t,coord_t,allocator>*
+  Row<val_t,coord_t,allocator>::
+  gaussian_elimination(Row<val_t,coord_t,allocator>* restrict other, 
+                       const float dense_threshold) 
     const restrict_this
   {
     if ((sparse == this->kind) and (sparse == other->kind)) {
-      SparseRow<val_t,coord_t> const* s1 = static_cast<SparseRow<val_t,coord_t> const*>(this);
-      SparseRow<val_t,coord_t>* s2 = static_cast<SparseRow<val_t,coord_t>*>(other);
+      SparseRow<val_t,coord_t,allocator> const* s1 = static_cast<SparseRow<val_t,coord_t,allocator> const*>(this);
+      SparseRow<val_t,coord_t,allocator>* s2 = static_cast<SparseRow<val_t,coord_t,allocator>*>(other);
       if (s2->fill_in() > dense_threshold) {
         // FIXME: could merge ctor+elimination in one funcall
-        DenseRow<val_t,coord_t>* dense_other(new DenseRow<val_t,coord_t>(s2));
+        DenseRow<val_t,coord_t,allocator>* dense_other(new DenseRow<val_t,coord_t,allocator>(s2));
         delete other;
         return s1->gaussian_elimination(dense_other);
       }
@@ -185,18 +195,18 @@ namespace rheinfall {
       }; // if (fill_in > ...)
     }
     else if ((sparse == this->kind) and (dense == other->kind)) {
-      SparseRow<val_t,coord_t> const* s = static_cast<SparseRow<val_t,coord_t> const*>(this);
-      DenseRow<val_t,coord_t>* d = static_cast<DenseRow<val_t,coord_t>*>(other);
+      SparseRow<val_t,coord_t,allocator> const* s = static_cast<SparseRow<val_t,coord_t,allocator> const*>(this);
+      DenseRow<val_t,coord_t,allocator>* d = static_cast<DenseRow<val_t,coord_t,allocator>*>(other);
       return s->gaussian_elimination(d);
     }
     else if ((dense == this->kind) and (sparse == other->kind)) {
-      DenseRow<val_t,coord_t> const* d = static_cast<DenseRow<val_t,coord_t> const*>(this);
-      SparseRow<val_t,coord_t>* s = static_cast<SparseRow<val_t,coord_t>*>(other);
+      DenseRow<val_t,coord_t,allocator> const* d = static_cast<DenseRow<val_t,coord_t,allocator> const*>(this);
+      SparseRow<val_t,coord_t,allocator>* s = static_cast<SparseRow<val_t,coord_t,allocator>*>(other);
       return d->gaussian_elimination(s);
     }
     else if ((dense == this->kind) and (dense == other->kind)) {
-      DenseRow<val_t,coord_t> const* d1 = static_cast<DenseRow<val_t,coord_t> const*>(this);
-      DenseRow<val_t,coord_t>* d2 = static_cast<DenseRow<val_t,coord_t>*>(other);
+      DenseRow<val_t,coord_t,allocator> const* d1 = static_cast<DenseRow<val_t,coord_t,allocator> const*>(this);
+      DenseRow<val_t,coord_t,allocator>* d2 = static_cast<DenseRow<val_t,coord_t,allocator>*>(other);
       return d1->gaussian_elimination(d2);
     }
     else
@@ -206,10 +216,12 @@ namespace rheinfall {
 
 
 #ifdef WITH_MPI
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   template<class Archive>
   inline void 
-  Row<val_t,coord_t>::serialize(Archive& ar, const unsigned int version) 
+  Row<val_t,coord_t,allocator>::
+  serialize(Archive& ar, const unsigned int version) 
   {
     assert(version == 0);
     // When the class Archive corresponds to an output archive, the

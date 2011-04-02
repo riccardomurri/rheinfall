@@ -27,7 +27,7 @@
  */
 
 #ifndef RF_SPARSEROW_HPP
-#define RF_SPARSEROW_HPP
+#define RF_SPARSEROW_HPP 1
 
 
 #include "config.hpp"
@@ -47,6 +47,7 @@
 #include <cassert>
 #include <iostream>
 #include <iterator>
+#include <memory> // std::allocator
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -56,15 +57,16 @@ namespace rheinfall {
 
   // forward declaration of needed classes
   // (otherwise we have circular dependency problems)
-  template <typename val_t, typename coord_t> class Rheinfall;
-  template <typename val_t, typename coord_t> class Row;
-  template <typename val_t, typename coord_t> class SparseRow;
-  template <typename val_t, typename coord_t> class DenseRow;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class Rheinfall;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class Row;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class SparseRow;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class DenseRow;
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t,
+            template<typename T> class allocator = std::allocator >
   /** Store a matrix row as a vector of (column, entry) pairs. */
-  class SparseRow : public Row<val_t,coord_t>
+  class SparseRow : public Row<val_t,coord_t,allocator>
   {
   public:
 
@@ -79,8 +81,8 @@ namespace rheinfall {
         gotten from interval [p0, p1). */
     template <typename ForwardIter>
     static
-    SparseRow<val_t,coord_t>* new_from_range(ForwardIter p0, ForwardIter p1, 
-                                             const coord_t ending_column);
+    SparseRow<val_t,coord_t,allocator>* new_from_range(ForwardIter p0, ForwardIter p1, 
+                                                       const coord_t ending_column);
 
 #ifdef WITH_MPI
     /** Make a @a SparseRow instance from an MPI message payload.
@@ -88,8 +90,8 @@ namespace rheinfall {
         communicator/source/tag, that is passed unchanged to @c
         boost::mpi::communicator::recv(). */
     static
-    SparseRow<val_t,coord_t>* new_from_mpi_message(mpi::communicator& comm, 
-                                                   const int source, const int tag);
+    SparseRow<val_t,coord_t,allocator>* new_from_mpi_message(mpi::communicator& comm, 
+                                                             const int source, const int tag);
 #endif
 
     /** Return fill-in percentage, that is the number of actual
@@ -116,7 +118,7 @@ namespace rheinfall {
         first nonzero entry at a column index strictly larger than
         the one of both rows. Return pointer to the combined row, which
         could possibly be this row if in-place update took place. */
-    SparseRow<val_t,coord_t>* gaussian_elimination(SparseRow<val_t,coord_t>* other) const;
+    SparseRow<val_t,coord_t,allocator>* gaussian_elimination(SparseRow<val_t,coord_t,allocator>* other) const;
 
     /** Perform Gaussian elimination: sum a multiple of this row to
         (a multiple of) row @c r so that the combination has its
@@ -124,15 +126,16 @@ namespace rheinfall {
         the one of both rows. Return pointer to the combined row, which
         could possibly be this row if in-place update took place. 
         Elimination on a dense row returns a dense row. */
-    DenseRow<val_t,coord_t>* gaussian_elimination(DenseRow<val_t,coord_t>* other) const;
+    DenseRow<val_t,coord_t,allocator>* gaussian_elimination(DenseRow<val_t,coord_t,allocator>* other) const;
 
   protected:
 
     /** Nickname for base class; used to shorten templatized expressions. */
-    typedef Row<val_t,coord_t> Row_; 
+    typedef Row<val_t,coord_t,allocator> Row_; 
 
     /** Type used for storing the (coordinate, value) pairs that make up a sparse row. */
-    typedef std::vector< std::pair<coord_t,val_t> > storage_t;
+    typedef std::vector< std::pair<coord_t,val_t>,
+                         allocator<std::pair<coord_t,val_t> > > storage_t;
     /** Actual storage of the (coordinate, value) pairs that make up a
         sparse row.  The initial nonzero term is stored separately
         (see @ref Row::leading_term_). */
@@ -141,8 +144,8 @@ namespace rheinfall {
     /** Print a textual representation of the row to stream @c o. */
     virtual void print_on(std::ostream& o) const;
 
-    friend class Rheinfall<val_t,coord_t>; // read*() needs to call the above ctor
-    friend class DenseRow<val_t,coord_t>;
+    friend class Rheinfall<val_t,coord_t,allocator>; // read*() needs to call the above ctor
+    friend class DenseRow<val_t,coord_t,allocator>;
 
     /** Default constructor, needed by boost::serialize.
         Initializes the row with invalid values; should call
@@ -174,11 +177,13 @@ namespace rheinfall {
 
 namespace rheinfall {
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline
-  SparseRow<val_t,coord_t>::SparseRow(const coord_t starting_column, 
-                                      const coord_t ending_column, 
-                                      const val_t leading_term) 
+  SparseRow<val_t,coord_t,allocator>::
+  SparseRow(const coord_t starting_column, 
+            const coord_t ending_column, 
+            const val_t leading_term) 
     : Row_::Row(Row_::sparse, starting_column, ending_column, leading_term),
       storage() 
   { 
@@ -186,9 +191,10 @@ namespace rheinfall {
   };
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline
-  SparseRow<val_t,coord_t>::SparseRow() 
+  SparseRow<val_t,coord_t,allocator>::SparseRow() 
     : Row_::Row(Row_::sparse, -1, -1, 0),
       storage() 
   { 
@@ -196,15 +202,17 @@ namespace rheinfall {
   };
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   template <typename ForwardIter>
   inline
-  SparseRow<val_t,coord_t>*
-  SparseRow<val_t,coord_t>::new_from_range(ForwardIter p0,
-                                           ForwardIter p1,
-                                           const coord_t ending_column)
+  SparseRow<val_t,coord_t,allocator>*
+  SparseRow<val_t,coord_t,allocator>::
+  new_from_range(ForwardIter p0,
+                 ForwardIter p1,
+                 const coord_t ending_column)
   { 
-    SparseRow<val_t,coord_t>* row = new SparseRow();
+    SparseRow<val_t,coord_t,allocator>* row = new SparseRow();
     row->ending_column_ = ending_column;
     coord_t starting_column = ending_column;
     val_t leading_term = 0;
@@ -238,13 +246,15 @@ namespace rheinfall {
 
 
 #ifdef WITH_MPI
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline
-  SparseRow<val_t,coord_t>*
-  SparseRow<val_t,coord_t>::new_from_mpi_message(mpi::communicator& comm, 
-                                                 const int source, const int tag)
+  SparseRow<val_t,coord_t,allocator>*
+  SparseRow<val_t,coord_t,allocator>::
+  new_from_mpi_message(mpi::communicator& comm, 
+                       const int source, const int tag)
   {
-    SparseRow<val_t,coord_t>* row = new  SparseRow<val_t,coord_t>();
+    SparseRow<val_t,coord_t,allocator>* row = new  SparseRow<val_t,coord_t,allocator>();
     comm.recv(source, tag, *row);
     return row;
   };
@@ -252,9 +262,11 @@ namespace rheinfall {
 
 
 #ifndef NDEBUG
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline bool
-  SparseRow<val_t,coord_t>::__ok() const
+  SparseRow<val_t,coord_t,allocator>::
+  __ok() const
   {
     assert(0 <= Row_::starting_column_);
     assert(Row_::starting_column_ <= Row_::ending_column_);
@@ -274,9 +286,11 @@ namespace rheinfall {
 #endif
 
 
-  template <typename val_t, typename coord_t>
-  inline SparseRow<val_t,coord_t>*
-  SparseRow<val_t,coord_t>::adjust()
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline SparseRow<val_t,coord_t,allocator>*
+  SparseRow<val_t,coord_t,allocator>::
+  adjust()
   {
     if (storage.size() > 0) {
       Row_::starting_column_ = storage.front().first;
@@ -296,17 +310,20 @@ namespace rheinfall {
   };
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   float
-  SparseRow<val_t,coord_t>::fill_in() const 
+  SparseRow<val_t,coord_t,allocator>::fill_in() const 
   { 
     return 100.0 * size() / (Row_::ending_column_ - Row_::starting_column_); 
   };
 
 
-  template <typename val_t, typename coord_t>
-  SparseRow<val_t,coord_t>* 
-  SparseRow<val_t,coord_t>::gaussian_elimination(SparseRow<val_t,coord_t>* restrict other) 
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  SparseRow<val_t,coord_t,allocator>* 
+  SparseRow<val_t,coord_t,allocator>::
+  gaussian_elimination(SparseRow<val_t,coord_t,allocator>* restrict other) 
     const restrict_this
   {
     assert(this->__ok());
@@ -318,7 +335,7 @@ namespace rheinfall {
                                           other->Row_::leading_term_,
                                           a, b);
 
-    SparseRow<val_t,coord_t>* restrict result = NULL; // XXX: use boost::optional<...> instead?
+    SparseRow<val_t,coord_t,allocator>* restrict result = NULL; // XXX: use boost::optional<...> instead?
 
     typename storage_t::const_iterator this_i = this->storage.begin(); 
     typename storage_t::const_iterator other_i = other->storage.begin();
@@ -395,12 +412,14 @@ namespace rheinfall {
 #endif
     delete other; // release old storage
     return result;
-  }; // SparseRow<val_t,coord_t>* gaussian_elimination(SparseRow<val_t,coord_t>* r)
+  }; // SparseRow<val_t,coord_t,allocator>* gaussian_elimination(SparseRow<val_t,coord_t,allocator>* r)
 
 
-  template <typename val_t, typename coord_t>
-  DenseRow<val_t,coord_t>* 
-  SparseRow<val_t,coord_t>::gaussian_elimination(DenseRow<val_t,coord_t>* restrict other) 
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  DenseRow<val_t,coord_t,allocator>* 
+  SparseRow<val_t,coord_t,allocator>::
+  gaussian_elimination(DenseRow<val_t,coord_t,allocator>* restrict other) 
     const restrict_this
   {
     assert(this->starting_column_ == other->starting_column_);
@@ -424,16 +443,18 @@ namespace rheinfall {
       };
     other->Row_::leading_term_ = 0; // by construction
 
-    DenseRow<val_t,coord_t>* result = other->adjust();
+    DenseRow<val_t,coord_t,allocator>* result = other->adjust();
     assert(NULL == result 
            or result->Row_::starting_column_ > this->Row_::starting_column_);
     return result; // content update done, adjust size and starting column
-  }; // DenseRow<val_t,coord_t>* gaussian_elimination(DenseRow<val_t,coord_t>* other)
+  }; // DenseRow<val_t,coord_t,allocator>* gaussian_elimination(DenseRow<val_t,coord_t,allocator>* other)
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline val_t
-  SparseRow<val_t,coord_t>::get(const coord_t col) const
+  SparseRow<val_t,coord_t,allocator>::
+  get(const coord_t col) const
   {
     assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
     if (col == Row_::starting_column_) 
@@ -456,9 +477,11 @@ namespace rheinfall {
   }; // SparseRow::get(...) const 
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline void
-  SparseRow<val_t,coord_t>::print_on(std::ostream& out) const 
+  SparseRow<val_t,coord_t,allocator>::
+  print_on(std::ostream& out) const 
   {
     out << "{ "
         << Row_::starting_column_ <<":"<< Row_::leading_term_;
@@ -472,26 +495,30 @@ namespace rheinfall {
 
 
 #ifdef WITH_MPI
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   template<class Archive>
   inline void 
-  SparseRow<val_t,coord_t>::serialize(Archive& ar, const unsigned int version) 
+  SparseRow<val_t,coord_t,allocator>::
+  serialize(Archive& ar, const unsigned int version) 
   {
     assert(version == 0);
     // When the class Archive corresponds to an output archive, the
     // & operator is defined similar to <<.  Likewise, when the class Archive
     // is a type of input archive the & operator is defined similar to >>.
     ar 
-      & boost::serialization::base_object< Row<val_t,coord_t> >(*this) 
+      & boost::serialization::base_object< Row<val_t,coord_t,allocator> >(*this) 
       & storage;
     assert(this->__ok());
   }; // SparseRow::serialize(...)
 #endif // WITH_MPI
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline void
-  SparseRow<val_t,coord_t>::set(const coord_t col, const val_t value) 
+  SparseRow<val_t,coord_t,allocator>::
+  set(const coord_t col, const val_t value) 
   {
     assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
     if (col == Row_::starting_column_) {
@@ -517,9 +544,10 @@ namespace rheinfall {
   }; // SparseRow::set(...)
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline size_t 
-  SparseRow<val_t,coord_t>::size() const 
+  SparseRow<val_t,coord_t,allocator>::size() const 
   { 
     return storage.size(); 
   };

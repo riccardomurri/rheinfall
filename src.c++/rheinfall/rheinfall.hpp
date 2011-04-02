@@ -27,7 +27,7 @@
  */
 
 #ifndef RHEINFALL_HPP
-#define RHEINFALL_HPP
+#define RHEINFALL_HPP 1
 
 
 #include "config.hpp"
@@ -41,6 +41,7 @@
 # include <boost/optional.hpp>
 #endif
 
+#include <bits/allocator.h>
 #include <iostream>
 #include <list>
 #include <map>
@@ -52,7 +53,8 @@ namespace rheinfall {
 
   /** Implements the `Rheinfall` algorithm for the computation of matrix
       rank. */
-  template <typename val_t, typename coord_t = int>
+  template <typename val_t, typename coord_t = int, 
+            template<typename T> class allocator = std::allocator >
   class Rheinfall {
 
 public:
@@ -152,18 +154,19 @@ public:
     public:
       /** Constructor, taking parent instance and index of the columns
           to process. */
-      Processor(Rheinfall& parent,
-                const coord_t column);
+      Processor(Rheinfall& parent, const coord_t column);
       /** Destructor. Releases OpenMP lock and frees up remaining memory. */
       ~Processor();
       
     protected:     
-      Rheinfall<val_t,coord_t>& parent_; /**< Parent instance. */
-      const coord_t column_;             /**< Index of matrix column to process. */
-      friend class Rheinfall<val_t,coord_t>; // XXX: see rank()
+      /** Parent instance. */
+      Rheinfall<val_t,coord_t,allocator>& parent_;
+      /** Index of matrix column to process. */
+      const coord_t column_;
+      friend class Rheinfall<val_t,coord_t,allocator>; // XXX: see rank()
       
       /** Row used for elimination */
-      Row<val_t,coord_t>* u;
+      Row<val_t,coord_t,allocator>* u;
       
       /** Processor state: it is @c running when Gaussian elimination
           operations are being carried out regularly; it turns @c ending
@@ -173,7 +176,8 @@ public:
       enum { running, ending, done } phase;
       
       /** A block of rows. */
-      typedef std::list< Row<val_t,coord_t>* > row_list;
+      typedef std::list< Row<val_t,coord_t,allocator>*, 
+                         allocator<Row<val_t,coord_t,allocator>*> > row_list;
       /** The block of rows that will be eliminated next time @c step() is called. */
       row_list rows;
       /** List of incoming rows from other processors. */
@@ -186,7 +190,8 @@ public:
 #ifdef WITH_MPI
       /** Type used for storing the list of rows sent to other
           processors and the associated MPI request. */
-      typedef std::list< std::pair< mpi::request,Row<val_t,coord_t>* > > outbox_t;
+      typedef std::list< std::pair< mpi::request, Row<val_t,coord_t,allocator>* >,
+                         allocator< std::pair< mpi::request, Row<val_t,coord_t,allocator>* > > > outbox_t;
       /** List of rows sent to other processors and the associated MPI request. 
           We need to keep track of these in order to free the resources when we're done. */
       outbox_t outbox;
@@ -204,7 +209,7 @@ public:
     public: 
 
       /** Append the given row to @c inbox */
-      void recv_row(Row<val_t,coord_t>* new_row);
+      void recv_row(Row<val_t,coord_t,allocator>* new_row);
       
       /** Make a pass over the block of rows and return either 0 or 1
           (depending whether elimination took place or not). */
@@ -221,8 +226,10 @@ public:
     };
 
 
-    const coord_t ncols_;         /**< Number of matrix columns. */
-    std::vector<Processor*> vpus; /**< Local processors. */
+    /** Number of matrix columns. */
+    const coord_t ncols_;         
+    /** Local processors. */
+    std::vector< Processor*, allocator<Processor*> > vpus;
 
 #ifdef WITH_MPI
     mpi::communicator comm_; /**< MPI communicator. */
@@ -266,7 +273,7 @@ public:
 
     /** Send the row data pointed by @c row to the processor owning the
         block starting at @c col. Frees up @c row */
-    void send_row(Processor& source, Row<val_t,coord_t>* row);
+    void send_row(Processor& source, Row<val_t,coord_t,allocator>* row);
 
 #ifdef WITH_MPI
     /** Receive messages that have arrived during a computation cycle. */
@@ -283,7 +290,10 @@ public:
 
   private:
     /// only used inside `read` to keep rows in memory until the whole file has been loaded
-    typedef std::map< coord_t, SparseRow<val_t,coord_t>* > _rowmap_t;
+    typedef std::map< coord_t, SparseRow<val_t,coord_t,allocator>*,
+                      std::less<coord_t>,
+                      allocator< std::pair< coord_t, 
+                                            SparseRow<val_t,coord_t,allocator>* > > > _rowmap_t;
 };
 
 
@@ -293,10 +303,12 @@ public:
 
 // ------- inline methods -------
 
-  template <typename val_t, typename coord_t>
-  Rheinfall<val_t,coord_t>::Rheinfall(const coord_t ncols, 
-                                      const coord_t width,
-                                      const float dense_threshold)
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  Rheinfall<val_t,coord_t,allocator>::
+  Rheinfall(const coord_t ncols, 
+            const coord_t width,
+            const float dense_threshold)
     : ncols_(ncols)
     , vpus()
     , w_(width)
@@ -316,18 +328,20 @@ public:
     vpus.reserve(nmemb);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
-        vpus.push_back(new Processor(*this, c));
+        vpus.push_back(new Rheinfall<val_t,coord_t,allocator>::Processor(*this, c));
     // internal check that the size of the data structure is actually correct
     assert(vpus.size() <= nmemb);
   };
 
 
 #ifdef WITH_MPI
-  template <typename val_t, typename coord_t>
-  Rheinfall<val_t,coord_t>::Rheinfall(mpi::communicator& comm, 
-                                      const coord_t ncols, 
-                                      const coord_t width,
-                                      const float dense_threshold)
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  Rheinfall<val_t,coord_t,allocator>::
+  Rheinfall(mpi::communicator& comm, 
+            const coord_t ncols, 
+            const coord_t width,
+            const float dense_threshold)
   : ncols_(ncols)
   , vpus()
   , comm_(comm)
@@ -340,7 +354,7 @@ public:
   vpus.reserve(1 + ncols_ / nprocs_);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
-        vpus.push_back(new Processor(*this, c));
+        vpus.push_back(new Rheinfall<val_t,coord_t,allocator>::Processor(*this, c));
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_init_lock(& mpi_send_lock_); 
 # endif // _OPENMP && WITH_MPI_SERIALIZED
@@ -348,8 +362,9 @@ public:
 #endif
 
 
-  template <typename val_t, typename coord_t>
-  Rheinfall<val_t,coord_t>::~Rheinfall()
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  Rheinfall<val_t,coord_t,allocator>::~Rheinfall()
   {
 #if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_destroy_lock(& mpi_send_lock_); 
@@ -357,17 +372,20 @@ public:
   };
 
   
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   coord_t
-  Rheinfall<val_t,coord_t>::read_noninterleaved(std::istream& input,  
-                                                coord_t& nrows, coord_t& ncols, 
-                                                const bool transpose) 
+  Rheinfall<val_t,coord_t,allocator>::
+  read_noninterleaved(std::istream& input,  
+                      coord_t& nrows, coord_t& ncols, 
+                      const bool transpose) 
   {
     // count non-zero items read
     coord_t nnz = 0;
     
     // only read rows whose leading column falls in our domain
-    SparseRow<val_t,coord_t>* row = new SparseRow<val_t,coord_t>(ncols_ - 1);
+    SparseRow<val_t,coord_t,allocator>* row = 
+      new SparseRow<val_t,coord_t,allocator>(ncols_ - 1);
     
     if (0 == nrows) {
       // read header
@@ -405,7 +423,7 @@ public:
             // discard null rows and rows belonging to other MPI ranks
             delete row;
         };
-        row = new SparseRow<val_t,coord_t>(ncols_ - 1);
+        row = new SparseRow<val_t,coord_t,allocator>(ncols_ - 1);
         last_row_index = i;
       };
       if (-1 == i and -1 == j and 0 == value)
@@ -418,10 +436,12 @@ public:
   };
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   coord_t
-  Rheinfall<val_t,coord_t>::read(std::istream& input,  coord_t& nrows, coord_t& ncols, 
-                                 const bool local_only, const bool transpose)
+  Rheinfall<val_t,coord_t,allocator>::
+  read(std::istream& input,  coord_t& nrows, coord_t& ncols, 
+       const bool local_only, const bool transpose)
   {
     if (0 == nrows) {
       // read header
@@ -437,8 +457,14 @@ public:
     coord_t nnz = 0;
     
     // need to keep rows in memory until we reach end of file
-    std::map< coord_t, std::map< coord_t,val_t > > m;
-    
+    typedef std::pair< const coord_t,val_t > _coord_and_val;
+    typedef std::map< coord_t, val_t, std::less<coord_t>, 
+                      allocator<_coord_and_val> > _simplerow;
+    typedef std::pair< const coord_t,_simplerow > _coord_and_simplerow;
+    typedef std::map< coord_t, _simplerow, std::less<coord_t>, 
+                      allocator<_coord_and_simplerow> > _simplerows;
+    _simplerows m;
+
     coord_t i, j;
     val_t value;
     while (not input.eof()) {
@@ -460,16 +486,16 @@ public:
     }; // while(not eof)
 
 #ifdef WITH_MPI
-    std::list< mpi::request > outbox;
+    std::list< mpi::request, allocator<mpi::request> > outbox;
 #endif
-    for (typename std::map< coord_t, std::map< coord_t,val_t > >::iterator it = m.begin(); 
+    for (typename _simplerows::iterator it = m.begin(); 
          it != m.end(); 
          ++it) {
       if (it->second.begin() != it->second.end()) { // non-null matrix row
-        SparseRow<val_t,coord_t>* row = 
-          SparseRow<val_t,coord_t>::new_from_range(it->second.begin(), 
-                                                   it->second.end(), 
-                                                   ncols-1);
+        SparseRow<val_t,coord_t,allocator>* row = 
+          SparseRow<val_t,coord_t,allocator>::new_from_range(it->second.begin(), 
+                                                             it->second.end(), 
+                                                             ncols-1);
         if (NULL == row)
           continue; // with next `it`
         const coord_t starting_column = row->first_nonzero_column();
@@ -504,9 +530,11 @@ public:
   };
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   coord_t 
-  Rheinfall<val_t,coord_t>::rank() 
+  Rheinfall<val_t,coord_t,allocator>::
+  rank() 
   {
     // kickstart termination signal
     if (is_local(0)) {
@@ -514,7 +542,7 @@ public:
     };
 
     // where to collect (partial) ranks
-    std::vector<coord_t> r(vpus.size(), 0);
+    std::vector<coord_t, allocator<coord_t> > r(vpus.size(), 0);
   
     coord_t n0 = 0;
     while(n0 < vpus.size()) {
@@ -535,8 +563,8 @@ public:
       while (boost::optional<mpi::status> status = comm_.iprobe()) { 
         switch(status->tag()) {
         case TAG_ROW_SPARSE: {
-          SparseRow<val_t,coord_t>* new_row = 
-            SparseRow<val_t,coord_t>::new_from_mpi_message(comm_, status->source(), status->tag());
+          SparseRow<val_t,coord_t,allocator>* new_row = 
+            SparseRow<val_t,coord_t,allocator>::new_from_mpi_message(comm_, status->source(), status->tag());
           assert(is_local(new_row->first_nonzero_column()));
           Processor* vpu = vpu_for_column(new_row->first_nonzero_column());
           assert(NULL != vpu);
@@ -544,8 +572,8 @@ public:
           break;
         };
         case TAG_ROW_DENSE: {
-          DenseRow<val_t,coord_t>* new_row = 
-            DenseRow<val_t,coord_t>::new_from_mpi_message(comm_, status->source(), status->tag());
+          DenseRow<val_t,coord_t,allocator>* new_row = 
+            DenseRow<val_t,coord_t,allocator>::new_from_mpi_message(comm_, status->source(), status->tag());
           assert(is_local(new_row->first_nonzero_column()));
           Processor* vpu = vpu_for_column(new_row->first_nonzero_column());
           assert(NULL != vpu);
@@ -590,9 +618,11 @@ public:
   };
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline bool 
-  Rheinfall<val_t,coord_t>::is_local(const coord_t c) const 
+  Rheinfall<val_t,coord_t,allocator>::
+  is_local(const coord_t c) const 
   { 
 #ifdef WITH_MPI
     return (owner(c) == me_); 
@@ -602,27 +632,31 @@ public:
   };
   
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline coord_t 
-  Rheinfall<val_t,coord_t>::vpu_index_for_column(const coord_t c) const
+  Rheinfall<val_t,coord_t,allocator>::
+  vpu_index_for_column(const coord_t c) const
   { 
     assert(c >= 0 and c < ncols_);
     return (w_ * ((c/w_) / nprocs_) + (c % w_));
   };
 
 
-  template <typename val_t, typename coord_t>
-  inline typename Rheinfall<val_t,coord_t>::Processor*
-  Rheinfall<val_t,coord_t>::vpu_for_column(const coord_t c) const
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline typename Rheinfall<val_t,coord_t,allocator>::Processor*
+  Rheinfall<val_t,coord_t,allocator>::
+  vpu_for_column(const coord_t c) const
   { 
     return vpus[vpu_index_for_column(c)]; 
   };
 
 
 #ifdef WITH_MPI
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, template<typename T> class allocator>
   inline int 
-  Rheinfall<val_t,coord_t>::owner(const coord_t c) const
+  Rheinfall<val_t,coord_t,allocator>::owner(const coord_t c) const
   { 
     assert(c >= 0 and c < ncols_);
     return ((c/w_) % nprocs_); 
@@ -630,9 +664,11 @@ public:
 #endif
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline void
-  Rheinfall<val_t,coord_t>::send_row(Processor& source, Row<val_t,coord_t>* row) 
+  Rheinfall<val_t,coord_t,allocator>::
+  send_row(Processor& source, Row<val_t,coord_t,allocator>* row) 
 {
   coord_t column = row->first_nonzero_column();
   assert(column >= 0 and column < ncols_);
@@ -647,12 +683,12 @@ public:
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_set_lock(& mpi_send_lock_);
 # endif
-    if (row->kind == Row<val_t,coord_t>::sparse) 
+    if (row->kind == Row<val_t,coord_t,allocator>::sparse) 
       req = comm_.issend(owner(column), TAG_ROW_SPARSE, 
-                        *(static_cast<SparseRow<val_t,coord_t>*>(row)));
-    else if (row->kind == Row<val_t,coord_t>::dense)
+                        *(static_cast<SparseRow<val_t,coord_t,allocator>*>(row)));
+    else if (row->kind == Row<val_t,coord_t,allocator>::dense)
       req = comm_.issend(owner(column), TAG_ROW_DENSE, 
-                        *(static_cast<DenseRow<val_t,coord_t>*>(row)));
+                        *(static_cast<DenseRow<val_t,coord_t,allocator>*>(row)));
     else 
       // should not happen!
       throw std::logic_error("Unhandled row kind in Rheinfall::send_row()");
@@ -665,9 +701,11 @@ public:
 };
 
 
-template <typename val_t, typename coord_t>
+template <typename val_t, typename coord_t, 
+          template<typename T> class allocator>
 inline void 
-Rheinfall<val_t,coord_t>::send_end(Processor const& origin, const coord_t column) const
+Rheinfall<val_t,coord_t,allocator>::
+send_end(Processor const& origin, const coord_t column) const
 {
   if (column >= ncols_)
     return;
@@ -694,9 +732,11 @@ Rheinfall<val_t,coord_t>::send_end(Processor const& origin, const coord_t column
 
 // ------- Processor -------
 
-  template <typename val_t, typename coord_t>
-  Rheinfall<val_t,coord_t>::Processor::Processor(Rheinfall<val_t,coord_t>& parent, 
-                                                 const coord_t column)
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  Rheinfall<val_t,coord_t,allocator>::Processor::
+  Processor(Rheinfall<val_t,coord_t,allocator>& parent, 
+            const coord_t column)
       : parent_(parent),
         column_(column), 
         u(NULL), 
@@ -715,8 +755,10 @@ Rheinfall<val_t,coord_t>::send_end(Processor const& origin, const coord_t column
     };
 
 
-template <typename val_t, typename coord_t>
-Rheinfall<val_t,coord_t>::Processor::~Processor()
+template <typename val_t, typename coord_t, 
+          template<typename T> class allocator>
+Rheinfall<val_t,coord_t,allocator>::Processor::
+~Processor()
 {
 #ifdef _OPENMP
       omp_destroy_lock(&inbox_lock_);
@@ -729,13 +771,15 @@ Rheinfall<val_t,coord_t>::Processor::~Processor()
 }
 
 
-  template <typename val_t, typename coord_t>
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
   inline void 
-  Rheinfall<val_t,coord_t>::Processor::recv_row(Row<val_t,coord_t>* new_row) 
+  Rheinfall<val_t,coord_t,allocator>::Processor::
+  recv_row(Row<val_t,coord_t,allocator>* new_row) 
   {
     assert(running == phase);
-    assert((Row<val_t,coord_t>::sparse == new_row->kind 
-            or Row<val_t,coord_t>::dense == new_row->kind));
+    assert((Row<val_t,coord_t,allocator>::sparse == new_row->kind 
+            or Row<val_t,coord_t,allocator>::dense == new_row->kind));
     assert(column_ == new_row->starting_column_);
 #ifdef _OPENMP
     omp_set_lock(&inbox_lock_);
@@ -747,9 +791,11 @@ Rheinfall<val_t,coord_t>::Processor::~Processor()
   };
 
 
-template <typename val_t, typename coord_t>
+template <typename val_t, typename coord_t, 
+          template<typename T> class allocator>
 coord_t
-Rheinfall<val_t,coord_t>::Processor::step() 
+Rheinfall<val_t,coord_t,allocator>::Processor::
+step() 
 {
 #ifdef _OPENMP
   omp_set_lock(&processing_lock_);
@@ -778,24 +824,25 @@ Rheinfall<val_t,coord_t>::Processor::step()
     assert (NULL != u);
     for (typename row_list::iterator it = rows.begin(); it != rows.end(); ++it) {
       // swap `u` and the new row if the new row is shorter, or has "better" leading term
-      if (Row<val_t,coord_t>::sparse == (*it)->kind) {
-        SparseRow<val_t,coord_t>* s = static_cast<SparseRow<val_t,coord_t>*>(*it);
-        if (Row<val_t,coord_t>::sparse == u->kind) {
+      if (Row<val_t,coord_t,allocator>::sparse == (*it)->kind) {
+        SparseRow<val_t,coord_t,allocator>* s = 
+          static_cast<SparseRow<val_t,coord_t,allocator>*>(*it);
+        if (Row<val_t,coord_t,allocator>::sparse == u->kind) {
           // if `*it` (new row) is shorter, it becomes the new pivot row
           if (s->size() < u->size())
             std::swap(u, *it);
         }
-        else if (Row<val_t,coord_t>::dense == u->kind)
+        else if (Row<val_t,coord_t,allocator>::dense == u->kind)
           std::swap(u, *it);
         else 
           assert(false); // forgot one kind in chained `if`s?
       }
-      else if (Row<val_t,coord_t>::dense == (*it)->kind) {
-        if (Row<val_t,coord_t>::dense == u->kind) {
+      else if (Row<val_t,coord_t,allocator>::dense == (*it)->kind) {
+        if (Row<val_t,coord_t,allocator>::dense == u->kind) {
           // swap `u` and `row` iff `row`'s leading term is "better"
           if (first_is_better_pivot<val_t>
-              (static_cast<DenseRow<val_t,coord_t>*>(*it)->leading_term_,
-               static_cast<DenseRow<val_t,coord_t>*>(u)->leading_term_))
+              (static_cast<DenseRow<val_t,coord_t,allocator>*>(*it)->leading_term_,
+               static_cast<DenseRow<val_t,coord_t,allocator>*>(u)->leading_term_))
             // swap `u` and `row`
             std::swap(u, *it);
         };
@@ -805,7 +852,8 @@ Rheinfall<val_t,coord_t>::Processor::step()
         assert(false); // forgot a row kind in `if` chain?
 
       // perform elimination -- return NULL in case resulting row is full of zeroes
-      Row<val_t,coord_t>* new_row = u->gaussian_elimination(*it, parent_.dense_threshold);
+      Row<val_t,coord_t,allocator>* new_row = 
+        u->gaussian_elimination(*it, parent_.dense_threshold);
       // ship reduced rows to other processors
       if (NULL != new_row) {
         assert(new_row->starting_column_ > this->column_);
@@ -857,7 +905,7 @@ Rheinfall<val_t,coord_t>::Processor::step()
 #ifdef WITH_MPI        
     if (outbox.size() > 0) {
       // wait untill all sent messages have arrived
-      std::vector< mpi::request > reqs;
+      std::vector< mpi::request, allocator<mpi::request> > reqs;
       reqs.reserve(outbox.size());
       for (typename outbox_t::iterator it = outbox.begin();
            it != outbox.end();
@@ -894,17 +942,21 @@ Rheinfall<val_t,coord_t>::Processor::step()
 }
 
 
-template <typename val_t, typename coord_t>
+template <typename val_t, typename coord_t, 
+          template<typename T> class allocator>
 inline void 
-Rheinfall<val_t,coord_t>::Processor::end_phase() 
+Rheinfall<val_t,coord_t,allocator>::Processor::
+end_phase() 
 { 
   phase = ending; 
 };
 
 
-template <typename val_t, typename coord_t>
+template <typename val_t, typename coord_t, 
+          template<typename T> class allocator>
 inline bool 
-Rheinfall<val_t,coord_t>::Processor::is_done() const 
+Rheinfall<val_t,coord_t,allocator>::Processor::
+is_done() const 
 { 
   return (done == phase); 
 };
