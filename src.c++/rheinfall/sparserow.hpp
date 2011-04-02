@@ -355,22 +355,21 @@ namespace rheinfall {
         // else, other_i reached end of vector, use out-of-range value
         : other->ending_column_ + 1;
 
-      bool nonzero_found = false;
+      bool nonzero_found = true;
       coord_t coord;
       val_t entry;
       if (other_col < this_col) {
         entry = b * other_i->second;
         assert(not is_zero(entry));
         coord = other_col;
-        nonzero_found = true;
         ++other_i;
       }
       else if (other_col == this_col) {
         entry = a * this_i->second + b * other_i->second;
-        if (not is_zero(entry)) {
+        if (is_zero(entry))
+          nonzero_found = false;
+        else
           coord = this_col;
-          nonzero_found = true;
-        };
         ++this_i;
         ++other_i;
       }
@@ -378,7 +377,6 @@ namespace rheinfall {
         entry = a * this_i->second;
         assert(not is_zero(entry));
         coord = this_col;
-        nonzero_found = true;
         ++this_i;
       }
       else 
