@@ -220,8 +220,6 @@ usage(std::ostream& out, const int argc, char const* const* argv)
 #ifdef WITH_MODULAR_VALUES
       << "  -p NUM  Perform computations modulo NUM (default: 2038076783)." << std::endl
 #endif
-      << "  -m NUM  Limit memory consumption to NUM GBs;" << std::endl
-      << "          if more memory is needed, the program will abort." << std::endl
 #if defined(WITH_MPI) or defined(_OPENMP)
       << "  -w NUM  Divide matrix in bands of NUM columns each and distribute" << std::endl
       << "          bands to MPI ranks / OpenMP tasks in a round-robin fashion." << std::endl
