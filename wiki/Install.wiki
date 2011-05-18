@@ -1,0 +1,110 @@
+#summary Installation instructions
+#labels Featured
+
+= Introduction =
+
+Rheinfall consists of a C++ library and example programs.
+
+The C++ library is a header-only library; no compilation is necessary
+and the installation procedure just copies the header files into a
+directory `rheinfall/` on your compiler's _include_ path.
+
+The example programs compute the rank of an input matrix in
+[http://ljk.imag.fr/membres/Jean-Guillaume.Dumas/simc.html SMS format].
+The same program is offered in C and C++ versions.  The C++ version
+demoes the features available through the library; the C version
+implements the same algorithm directly, so you will have to copy and
+modify the code to adapt it, e.g., to use a different data type.
+
+== What is actually built ==
+
+C++ example programs are built in the following flavors: 
+
+  * `rank-int`, `rank-int32`, `rank-64`: integer-based exact computation, using fixed-width integer types: `rank-int` uses the widest integer type available in the compiler, `rank-int32` uses 32-bit integers and `rank-int64` uses 64-bit integers (if available);
+  * `rank-mod`: modular arithmetic (32-bit modulus);
+  * `rank-double`: double precision; 
+  * `rank-mpq`, `rank-mpz`: infinite precision rational and integer types, if you have GMP installed.
+
+The C example programs are built in the following flavors:
+  * `crank-int`: integer based exact computation, using the widest integer type available from the compiler;
+  * `crank-double`: double precision.
+
+If the `./configure` script can find an MPI library and compiler, then
+programs `rank-*-mpi` and `crank-*-mpi` will be built, that implement
+the parallel version of the Rheinfall algorithm over MPI.  You can
+avoid compiling MPI code (and not even check for MPI presence) by
+passing option `--with-mpi=no` to `./configure`.
+
+If your compiler has OpenMP support, programs `rank-*-omp` and
+`crank-*-omp` will be built, that implement the parallel version of
+Rheinfall using OpenMP threads.  Use of the OpenMP-based versions is
+_presently discouraged:_ the OpenMP code does not have any significant
+performance advantage over the serial one, and it has data corruptions
+issues (because of lack of locking in the shared data structures).
+There is not way, to disable compiling the OpenMP variants at present;
+just don't use them.
+
+
+= Required Software =
+
+In order to compile "Rheinfall" you need to install some software
+dependencies.
+
+  * You need a C++ compiler with good template support; these days, any compiler should do.  I've only tested GCC (from version 4.1 onwards) and Intel C++ (versions 11 and 12).
+
+  * In order to get the infinite precision support, you need to have GMP installed (with C++ support!).  Then just pass the `--with-gmp=PATH` option to `./configure`; the GMP library `PATH` should contain a `lib/` subdirectory with the GMP and GMPxx libraries in it.
+
+  * You need the Boost.MPI library; specify its location with the command-line option `--with-boost=PATH` to `./configure`. It is expected that `PATH` contains `include/` and `lib/` subdirectories, which contain the Boost header files and the compiled libraries (static or shared).
+
+    For MPI, you need to apply a patch (that implement MPI "synchronous send" in Boost.MPI) to the Boost sources and recompile:
+{{{
+  # top-level directory of the Boost sources
+  cd boost/
+
+  # save the patch to file boost_1_45_0.issend.patch
+  patch -i boost_1_45_0.issend.patch
+
+  # now compile Boost as usual...
+  bjam threading=multi variant=release --with-libraries=test,serialization,mpi ...
+}}}
+
+    The provided script `util/prereq.sh` installs all the needed
+    software into directory `sw` (located within the directory where
+    you invoke `util/prereq.sh`).  To change the installation
+    directory for the auxiliary software, pass the directory path as
+    the sole argument to the `util/prereq.sh` script, e.g.:
+{{{
+  cd /the/rheinfall/sources
+
+  # install dependent software into ./mysw
+  ./util/prereq.sh "mysw"
+}}}
+    The default invocation of `util/prereq.sh` is equivalent to the
+    following:
+{{{
+  ./util/prereq.sh ./sw
+}}}
+
+
+= Compilation =
+
+Before compiling, ensure you have installed all the required
+software; see section "Required Software" above.
+
+Assuming you have installed the required software into directory `./sw`
+(e.g., by using the supplied `util/prereq.sh` script, see above), then
+you can proceed as with any automake program.
+{{{
+  # create the Makefile
+  autoreconf -i
+  ./configure --with-boost=./sw --with-gmp=./sw
+  
+  # compile
+  make
+
+  # download test matrices and run checks
+  make check
+
+  # copy library header files to their destination
+  make install
+}}}
