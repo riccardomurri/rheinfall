@@ -33,13 +33,14 @@ options.
 In addition to the standard Linux commands and a C/C++ compiler, you
 will need the following software prior to building Rheinfall:
 
+# http://rpmfind.net/linux/rpm2html/search.php?query=wget
 || *command name* || *home page* || *package name* ||
-|| `svn`          || SubVersion, http://subversion.tigris.org/         || `subversion` ([apt://subversion Debian, Ubuntu], CentOS) ||
-|| `make`         || GNU make, http://www.gnu.org/software/make/       || `make` ([apt://make Debian, Ubuntu], CentOS) ||
-|| `wget`         || GNU wget, http://www.gnu.org/software/wget/       || `wget` ([apt://wget Debian, Ubuntu], CentOS) ||
-|| `automake`     || GNU automake _(at least version 1.10),_ http://www.gnu.org/software/automake/ || `automake` ([apt://automake Debian, Ubuntu], CentOS) ||
-|| `autoreconf`   || GNU autoconf _(at least version 2.65),_ http://www.gnu.org/software/autoconf/ || `automake` ([apt://autoconf Debian, Ubuntu], CentOS) ||
-|| `libtoolize`   || GNU libtool, http://www.gnu.org/software/libtool/ || `libtool` ([apt://libtool Debian, Ubuntu], CentOS) ||
+|| `svn`          || SubVersion, http://subversion.tigris.org/         || `subversion` ([http://packages.debian.org/squeeze/subversion Debian], [http://packages.ubuntu.com/subversion Ubuntu], [http://rpmfind.net/linux/rpm2html/search.php?query=subversion CentOS/Fedora/RHEL and other RPM-based distributions]) ||
+|| `make`         || GNU make, http://www.gnu.org/software/make/       || `make` ([http://packages.debian.org/squeeze/make Debian], [http://packages.ubuntu.com/make Ubuntu], [http://rpmfind.net/linux/rpm2html/search.php?query=make CentOS/Fedora/RHEL and other RPM-based distributions]) ||
+|| `wget`         || GNU wget, http://www.gnu.org/software/wget/       || `wget` ([http://packages.debian.org/squeeze/wget Debian], [http://packages.ubuntu.com/wget Ubuntu], [http://rpmfind.net/linux/rpm2html/search.php?query=wget CentOS/Fedora/RHEL and other RPM-based distributions]) ||
+|| `automake`     || GNU automake _(at least version 1.10),_ http://www.gnu.org/software/automake/ || `automake` ([http://packages.debian.org/squeeze/automake Debian], [http://packages.ubuntu.com/automake Ubuntu], [http://rpmfind.net/linux/rpm2html/search.php?query=automake CentOS/Fedora/RHEL and other RPM-based distributions]) ||
+|| `autoreconf`   || GNU autoconf _(at least version 2.65),_ http://www.gnu.org/software/autoconf/ || `automake` ([http://packages.debian.org/squeeze/automake Debian], [http://packages.ubuntu.com/automake Ubuntu], [http://rpmfind.net/linux/rpm2html/search.php?query=automake CentOS/Fedora/RHEL and other RPM-based distributions]) ||
+|| `libtoolize`   || GNU libtool, http://www.gnu.org/software/libtool/ || `libtool` ([http://packages.debian.org/squeeze/libtool Debian], [http://packages.ubuntu.com/libtool Ubuntu], [http://rpmfind.net/linux/rpm2html/search.php?query=libtool CentOS/Fedora/RHEL and other RPM-based distributions]) ||
 
 If you have the dependencies in place, the following commands will
 place the Rheinfall sources in a directory called `rheinfall` and
