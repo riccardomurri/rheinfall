@@ -1,6 +1,8 @@
 #summary Installation instructions
 #labels Featured
 
+<wiki:toc />
+
 = Introduction =
 
 Rheinfall consists of a C++ library and example programs.
@@ -16,7 +18,72 @@ demoes the features available through the library; the C version
 implements the same algorithm directly, so you will have to copy and
 modify the code to adapt it, e.g., to use a different data type.
 
+At the moment there is no packaged and released code; 
+the only way to build Rheinfall is to install from the
+SVN sources. 
+
+
+= Quickstart instructions =
+
+The following instructions provide the simplest route to compiling all
+the example programs in Rheinfall and trying them out.  See section 
+[#How_to_build_Rheinfall_from_sources] for a detailed description of
+options.
+
+In addition to the standard Linux commands and a C/C++ compiler, you
+will need the following software prior to building Rheinfall:
+
+|| *command name* || *home page* || *package name* ||
+|| `svn`          || SubVersion, http://subversion.tigris.org/         || `subversion` ([apt://subversion Debian, Ubuntu], CentOS) ||
+|| `make`         || GNU make, http://www.gnu.org/software/make/       || `make` ([apt://make Debian, Ubuntu], CentOS) ||
+|| `wget`         || GNU wget, http://www.gnu.org/software/wget/       || `wget` ([apt://wget Debian, Ubuntu], CentOS) ||
+|| `automake`     || GNU automake _(at least version 1.10),_ http://www.gnu.org/software/automake/ || `automake` ([apt://automake Debian, Ubuntu], CentOS) ||
+|| `autoreconf`   || GNU autoconf _(at least version 2.65),_ http://www.gnu.org/software/autoconf/ || `automake` ([apt://autoconf Debian, Ubuntu], CentOS) ||
+|| `libtoolize`   || GNU libtool, http://www.gnu.org/software/libtool/ || `libtool` ([apt://libtool Debian, Ubuntu], CentOS) ||
+
+If you have the dependencies in place, the following commands will
+place the Rheinfall sources in a directory called `rheinfall` and
+compile the example programs:
+{{{
+  # check out the Rheinfall sources
+  svn co http://rheinfall.googlecode.com/svn/trunk rheinfall
+
+  # install the required libraries
+  cd rheinfall/
+  ./util/prereq.sh sw  
+
+  # build the example programs
+  autoreconf -i
+  ./configure --with-boost=`pwd`/sw --with-gmp=`pwd`/sw
+  make
+}}}
+
+The test suite will download some matrices of the _Mgn_ group from the online 
+[http://ljk.imag.fr/membres/Jean-Guillaume.Dumas/simc.html Sparse Integer Matrices Collection]
+and use the compiled programs to compute their ranks (and check if
+this is correct).  To run the test suite: 
+{{{ 
+  make check
+}}}
+
+
+= How to build Rheinfall from sources =
+
+At the moment there is no packaged and released code; the only way to
+build Rheinfall is to install from the SVN sources.
+
+This section provides complete instructions on how to build Rheinfall
+example programs and the various compilation options.
+
+Rheinfall uses the GNU automake/autoconf mechanism for generating
+Makefiles and driving compilation. The following sections detail the
+important options available to the `./configure` script and their
+effect.
+
+
 == What is actually built ==
+
+Since the C++ library is a header-only library, no compilation is necessary.
 
 C++ example programs are built in the following flavors: 
 
@@ -45,7 +112,7 @@ There is not way, to disable compiling the OpenMP variants at present;
 just don't use them.
 
 
-= Required Software =
+== Required Software ==
 
 In order to compile "Rheinfall" you need to install some software
 dependencies.
@@ -86,7 +153,7 @@ dependencies.
 }}}
 
 
-= Compilation =
+== Compilation ==
 
 Before compiling, ensure you have installed all the required
 software; see section "Required Software" above.
