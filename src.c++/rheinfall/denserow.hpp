@@ -319,6 +319,10 @@ namespace rheinfall {
     for (size_t j = 0; j <= this->size()-1; ++j) {
       other->storage[j] *= b;
       other->storage[j] += a*this->storage[j];
+#ifdef RF_COUNT_OPS
+      if (this->ops_count_ptr != NULL)
+        *(this->ops_count_ptr) += 3;
+#endif
     };
     other->Row_::leading_term_ = 0;
 
@@ -347,9 +351,18 @@ namespace rheinfall {
       new DenseRow(1 + this->Row_::starting_column_, this->Row_::ending_column_);
     assert(result->size() == this->size() - 1);
     size_t j = 0;
-    for (; j < this->size()-1; ++j)
+    for (; j < this->size()-1; ++j) {
        result->storage[j] = b*other->storage[j] + a*this->storage[j];
+#ifdef RF_COUNT_OPS
+       if ((this->ops_count_ptr) != NULL)
+         *(this->ops_count_ptr) += 3;
+#endif
+    };
     result->Row_::leading_term_ = b*other->storage[j] + a*this->storage[j];
+#ifdef RF_COUNT_OPS
+    if ((this->ops_count_ptr) != NULL)
+      *(this->ops_count_ptr) += 3;
+#endif
     delete other;
 
     result = result->adjust(); // update done, adjust size and starting column

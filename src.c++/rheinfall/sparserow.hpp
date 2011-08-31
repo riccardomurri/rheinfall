@@ -363,6 +363,10 @@ namespace rheinfall {
         assert(not is_zero(entry));
         coord = other_col;
         ++other_i;
+#ifdef RF_COUNT_OPS
+        if ((this->ops_count_ptr) != NULL)
+          *(this->ops_count_ptr) += 1;
+#endif
       }
       else if (other_col == this_col) {
         entry = a * this_i->second + b * other_i->second;
@@ -372,12 +376,20 @@ namespace rheinfall {
           coord = this_col;
         ++this_i;
         ++other_i;
+#ifdef RF_COUNT_OPS
+        if ((this->ops_count_ptr) != NULL)
+          *(this->ops_count_ptr) += 3;
+#endif
       }
       else if (other_col > this_col) {
         entry = a * this_i->second;
         assert(not is_zero(entry));
         coord = this_col;
         ++this_i;
+#ifdef RF_COUNT_OPS
+        if ((this->ops_count_ptr) != NULL)
+          *(this->ops_count_ptr) += 1;
+#endif
       }
       else 
         // should not happen!
@@ -407,7 +419,7 @@ namespace rheinfall {
       assert(result->ending_column_ == this->ending_column_);
       assert(result->size() <= this->size() + other->size());
     };
-#endif
+#endif // ifdef NDEBUG
     delete other; // release old storage
     return result;
   }; // SparseRow<val_t,coord_t,allocator>* gaussian_elimination(SparseRow<val_t,coord_t,allocator>* r)
@@ -438,6 +450,10 @@ namespace rheinfall {
       {
         assert(it->first > Row_::starting_column_ and it->first <= Row_::ending_column_);
         other->storage[other->size()-1 - (it->first - (other->starting_column_ + 1))] += a * it->second;
+#ifdef RF_COUNT_OPS
+        if ((this->ops_count_ptr) != NULL)
+          *(this->ops_count_ptr) += 2;
+#endif
       };
     other->Row_::leading_term_ = 0; // by construction
 

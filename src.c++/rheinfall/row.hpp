@@ -123,6 +123,11 @@ namespace rheinfall {
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version);
 #endif
+
+#ifdef RF_COUNT_OPS
+    unsigned long *ops_count_ptr;
+#endif 
+
   }; // class Row
 
 }; // namespace rheinfall
@@ -143,10 +148,13 @@ namespace rheinfall {
       const coord_t starting_column, 
       const coord_t ending_column, 
       const val_t leading_term)
-    : kind(kind_), 
-      starting_column_(starting_column), 
-      ending_column_(ending_column),
-      leading_term_(leading_term)
+    : kind(kind_)
+    , starting_column_(starting_column)
+    , ending_column_(ending_column)
+    , leading_term_(leading_term)
+#ifdef RF_COUNT_OPS
+    , ops_count_ptr(NULL)
+#endif
     { 
       // init-only ctor
     };

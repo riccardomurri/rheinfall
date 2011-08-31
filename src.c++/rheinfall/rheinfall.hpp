@@ -146,6 +146,13 @@ public:
         value. Default is to switch to dense storage at 40% fill-in. */
     float dense_threshold;
 
+#ifdef RF_COUNT_OPS
+    /// Return count of arithmetic operations done so far. Note that
+    /// this is only meaningful @a after a @c rank() invocation has
+    /// completed.
+    unsigned long get_ops_count() const { return ops_count; };
+#endif
+
 
   protected:
     /** A single processing element. */
@@ -205,6 +212,10 @@ public:
       /** Lock for running the @c step() function. */
       omp_lock_t processing_lock_;
 #endif
+
+#ifdef RF_COUNT_OPS
+      unsigned long *ops_count_ptr;
+#endif
       
     public: 
 
@@ -228,8 +239,10 @@ public:
 
     /** Number of matrix columns. */
     const coord_t ncols_;         
+    /** Type for grouping all local processors. */
+    typedef std::vector< Processor*, allocator<Processor*> > vpu_array_t;
     /** Local processors. */
-    std::vector< Processor*, allocator<Processor*> > vpus;
+    vpu_array_t vpus;
 
 #ifdef WITH_MPI
     mpi::communicator comm_; /**< MPI communicator. */
@@ -294,6 +307,12 @@ public:
                       std::less<coord_t>,
                       allocator< std::pair< coord_t, 
                                             SparseRow<val_t,coord_t,allocator>* > > > _rowmap_t;
+
+#ifdef RF_COUNT_OPS
+    /// count of arithmetic operations
+    unsigned long ops_count;
+#endif
+
 };
 
 
@@ -318,6 +337,9 @@ public:
     , nprocs_(comm_.size())
 #endif
     , dense_threshold(dense_threshold)
+#ifdef RF_COUNT_OPS
+    , ops_count(0)
+#endif
   {  
     // setup the array of processors
 #ifdef WITH_MPI
@@ -331,6 +353,10 @@ public:
         vpus.push_back(new Rheinfall<val_t,coord_t,allocator>::Processor(*this, c));
     // internal check that the size of the data structure is actually correct
     assert(vpus.size() <= nmemb);
+#ifdef RF_COUNT_OPS
+    for (typename vpu_array_t::iterator vpu = vpus.begin(); vpu != vpus.end(); ++vpu)
+      (*vpu)->ops_count_ptr = &ops_count;
+#endif
   };
 
 
@@ -349,6 +375,9 @@ public:
   , nprocs_(comm.size())
   , w_(width)
   , dense_threshold(dense_threshold)
+#ifdef RF_COUNT_OPS
+  , ops_count(0)
+#endif
 {  
   // setup the array of processors
   vpus.reserve(1 + ncols_ / nprocs_);
@@ -358,6 +387,10 @@ public:
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_init_lock(& mpi_send_lock_); 
 # endif // _OPENMP && WITH_MPI_SERIALIZED
+#ifdef RF_COUNT_OPS
+    for (typename vpu_array_t::iterator vpu = vpus.begin(); vpu != vpus.end(); ++vpu)
+      (*vpu)->ops_count_ptr = &ops_count;
+#endif
 };
 #endif
 
@@ -610,6 +643,11 @@ public:
     // collect the partial ranks for all processes
     coord_t rank = 0;
     mpi::all_reduce(comm_, local_rank, rank, std::plus<int>());
+
+    // likewise, sum ops count from all processes
+    unsigned long total_ops_count = 0;
+    mpi::all_reduce(comm_, ops_count, total_ops_count, std::plus<int>());
+    ops_count = total_ops_count;
 #else
     const coord_t rank = local_rank;
 #endif
@@ -771,16 +809,20 @@ Rheinfall<val_t,coord_t,allocator>::Processor::
 }
 
 
-  template <typename val_t, typename coord_t, 
-            template<typename T> class allocator>
-  inline void 
-  Rheinfall<val_t,coord_t,allocator>::Processor::
-  recv_row(Row<val_t,coord_t,allocator>* new_row) 
+template <typename val_t, typename coord_t, 
+          template<typename T> class allocator>
+inline void 
+Rheinfall<val_t,coord_t,allocator>::Processor::
+recv_row(Row<val_t,coord_t,allocator>* new_row) 
   {
     assert(running == phase);
     assert((Row<val_t,coord_t,allocator>::sparse == new_row->kind 
             or Row<val_t,coord_t,allocator>::dense == new_row->kind));
     assert(column_ == new_row->starting_column_);
+#ifdef RF_COUNT_OPS
+    if (NULL != this->ops_count_ptr)
+      new_row->ops_count_ptr = this->ops_count_ptr;
+#endif
 #ifdef _OPENMP
     omp_set_lock(&inbox_lock_);
 #endif

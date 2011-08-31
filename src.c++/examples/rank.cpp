@@ -579,7 +579,13 @@ main(int argc, char** argv)
       if (0 == myid)
         std::cout << " cputime:" << std::fixed << std::setprecision(6) << consumed;
       if (0 == myid)
-        std::cout << " wctime:" << std::fixed << std::setprecision(6) << elapsed << std::endl;
+        std::cout << " wctime:" << std::fixed << std::setprecision(6) << elapsed;
+#ifdef RF_COUNT_OPS
+      if (0== myid)
+        std::cout << " ops:" << rf.get_ops_count();
+#endif
+      if (0 == myid)
+        std::cout << std::endl;
     };
 
 #ifdef WITH_MPI
