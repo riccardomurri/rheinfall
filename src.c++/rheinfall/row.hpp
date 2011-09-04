@@ -83,6 +83,9 @@ namespace rheinfall {
     /** Virtual destructor (for actual use in subclasses). */
     virtual ~Row();
 
+    /** Add @a value to the entry in column @a col. */
+    virtual void add_to_entry(const coord_t col, const val_t value) = 0;
+
     /** Return a copy of the element stored at column @c col */
     virtual val_t get(const coord_t col) const = 0;
 
@@ -111,7 +114,10 @@ namespace rheinfall {
       return out;
     };
 
-  protected:
+    // XXX: the following is public only to allow the test programs to
+    // check the internal state of objects.  Adjust the tests so we
+    // can have proper protection of the fields.
+  public:
     /** Index of the first column where a nonzero element is stored. */
     coord_t starting_column_; // would-be `const`: can only be modified by ctor and serialization
     /** Index of the last column in the matrix. */
