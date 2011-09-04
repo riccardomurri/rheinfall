@@ -1,7 +1,7 @@
 /**
  * @file   test_rank_double.cpp
  *
- * Correctness test for the `Rheinfall` C++ implementation, with `long
+ * Correctness test for the ``Rheinfall`` C++ implementation, with `long
  * double` coefficients.
  *
  * @author  riccardo.murri@gmail.com
@@ -42,7 +42,7 @@
 typedef long double val_t;
 typedef long coord_t;
 
-#include <rheinfall.hpp>
+#include <rank.hpp>
 
 #include <cassert>
 #include <fstream>

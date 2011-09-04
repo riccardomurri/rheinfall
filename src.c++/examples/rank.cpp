@@ -147,7 +147,7 @@ typedef boost::xint::integer val_t;
 #endif
 
 
-#include <rheinfall.hpp>
+#include <rank.hpp>
 #include <types.hpp>
 
 #ifdef WITH_MPI
@@ -524,9 +524,9 @@ main(int argc, char** argv)
 #endif
 
 #ifdef WITH_MPI
-      rheinfall::Rheinfall<val_t, coord_t, allocator> rf(world, cols, width);
+      rheinfall::Rank<val_t, coord_t, allocator> rf(world, cols, width);
 #else
-      rheinfall::Rheinfall<val_t, coord_t, allocator> rf(cols, width);
+      rheinfall::Rank<val_t, coord_t, allocator> rf(cols, width);
 #endif
 
       coord_t nnz = rf.read_triples(input, rows, cols, true, transpose);

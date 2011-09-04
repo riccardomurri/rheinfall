@@ -56,7 +56,7 @@ namespace mpl = boost::mpl;
 namespace rheinfall {
 
   // forward declarations to avoid circular dependency
-  template <typename val_t, typename coord_t, template<typename T> class allocator> class Rheinfall;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class Rank;
   template <typename val_t, typename coord_t, template<typename T> class allocator> class Row;
   template <typename val_t, typename coord_t, template<typename T> class allocator> class SparseRow;
   template <typename val_t, typename coord_t, template<typename T> class allocator> class DenseRow;
@@ -121,7 +121,7 @@ namespace rheinfall {
     protected:
       typedef Row<val_t,coord_t,allocator> Row_; //< Nickname for base class; used to shorten templatized expressions
 
-      friend class Rheinfall<val_t,coord_t,allocator>;
+      friend class Rank<val_t,coord_t,allocator>;
       friend class SparseRow<val_t,coord_t,allocator>;
 
       /// array of entries.

@@ -45,7 +45,7 @@ typedef long mod_int_t;
 typedef modular::Modular<mod_int_t> val_t;
 typedef long coord_t;
 
-#include <rheinfall.hpp>
+#include <rank.hpp>
 
 #include <cassert>
 #include <fstream>
