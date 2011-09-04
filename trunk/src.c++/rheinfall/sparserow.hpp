@@ -234,8 +234,8 @@ namespace rheinfall {
         row->set(coord, value);
       };
     };
-    row->Row_::starting_column_ = starting_column;
-    row->Row_::leading_term_ = leading_term;
+    row->starting_column_ = starting_column;
+    row->leading_term_ = leading_term;
 
     if (row->starting_column_ == row->ending_column_) {
       delete row;
@@ -271,16 +271,16 @@ namespace rheinfall {
   SparseRow<val_t,coord_t,allocator>::
   __ok() const
   {
-    assert(0 <= Row_::starting_column_);
-    assert(Row_::starting_column_ <= Row_::ending_column_);
-    assert(not is_zero(Row_::leading_term_));
+    assert(0 <= this->starting_column_);
+    assert(this->starting_column_ <= this->ending_column_);
+    assert(not is_zero(this->leading_term_));
     // entries in `this->storage` are *always* ordered by increasing column index
-    coord_t s1 = Row_::starting_column_;
+    coord_t s1 = this->starting_column_;
     for (typename storage_t::const_iterator it = storage.begin(); 
          it < storage.end(); 
          ++it) {
       assert(s1 < it->first);
-      assert(it->first <= Row_::ending_column_);
+      assert(it->first <= this->ending_column_);
       assert(not is_zero(it->second));
       s1 = it->first;
     };
@@ -295,9 +295,9 @@ namespace rheinfall {
   SparseRow<val_t,coord_t,allocator>::
   add_to_entry(const coord_t col, const val_t value) 
   {
-    assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
-    if (col == Row_::starting_column_) {
-      Row_::leading_term_ += value;
+    assert(col >= this->starting_column_ and col <= this->ending_column_);
+    if (col == this->starting_column_) {
+      this->leading_term_ += value;
       return;
     };
     // else, fast-forward to place where element is/would be stored
@@ -326,10 +326,10 @@ namespace rheinfall {
   adjust()
   {
     if (storage.size() > 0) {
-      Row_::starting_column_ = storage.front().first;
-      assert(0 <= Row_::starting_column_ and Row_::starting_column_ < Row_::ending_column_);
-      Row_::leading_term_ = storage.front().second;
-      assert(not is_zero(Row_::leading_term_));
+      this->starting_column_ = storage.front().first;
+      assert(0 <= this->starting_column_ and this->starting_column_ < this->ending_column_);
+      this->leading_term_ = storage.front().second;
+      assert(not is_zero(this->leading_term_));
       storage.erase(storage.begin());
       assert(this->__ok());
       return this;
@@ -348,7 +348,7 @@ namespace rheinfall {
   float
   SparseRow<val_t,coord_t,allocator>::fill_in() const 
   { 
-    return 100.0 * size() / (Row_::ending_column_ - Row_::starting_column_); 
+    return 100.0 * size() / (this->ending_column_ - this->starting_column_); 
   };
 
 
@@ -364,8 +364,8 @@ namespace rheinfall {
     assert(this->starting_column_ == other->starting_column_);
 
     val_t a, b;
-    rheinfall::get_row_multipliers<val_t>(this->Row_::leading_term_,
-                                          other->Row_::leading_term_,
+    rheinfall::get_row_multipliers<val_t>(this->leading_term_,
+                                          other->leading_term_,
                                           a, b);
 
     SparseRow<val_t,coord_t,allocator>* restrict result = NULL; // XXX: use boost::optional<...> instead?
@@ -434,7 +434,7 @@ namespace rheinfall {
         // from SparseRow::operator[] for efficiency
         if (NULL == result) {
           // allocate new SparseRow
-          result = new SparseRow(coord, Row_::ending_column_, entry);
+          result = new SparseRow(coord, this->ending_column_, entry);
           assert(storage.size() + other->storage.size() <= result->storage.max_size());
           result->storage.reserve(storage.size() + other->storage.size());
           assert(0 == result->storage.size());
@@ -471,8 +471,8 @@ namespace rheinfall {
     assert(not is_zero(other->leading_term_));
 
     val_t a, b;
-    rheinfall::get_row_multipliers(this->Row_::leading_term_,
-                                   other->Row_::leading_term_,
+    rheinfall::get_row_multipliers(this->leading_term_,
+                                   other->leading_term_,
                                    a, b);
 
     for (size_t j = 0; j < other->size(); ++j) 
@@ -481,18 +481,18 @@ namespace rheinfall {
          it != storage.end();
          ++it)
       {
-        assert(it->first > Row_::starting_column_ and it->first <= Row_::ending_column_);
+        assert(it->first > this->starting_column_ and it->first <= this->ending_column_);
         other->storage[other->size()-1 - (it->first - (other->starting_column_ + 1))] += a * it->second;
 #ifdef RF_COUNT_OPS
         if ((this->ops_count_ptr) != NULL)
           *(this->ops_count_ptr) += 2;
 #endif
       };
-    other->Row_::leading_term_ = 0; // by construction
+    other->leading_term_ = 0; // by construction
 
     DenseRow<val_t,coord_t,allocator>* result = other->adjust();
     assert(NULL == result 
-           or result->Row_::starting_column_ > this->Row_::starting_column_);
+           or result->starting_column_ > this->starting_column_);
     return result; // content update done, adjust size and starting column
   }; // DenseRow<val_t,coord_t,allocator>* gaussian_elimination(DenseRow<val_t,coord_t,allocator>* other)
 
@@ -503,9 +503,9 @@ namespace rheinfall {
   SparseRow<val_t,coord_t,allocator>::
   get(const coord_t col) const
   {
-    assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
-    if (col == Row_::starting_column_) 
-      return Row_::leading_term_;
+    assert(col >= this->starting_column_ and col <= this->ending_column_);
+    if (col == this->starting_column_) 
+      return this->leading_term_;
     if (storage.size() == 0)
       return 0;
     // else, fast-forward to place where element is/would be stored
@@ -531,7 +531,7 @@ namespace rheinfall {
   print_on(std::ostream& out) const 
   {
     out << "{ "
-        << Row_::starting_column_ <<":"<< Row_::leading_term_;
+        << this->starting_column_ <<":"<< this->leading_term_;
     for (typename storage_t::const_iterator it = storage.begin(); 
          it != storage.end(); 
          ++it) {
@@ -567,9 +567,9 @@ namespace rheinfall {
   SparseRow<val_t,coord_t,allocator>::
   set(const coord_t col, const val_t value) 
   {
-    assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
-    if (col == Row_::starting_column_) {
-      Row_::leading_term_ = value;
+    assert(col >= this->starting_column_ and col <= this->ending_column_);
+    if (col == this->starting_column_) {
+      this->leading_term_ = value;
       return;
     };
     // else, fast-forward to place where element is/would be stored
