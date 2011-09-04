@@ -44,7 +44,7 @@ matrix_from_file(const std::string& filename)
   rheinfall::Rheinfall<val_t,coord_t>* m 
     = new rheinfall::Rheinfall<val_t,coord_t>(cols, 1);
 
-  m->read(input, rows, cols, true, transpose);
+  m->read_triples(input, rows, cols, true, transpose);
   input.close();
   
   return m;
