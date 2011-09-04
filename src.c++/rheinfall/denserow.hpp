@@ -172,15 +172,15 @@ namespace rheinfall {
   DenseRow<val_t,coord_t,allocator>::
   DenseRow(const SparseRow<val_t,coord_t,allocator>* restrict r) 
     : Row_::Row(Row_::dense, r->starting_column_, r->ending_column_, r->leading_term_),
-      storage(Row_::ending_column_ - Row_::starting_column_, 0) 
+      storage(this->ending_column_ - this->starting_column_, 0) 
   { 
     assert(std::distance(r->storage.begin(), r->storage.end()) <= storage.size());
     for (typename SparseRow<val_t,coord_t,allocator>::storage_t::const_iterator it = r->storage.begin();
          it != r->storage.end();
          ++it) 
       {
-        assert(it->first > Row_::starting_column_ and it->first <= Row_::ending_column_);
-        storage[size()-1 - (it->first - (Row_::starting_column_ + 1))] = it->second;
+        assert(it->first > this->starting_column_ and it->first <= this->ending_column_);
+        storage[size()-1 - (it->first - (this->starting_column_ + 1))] = it->second;
       };
     assert(this->__ok());
   };
@@ -231,10 +231,10 @@ namespace rheinfall {
   DenseRow<val_t,coord_t,allocator>::
   __ok() const
   {
-    assert(0 <= Row_::starting_column_);
-    assert(Row_::starting_column_ <= Row_::ending_column_);
-    assert(not is_zero(Row_::leading_term_));
-    assert(storage.size() == Row_::ending_column_ - Row_::starting_column_);
+    assert(0 <= this->starting_column_);
+    assert(this->starting_column_ <= this->ending_column_);
+    assert(not is_zero(this->leading_term_));
+    assert(storage.size() == this->ending_column_ - this->starting_column_);
     return true;
   };
 #endif
@@ -246,11 +246,11 @@ namespace rheinfall {
   DenseRow<val_t,coord_t,allocator>::
   add_to_entry(const coord_t col, const val_t value) 
   {
-    assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
-    if (col == Row_::starting_column_)
-      Row_::leading_term_ += value;
+    assert(col >= this->starting_column_ and col <= this->ending_column_);
+    if (col == this->starting_column_)
+      this->leading_term_ += value;
     else
-      storage[storage.size()-1 - (col - (Row_::starting_column_ + 1))] += value;
+      storage[storage.size()-1 - (col - (this->starting_column_ + 1))] += value;
   };
 
 
@@ -260,12 +260,12 @@ namespace rheinfall {
   DenseRow<val_t,coord_t,allocator>::
   adjust()
   {
-    if (is_zero(Row_::leading_term_)) {
+    if (is_zero(this->leading_term_)) {
       // compute new starting column
       for (int j = storage.size()-1; j >= 0; --j)
         if (not is_zero(storage[j])) {
-          Row_::leading_term_ = storage[j];
-          Row_::starting_column_ += (storage.size() - j);
+          this->leading_term_ = storage[j];
+          this->starting_column_ += (storage.size() - j);
           storage.erase(storage.begin()+j, storage.end());
           assert(this->__ok());
           return this;
@@ -310,10 +310,10 @@ namespace rheinfall {
   gaussian_elimination(DenseRow<val_t,coord_t,allocator>* restrict other) 
     const restrict_this
   {
-    assert(this->Row_::starting_column_ == other->Row_::starting_column_);
-    assert(this->Row_::ending_column_ == other->Row_::ending_column_);
-    assert(not is_zero(this->Row_::leading_term_));
-    assert(not is_zero(other->Row_::leading_term_));
+    assert(this->starting_column_ == other->starting_column_);
+    assert(this->ending_column_ == other->ending_column_);
+    assert(not is_zero(this->leading_term_));
+    assert(not is_zero(other->leading_term_));
     assert(this->size() == other->size());
 
     return this->gaussian_elimination_impl(use_inplace_update<val_t>(), other);
@@ -329,8 +329,8 @@ namespace rheinfall {
     const restrict_this
   {
     val_t a, b;
-    get_row_multipliers<val_t>(this->Row_::leading_term_, 
-                               other->Row_::leading_term_, 
+    get_row_multipliers<val_t>(this->leading_term_, 
+                               other->leading_term_, 
                                a, b);
 
     for (size_t j = 0; j <= this->size()-1; ++j) {
@@ -341,12 +341,12 @@ namespace rheinfall {
         *(this->ops_count_ptr) += 3;
 #endif
     };
-    other->Row_::leading_term_ = 0;
+    other->leading_term_ = 0;
 
     DenseRow<val_t,coord_t,allocator>* const result = 
       other->adjust(); // update done, adjust size and starting column
     assert(NULL == result 
-           or result->Row_::starting_column_ > this->Row_::starting_column_);
+           or result->starting_column_ > this->starting_column_);
     return result;
   }; // dense_row_ptr gaussian_elimination_impl(mpl::true_, dense_row_ptr other)
 
@@ -360,12 +360,12 @@ namespace rheinfall {
     const restrict_this
   {
     val_t a, b;
-    get_row_multipliers<val_t>(this->Row_::leading_term_, 
-                               other->Row_::leading_term_, 
+    get_row_multipliers<val_t>(this->leading_term_, 
+                               other->leading_term_, 
                                a, b);
 
     DenseRow<val_t,coord_t,allocator>* restrict result = 
-      new DenseRow(1 + this->Row_::starting_column_, this->Row_::ending_column_);
+      new DenseRow(1 + this->starting_column_, this->ending_column_);
     assert(result->size() == this->size() - 1);
     size_t j = 0;
     for (; j < this->size()-1; ++j) {
@@ -375,7 +375,7 @@ namespace rheinfall {
          *(this->ops_count_ptr) += 3;
 #endif
     };
-    result->Row_::leading_term_ = b*other->storage[j] + a*this->storage[j];
+    result->leading_term_ = b*other->storage[j] + a*this->storage[j];
 #ifdef RF_COUNT_OPS
     if ((this->ops_count_ptr) != NULL)
       *(this->ops_count_ptr) += 3;
@@ -384,7 +384,7 @@ namespace rheinfall {
 
     result = result->adjust(); // update done, adjust size and starting column
     assert(NULL == result 
-           or result->Row_::starting_column_ > this->Row_::starting_column_);
+           or result->starting_column_ > this->starting_column_);
     return result;
   }; // dense_row_ptr gaussian_elimination_impl(mpl::false_, dense_row_ptr other)
 
@@ -395,11 +395,11 @@ namespace rheinfall {
   DenseRow<val_t,coord_t,allocator>::
   get(const coord_t col) const
   {
-    assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
-    if (col == Row_::starting_column_)
-      return Row_::leading_term_;
+    assert(col >= this->starting_column_ and col <= this->ending_column_);
+    if (col == this->starting_column_)
+      return this->leading_term_;
     else
-      return storage[size() - (col - (Row_::starting_column_ + 1)) - 1];
+      return storage[size() - (col - (this->starting_column_ + 1)) - 1];
   };
 
 
@@ -410,7 +410,7 @@ namespace rheinfall {
   print_on(std::ostream& out) const 
   {
     out << "["
-        << Row_::starting_column_ <<":"<< Row_::leading_term_;
+        << this->starting_column_ <<":"<< this->leading_term_;
     for (int j = storage.size()-1; j >= 0; --j)
       out <<","<< storage[j];
     out << "]";
@@ -440,11 +440,11 @@ namespace rheinfall {
   DenseRow<val_t,coord_t,allocator>::
   set(const coord_t col, const val_t value) 
   {
-    assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
-    if (col == Row_::starting_column_)
-      Row_::leading_term_ = value;
+    assert(col >= this->starting_column_ and col <= this->ending_column_);
+    if (col == this->starting_column_)
+      this->leading_term_ = value;
     else
-      storage[storage.size()-1 - (col - (Row_::starting_column_ + 1))] = value;
+      storage[storage.size()-1 - (col - (this->starting_column_ + 1))] = value;
   };
 
 
