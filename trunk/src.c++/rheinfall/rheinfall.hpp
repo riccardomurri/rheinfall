@@ -78,25 +78,31 @@ public:
     ~Rheinfall();
   
 
-    /** Read a matrix stream into the processors. Does not make any
-        assumption on the order of entries in the input stream,
-        therefore all entries have to be read into memory. Return
-        number of nonzero entries read.
+    /** Read a matrix stream into the processors.  Return number of
+        nonzero entries read.
 
-        The @c input stream should be in SMS format, see
-        http://www-ljk.imag.fr/membres/Jean-Guillaume.Dumas/simc.html
-        for details.  However, this function allows matrix entries to
-        appear in any order in the input stream (contrary to the SMS
-        specification, which states that entries should be
-        lexicographically sorted).
-        
+        Each line of the input stream must consist of a three numbers
+        separated by white space: row index, column index and the
+        entry value.  Row- and column indices are 1-based; the entry
+        value must be in a format that C++'s @c operator>> can map to
+        the @c val_t type.
+
+        No assumption on the order of entries in the input stream is
+        made, therefore all entries have to be read into memory before
+        @c Row objects can be assembled (and possibly dispatched to
+        other MPI ranks, if using MPI and @a local_only is @c false ).
+
         If arguments @a nrows and @a ncols are null, then the first
-        line read from stream @a input is assumed to be the header
-        line, from which the number of rows and columns is extracted
-        (and returned in @a nrows and @a ncols); otherwise, if @a
-        nrows is not zero, no header line is read and @a nrows, @a
-        ncols must contain the exact number of rows and columns in the
-        matrix.
+        line read from stream @a input is assumed to be a SMS format
+        header line, from which the number of rows and columns is
+        extracted (and returned in @a nrows and @a ncols).  Otherwise,
+        if @a nrows is not zero, no header line is read and @a nrows,
+        @a ncols must contain the exact number of rows and columns in
+        the matrix.
+        
+        Reading from the stream is terminated by EOF or after the SMS
+        footer line (consisting of three 0's in a row) is read.  In
+        any case, the @a input stream is not closed.
         
         If @c local_only is @c true (default), only rows assigned to the
         local MPI rank are retained and other are discarded.  If @c
@@ -107,32 +113,41 @@ public:
         the stream are exchanged, i.e., the transpose of the matrix is
         read into memory. 
     */
-    coord_t read(std::istream& input, coord_t& nrows, coord_t& ncols, 
-                 const bool local_only=true, const bool transpose=false);
+    coord_t read_triples(std::istream& input, coord_t& nrows, coord_t& ncols, 
+                         const bool local_only=true, const bool transpose=false);
     
-    /** Read a matrix stream into the
-        processors. Assumes that entries belonging to one row are not
-        interleaved with entries from other rows; i.e., that it can
-        consider reading row @a i complete as soon as it finds a row
-        index @a j!=i. Return number of nonzero entries read.
+    /** Read a matrix stream in SMS format into the processors.
+        Return number of nonzero entries read.
         
         The @c input stream should be in SMS format, see
         http://www-ljk.imag.fr/membres/Jean-Guillaume.Dumas/simc.html
-        for details.
+        for details.  In particular, this implies that entries
+        belonging to one row are not interleaved with entries from
+        other rows; i.e., that it can consider reading row @a i
+        complete as soon as it finds a row index @a j!=i. 
         
         If arguments @a nrows and @a ncols are null, then the first
         line read from stream @a input is assumed to be the SMS header
         line, from which the number of rows and columns is extracted
-        (and returned in @a nrows and @a ncols); otherwise, if @a
-        nrows is not zero, no header line is read and @a nrows, @a
-        ncols must contain the exact number of rows and columns in the
+        (and written to @a nrows and @a ncols); otherwise, if @a nrows
+        is not zero, no header line is read and @a nrows, @a ncols
+        must contain the exact number of rows and columns in the
         matrix.
+
+        Reading from the stream is terminated by EOF or after the SMS
+        footer line (consisting of three 0's in a row) is read.  In
+        any case, the @a input stream is not closed.
+        
+        If @c local_only is @c true (default), only rows assigned to the
+        local MPI rank are retained and other are discarded.  If @c
+        local_only is @c false, rows are sent to the destination MPI
+        rank as soon as they are read; only one rank should do the I/O.
         
         If @c transpose is @c true, then row and column values read from
         the stream are exchanged, i.e., the transpose of the matrix is
         read into memory. */
-    coord_t read_noninterleaved(std::istream& input, coord_t& nrows, coord_t& ncols, 
-                                const bool transpose=false);
+    coord_t read_sms(std::istream& input, coord_t& nrows, coord_t& ncols, 
+                     const bool local_only=true, const bool transpose=false);
 
     /** Return rank of matrix after in-place destructive computation. */
     coord_t rank();
@@ -405,9 +420,10 @@ public:
             template<typename T> class allocator>
   coord_t
   Rheinfall<val_t,coord_t,allocator>::
-  read_noninterleaved(std::istream& input,  
-                      coord_t& nrows, coord_t& ncols, 
-                      const bool transpose) 
+  read_sms(std::istream& input,  
+           coord_t& nrows, coord_t& ncols, 
+           const bool local_only,
+           const bool transpose) 
   {
     // count non-zero items read
     coord_t nnz = 0;
@@ -448,11 +464,26 @@ public:
         row = row->adjust();
         if (NULL != row) {
           const coord_t starting_column = row->first_nonzero_column();
-          if (starting_column < ncols_ and is_local(starting_column))
+          assert (starting_column < ncols_);
+          if (is_local(starting_column))
             vpu_for_column(starting_column)->recv_row(row);
-          else
-            // discard null rows and rows belonging to other MPI ranks
+          else {
+#ifdef WITH_MPI
+            if (not local_only) {
+              mpi::request req;
+# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+              omp_set_lock(& mpi_send_lock_);
+# endif 
+              req = comm_.isend(owner(starting_column), TAG_ROW_SPARSE, row);
+# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+              omp_unset_lock(& mpi_send_lock_);
+# endif
+              outbox.push_back(req);
+            }; // if not local_only
+#endif // WITH_MPI
+            // discard non-local and null rows
             delete row;
+          }; // ! is_local(starting_column)
         };
         row = new SparseRow<val_t,coord_t,allocator>(ncols_ - 1);
         last_row_index = i;
@@ -471,8 +502,8 @@ public:
             template<typename T> class allocator>
   coord_t
   Rheinfall<val_t,coord_t,allocator>::
-  read(std::istream& input,  coord_t& nrows, coord_t& ncols, 
-       const bool local_only, const bool transpose)
+  read_triples(std::istream& input,  coord_t& nrows, coord_t& ncols, 
+               const bool local_only, const bool transpose)
   {
     if (0 == nrows) {
       // read header
