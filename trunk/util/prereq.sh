@@ -13,12 +13,15 @@
 #GMP=5.0.1
 #GIVARO=3.3.2
 #ATLAS=3.8.3
-BOOST=1.46.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.46.0/boost_1_46_0.tar.gz
-TCMALLOC=1.7 # http://google-perftools.googlecode.com/files/google-perftools-1.7.tar.gz
+BOOST=1.47.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.47.0/boost_1_47_0.tar.gz
+TCMALLOC=1.8.3 # http://google-perftools.googlecode.com/files/google-perftools-1.8.3.tar.gz
 #TBB=20100915oss # http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_lin.tgz
 
-# undefine when running on a non-homogeneous cluster
-# (i.e., nodes may have different arch and/or memory size)
+# set this to install BeBOP's Sparse Matrix Converter library and command-line utility
+SMC=yes # See: http://bebop.cs.berkeley.edu/smc/
+
+# if your cluster is homogeneous (i.e., nodes all have the same
+# architecture and memory size), undefining this might give some speedup
 #BOOST_MPI_HOMOGENEOUS=yes
 
 
@@ -99,7 +102,12 @@ elif [ -e ${PROG} ]; then
 fi
 
 # target directory
-sw="${1:-sw}"; shift
+if [ -n "$1" ]; then
+    sw="$1"
+    shift
+else
+    sw='sw'
+fi
 if ! is_absolute_path "$sw"; then 
     sw="$(pwd)/${sw}"
 fi
@@ -343,5 +351,33 @@ if [ -n "$TBB" ]; then
     set +x
 fi
 
+
+# BeBOP Sparse Matrix Converter
+if [ -n "$SMC" ] && [ ! "$SMC" = no ]; then
+    _ Installing BeBOP Sparse Matrix Converter ...
+    cd ${sw}/src/
+    set -x 
+    wget http://bebop.cs.berkeley.edu/smc/tarballs/bebop_make.tar.gz
+    wget http://bebop.cs.berkeley.edu/smc/tarballs/bebop_util.tar.gz
+    wget http://bebop.cs.berkeley.edu/smc/tarballs/sparse_matrix_converter.tar.gz
+    for tgz in bebop_make.tar.gz bebop_util.tar.gz sparse_matrix_converter.tar.gz; do
+        tar -xzf "$tgz"
+    done
+    # configure for running on Linux
+    cd bebop_make
+    rm Makefile.include; ln -s Makefile.include.linux Makefile.include
+    #sed -i -e "s/^CC *= *gcc/CC = ${CC}/"
+    #sed -i -e "s/^LINKER *= *gcc/LINKER = ${CC}/"
+    cd ../bebop_util
+    make
+    cp -av libbebop_util.a  libbebop_util.so "${sw}/lib"
+    mkdir -p "${sw}/include/bebop"
+    cp -av include/bebop/util "${sw}/include/bebop/util"
+    cd ../sparse_matrix_converter
+    make
+    cp -av sparse_matrix_converter "${sw}/bin"
+    cp -av libsparse_matrix_converter.a libsparse_matrix_converter.so "${sw}/lib"
+    cp -av include/bebop/smc "${sw}/include/bebop/smc"
+fi
 
 _ All done.
