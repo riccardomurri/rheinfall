@@ -106,10 +106,6 @@ public:
         If @c transpose is @c true, then row and column values read from
         the stream are exchanged, i.e., the transpose of the matrix is
         read into memory. 
-
-        Finally, if @p ac is not @c NULL, every triple (row, column,
-        value) read from the stream is passed to @c ac->process.  This
-        could be used to compute, e.g., the matrix norm.
     */
     coord_t read(std::istream& input, coord_t& nrows, coord_t& ncols, 
                  const bool local_only=true, const bool transpose=false);
@@ -447,6 +443,8 @@ public:
       --j;
       // if row index changes, then a new row is starting, so commit the old one.
       if (i != last_row_index) {
+        // set initial row number
+        row->h0 = last_row_index;
         row = row->adjust();
         if (NULL != row) {
           const coord_t starting_column = row->first_nonzero_column();
@@ -531,8 +529,10 @@ public:
                                                              ncols-1);
         if (NULL == row)
           continue; // with next `it`
-        const coord_t starting_column = row->first_nonzero_column();
+        // set initial row number
+        row->h0 = it->first;
         // commit row
+        const coord_t starting_column = row->first_nonzero_column();
         if (is_local(starting_column))
           vpu_for_column(starting_column)->recv_row(row);
         else {
