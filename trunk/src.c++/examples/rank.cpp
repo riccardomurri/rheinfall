@@ -529,7 +529,7 @@ main(int argc, char** argv)
       rheinfall::Rheinfall<val_t, coord_t, allocator> rf(cols, width);
 #endif
 
-      coord_t nnz = rf.read(input, rows, cols, true, transpose);
+      coord_t nnz = rf.read_triples(input, rows, cols, true, transpose);
       input.close();
       if (0 == myid) {
         std::cout << " nonzero:" << nnz;
