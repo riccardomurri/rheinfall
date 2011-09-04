@@ -107,36 +107,37 @@ namespace rheinfall {
     /** Return number of allocated (i.e., non-zero) entries. */
     virtual size_t size() const;
 
-    /** Add @a value to the entry in column @a col. */
-    virtual void add_to_entry(const coord_t col, const val_t value);
-
     /** Set the element stored at column @c col */
     virtual void set(const coord_t col, const val_t value);
 
     /** Return a copy of the element stored at column @c col */
     virtual val_t get(const coord_t col) const;
 
-    /** Perform Gaussian elimination: sum a multiple of this row to (a
-        multiple of) row @c other so that the combination has its first
-        nonzero entry at a column index strictly larger than the one
-        of both rows. Return pointer to the combined row, which could
-        possibly be the @p other row if in-place update took place.
-        The two coefficients used for the linear combination are
-        written into @a a (multiplier for this row) and @a b
-        (multiplier for the @a other row). */
-    SparseRow<val_t,coord_t,allocator>* gaussian_elimination(SparseRow<val_t,coord_t,allocator>* other,
-                                                             val_t& a, val_t& b) const;
+    /** Return a pointer to a linear combination of this row with row
+        @c other.  The returned pointer could possibly be the @p other
+        row if in-place update took place.  The two coefficients used
+        for the linear combination are given by @a a (multiplier for
+        this row) and @a b (multiplier for the @a other row).
 
-    /** Perform Gaussian elimination: sum a multiple of this row to (a
-        multiple of) row @c other so that the combination has its first
-        nonzero entry at a column index strictly larger than the one
-        of both rows. Return pointer to the combined row, which could
-        possibly be the @p other row if in-place update took place.
-        The two coefficients used for the linear combination are
-        written into @a a (multiplier for this row) and @a b
-        (multiplier for the @a other row). */
-    DenseRow<val_t,coord_t,allocator>* gaussian_elimination(DenseRow<val_t,coord_t,allocator>* other, 
-                                                            val_t& a, val_t& b) const;
+        If this row is sparse and its fill-in percentage exceeds @a
+        dense_threshold, convert it to dense format storage before
+        performing elimination. */
+    SparseRow<val_t,coord_t,allocator>* linear_combination(SparseRow<val_t,coord_t,allocator>* other,
+                                                           const val_t& a, const val_t& b, 
+                                                           const bool adjust) const;
+
+    /** Return a pointer to a linear combination of this row with row
+        @c other.  The returned pointer could possibly be the @p other
+        row if in-place update took place.  The two coefficients used
+        for the linear combination are given by @a a (multiplier for
+        this row) and @a b (multiplier for the @a other row).
+
+        If this row is sparse and its fill-in percentage exceeds @a
+        dense_threshold, convert it to dense format storage before
+        performing elimination. */
+    DenseRow<val_t,coord_t,allocator>* linear_combination(DenseRow<val_t,coord_t,allocator>* other, 
+                                                          const val_t& a, const val_t& b,
+                                                          const bool adjust) const;
 
   protected:
 
@@ -280,7 +281,7 @@ namespace rheinfall {
   {
     assert(0 <= this->starting_column_);
     assert(this->starting_column_ <= this->ending_column_);
-    assert(not is_zero(this->leading_term_));
+    //assert(not is_zero(this->leading_term_));
     // entries in `this->storage` are *always* ordered by increasing column index
     coord_t s1 = this->starting_column_;
     for (typename storage_t::const_iterator it = storage.begin(); 
@@ -294,36 +295,6 @@ namespace rheinfall {
     return true;
   };
 #endif
-
-
-  template <typename val_t, typename coord_t, 
-            template<typename T> class allocator>
-  inline void
-  SparseRow<val_t,coord_t,allocator>::
-  add_to_entry(const coord_t col, const val_t value) 
-  {
-    assert(col >= this->starting_column_ and col <= this->ending_column_);
-    if (col == this->starting_column_) {
-      this->leading_term_ += value;
-      return;
-    };
-    // else, fast-forward to place where element is/would be stored
-    size_t jj = 0;
-    while (jj < storage.size() and storage[jj].first < col)
-      ++jj;
-    // set element accordingly
-    if (storage.size() == jj) {
-      // end of list reached, `col` is larger than any index in this row
-      storage.push_back(std::make_pair<size_t,val_t>(col,value));
-    }
-    else if (col == storage[jj].first) 
-      storage[jj].second += value;
-    else { // storage[jj].first > col, insert new pair before `jj`
-      storage.insert(storage.begin()+jj, 
-                     std::make_pair<size_t,val_t>(col,value));
-    };
-    //assert(this->__ok());
-  }; // SparseRow::add_to_entry(...)
 
 
   template <typename val_t, typename coord_t, 
@@ -363,17 +334,13 @@ namespace rheinfall {
             template<typename T> class allocator>
   SparseRow<val_t,coord_t,allocator>* 
   SparseRow<val_t,coord_t,allocator>::
-  gaussian_elimination(SparseRow<val_t,coord_t,allocator>* restrict other,
-                       val_t& a, val_t& b) 
+  linear_combination(SparseRow<val_t,coord_t,allocator>* restrict other,
+                     const val_t& a, const val_t& b, const bool adjust) 
     const restrict_this
   {
     assert(this->__ok());
     assert(other->__ok());
     assert(this->starting_column_ == other->starting_column_);
-
-    rheinfall::get_row_multipliers<val_t>(this->leading_term_,
-                                          other->leading_term_,
-                                          a, b);
 
     SparseRow<val_t,coord_t,allocator>* restrict result = NULL; // XXX: use boost::optional<...> instead?
 
@@ -400,9 +367,17 @@ namespace rheinfall {
       val_t entry;
       if (other_col < this_col) {
         entry = b * other_i->second;
+        ++other_i;
+#ifdef WITH_DOUBLE_VALUES
+        // ignore too small entries when using inexact arithmetic
+        if (not is_zero(entry))
+          coord = other_col;
+        else
+          nonzero_found = false;
+#else
         assert(not is_zero(entry));
         coord = other_col;
-        ++other_i;
+#endif
 #ifdef RF_COUNT_OPS
         if ((this->ops_count_ptr) != NULL)
           *(this->ops_count_ptr) += 1;
@@ -423,9 +398,17 @@ namespace rheinfall {
       }
       else if (other_col > this_col) {
         entry = a * this_i->second;
+        ++this_i;
+#ifdef WITH_DOUBLE_VALUES
+        // ignore too small entries when using inexact arithmetic
+        if (not is_zero(entry))
+          coord = this_col;
+        else
+          nonzero_found = false;
+#else
         assert(not is_zero(entry));
         coord = this_col;
-        ++this_i;
+#endif
 #ifdef RF_COUNT_OPS
         if ((this->ops_count_ptr) != NULL)
           *(this->ops_count_ptr) += 1;
@@ -433,7 +416,7 @@ namespace rheinfall {
       }
       else 
         // should not happen!
-        throw std::logic_error("Unhandled case in SparseRow::gaussian_elimination(SparseRow*)");
+        throw std::logic_error("Unhandled case in SparseRow::linear_combination(SparseRow*)");
     
       if (nonzero_found) {
         // XXX: the following code makes assumptions about how the
@@ -441,10 +424,17 @@ namespace rheinfall {
         // from SparseRow::operator[] for efficiency
         if (NULL == result) {
           // allocate new SparseRow
-          result = new SparseRow(coord, this->ending_column_, entry);
+          if (adjust) {
+            result = new SparseRow(coord, this->ending_column_, entry);
+            assert(result->storage.size() == 0);
+          }
+          else {
+            result = new SparseRow(0, this->ending_column_, 0);
+            result->set(coord, entry);
+            assert(result->storage.size() == 1);
+          };
           assert(storage.size() + other->storage.size() <= result->storage.max_size());
           result->storage.reserve(storage.size() + other->storage.size());
-          assert(0 == result->storage.size());
         }
         else {
           result->storage.push_back(std::make_pair(coord, entry));
@@ -454,33 +444,31 @@ namespace rheinfall {
 #ifndef NDEBUG
     if (NULL != result) {
       assert(result->__ok());
-      assert(result->starting_column_ > this->starting_column_);
-      assert(result->starting_column_ > other->starting_column_);
+      // the following two are only true when computing `u`-type rows,
+      // i.e., when `adjust` is true
+      assert((not adjust) or result->starting_column_ > this->starting_column_);
+      assert((not adjust) or result->starting_column_ > other->starting_column_);
       assert(result->ending_column_ == this->ending_column_);
       assert(result->size() <= this->size() + other->size());
     };
 #endif // ifdef NDEBUG
     delete other; // release old storage
     return result;
-  }; // SparseRow<val_t,coord_t,allocator>* gaussian_elimination(SparseRow<val_t,coord_t,allocator>* r)
+  }; // SparseRow<val_t,coord_t,allocator>* linear_combination(SparseRow<val_t,coord_t,allocator>* r)
 
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   DenseRow<val_t,coord_t,allocator>* 
   SparseRow<val_t,coord_t,allocator>::
-  gaussian_elimination(DenseRow<val_t,coord_t,allocator>* restrict other,
-                       val_t& a, val_t& b) 
+  linear_combination(DenseRow<val_t,coord_t,allocator>* restrict other,
+                     const val_t& a, const val_t& b, const bool adjust) 
     const restrict_this
   {
     assert(this->starting_column_ == other->starting_column_);
     assert(this->__ok());
     assert(other->__ok());
     assert(not is_zero(other->leading_term_));
-
-    rheinfall::get_row_multipliers(this->leading_term_,
-                                   other->leading_term_,
-                                   a, b);
 
     for (size_t j = 0; j < other->size(); ++j) 
       other->storage[j] *= b;
@@ -497,11 +485,11 @@ namespace rheinfall {
       };
     other->leading_term_ = 0; // by construction
 
-    DenseRow<val_t,coord_t,allocator>* result = other->adjust();
+    DenseRow<val_t,coord_t,allocator>* result = (adjust? other->adjust() : other);
     assert(NULL == result 
-           or result->starting_column_ > this->starting_column_);
+           or (adjust and result->starting_column_ > this->starting_column_));
     return result; // content update done, adjust size and starting column
-  }; // DenseRow<val_t,coord_t,allocator>* gaussian_elimination(DenseRow<val_t,coord_t,allocator>* other)
+  }; // DenseRow<val_t,coord_t,allocator>* linear_combination(DenseRow<val_t,coord_t,allocator>* other)
 
 
   template <typename val_t, typename coord_t, 

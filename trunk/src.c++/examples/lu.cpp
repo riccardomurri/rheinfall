@@ -33,7 +33,7 @@ typedef long coord_t;
 
 // Select what type will be used for the matrix coefficients.
 #if defined(WITH_MODULAR_VALUES)
-
+# error LU decomposition not yet implemented on Modular rings
 # include <types/modular.hpp>
 # if defined(HAVE_LONG_LONG_INT)
 typedef long long mod_int_t;
@@ -43,38 +43,14 @@ typedef long mod_int_t;
 typedef modular::Modular<mod_int_t> val_t;
 
 #elif defined(WITH_MODULAR_INT64_VALUES)
+# error LU decomposition not yet implemented on Modular rings
 
 # include <types/modular.hpp>
 typedef int64_ mod_int_t;
 typedef modular::Modular<mod_int_t> val_t;
 
-#elif defined(WITH_INT_VALUES)
-
-// always use widest standard integer type available
-# if defined(HAVE_LONG_LONG_INT)
-typedef long long val_t;
-# else
-typedef long val_t;
-# endif
-
-#elif defined(WITH_INT32_VALUES)
-
-// we do not know where int32_t is defined; we just know that is, somewhere...
-# if defined(HAVE_STDINT_H)
-#  include <stdint.h>
-# endif
-# if defined(HAVE_INTTYPES_H)
-#  include <inttypes.h>
-# endif
-# if defined(HAVE_SYS_TYPES_H)
-#  include <sys/types.h>
-# endif
-# if defined(HAVE_STDLIB_H)
-#  include <stdlib.h>
-# endif
-typedef int32_t val_t;
-
-#elif defined(WITH_INT64_VALUES)
+#elif defined(WITH_INT_VALUES) || defined(WITH_INT32_VALUES) || defined(WITH_INT64_VALUES) || defined(WITH_MPZ_VALUES)
+# error LU decomposition not available on the Integer ring
 
 // we do not know where int32_t is defined; we just know that is, somewhere...
 # if defined(HAVE_STDINT_H)
@@ -94,13 +70,14 @@ typedef int64_t val_t;
 #elif defined(WITH_DOUBLE_VALUES)
 
 // always select the widest floating-point type available
-# ifdef HAVE_LONG_DOUBLE
-typedef long double val_t;
-# else
+//# ifdef HAVE_LONG_DOUBLE
+//typedef long double val_t;
+//# else
 typedef double val_t;
-# endif 
+//# endif 
 
 #elif defined(WITH_MPQ_VALUES)
+# error LU decomposition not yet implemented for GMP rationals
 
 # ifndef HAVE_GMPXX
 #  error This source requires GMP to compile; messed up autoconf settings?
@@ -111,25 +88,9 @@ typedef double val_t;
 # include <types/gmpxx.hpp>
 typedef mpq_class val_t;
 
-#elif defined(WITH_MPZ_VALUES)
-
-# ifndef HAVE_GMPXX
-#  error This source requires GMP to compile; messed up autoconf settings?
-# else
-#  define WITH_GMPXX
-# endif
-# include <gmpxx.h>
-# include <types/gmpxx.hpp>
-typedef mpz_class val_t;
-
-#elif defined(WITH_XINT_VALUES)
-
-# include <boost/xint/integer.hpp>
-# include <types/xint.hpp>
-typedef boost::xint::integer val_t;
 #else
 
-# error Please define one of: WITH_INT_VALUES, WITH_MODULAR_VALUES, WITH_DOUBLE_VALUES, WITH_MPZ_VALUES, WITH_MPQ_VALUES or WITH_XINT_VALUES
+# error Please define one of: WITH_DOUBLE_VALUES, or (in the future) WITH_MODULAR_VALUES, WITH_MPQ_VALUES, WITH_MPF_VALUES
 
 #endif // WITH_..._VALUES 
 
@@ -148,7 +109,8 @@ typedef boost::xint::integer val_t;
 
 
 #include <types.hpp>
-#include <rank.hpp>
+#include <lu.hpp>
+
 
 #ifdef WITH_MPI
 # include <boost/mpi.hpp>
@@ -519,17 +481,20 @@ main(int argc, char** argv)
         std::swap(rows, cols);
 
 #ifdef WITH_DOUBLE_VALUES
+      // rheinfall::is_zero_traits<val_t>::tolerance = 
+      //   rows * cols * std::numeric_limits<val_t>::epsilon();
       rheinfall::is_zero_traits<val_t>::tolerance = 
-        rows * cols * std::numeric_limits<val_t>::epsilon();
+        10 * std::numeric_limits<val_t>::epsilon();
 #endif
 
 #ifdef WITH_MPI
-      rheinfall::Rank<val_t, coord_t, allocator> rf(world, cols, width);
+      rheinfall::LU<val_t, coord_t, allocator> algo(world, cols, width);
 #else
-      rheinfall::Rank<val_t, coord_t, allocator> rf(cols, width);
+      rheinfall::LU<val_t, coord_t, allocator> algo(cols, width);
 #endif
+      std::vector<rheinfall::Row<val_t,coord_t,allocator>*> l,u; 
 
-      coord_t nnz = rf.read_triples(input, rows, cols, true, transpose);
+      coord_t nnz = algo.read_triples(input, rows, cols, true, transpose);
       input.close();
       if (0 == myid) {
         std::cout << " nonzero:" << nnz;
@@ -561,9 +526,8 @@ main(int argc, char** argv)
       getrusage(RUSAGE_SELF, &ru);
       struct timeval cpu_t0; memcpy(&cpu_t0, &ru.ru_utime, sizeof(struct timeval));
 
-      int rank = rf.rank();
-      if (0 == myid)
-        std::cout << " rank:" << rank;
+      // compute the LU decomposition
+      algo.lu(l, u);
 
       // compute CPU time delta
       getrusage(RUSAGE_SELF, &ru);
@@ -582,7 +546,7 @@ main(int argc, char** argv)
         std::cout << " wctime:" << std::fixed << std::setprecision(6) << elapsed;
 #ifdef RF_COUNT_OPS
       if (0== myid)
-        std::cout << " ops:" << rf.get_ops_count();
+        std::cout << " ops:" << algo.get_ops_count();
 #endif
       if (0 == myid)
         std::cout << std::endl;

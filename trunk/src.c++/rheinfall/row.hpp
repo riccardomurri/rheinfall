@@ -83,9 +83,6 @@ namespace rheinfall {
     /** Virtual destructor (for actual use in subclasses). */
     virtual ~Row();
 
-    /** Add @a value to the entry in column @a col. */
-    virtual void add_to_entry(const coord_t col, const val_t value) = 0;
-
     /** Return a copy of the element stored at column @c col */
     virtual val_t get(const coord_t col) const = 0;
 
@@ -98,21 +95,18 @@ namespace rheinfall {
     /** Return number of allocated (i.e., non-zero) entries. */
     virtual size_t size() const = 0;
 
-    /** Perform Gaussian elimination: sum a multiple of this row to (a
-        multiple of) row @c other so that the combination has its first
-        nonzero entry at a column index strictly larger than the one
-        of both rows. Return pointer to the combined row, which could
-        possibly be the @p other row if in-place update took place.
-        The two coefficients used for the linear combination are
-        written into @a a (multiplier for this row) and @a b
-        (multiplier for the @a other row).  
+    /** Return a pointer to a linear combination of this row with row
+        @c other.  The returned pointer could possibly be the @p other
+        row if in-place update took place.  The two coefficients used
+        for the linear combination are given by @a a (multiplier for
+        this row) and @a b (multiplier for the @a other row).
 
         If this row is sparse and its fill-in percentage exceeds @a
         dense_threshold, convert it to dense format storage before
         performing elimination. */
-    Row* gaussian_elimination(Row* other, 
-                              val_t& a, val_t& b,
-                              const float dense_threshold = 100.0) const;
+    Row* linear_combination(Row* other, 
+                            const val_t& a, const val_t& b, const bool adjust,
+                            const float dense_threshold = 100.0) const;
 
     /** Print a textual representation of the row to stream @c out.
         See http://www.parashift.com/c++-faq-lite/input-output.html#faq-15.11 */
@@ -211,9 +205,9 @@ namespace rheinfall {
             template<typename T> class allocator>
   inline Row<val_t,coord_t,allocator>*
   Row<val_t,coord_t,allocator>::
-  gaussian_elimination(Row<val_t,coord_t,allocator>* restrict other, 
-                       val_t& a, val_t& b,
-                       const float dense_threshold) 
+  linear_combination(Row<val_t,coord_t,allocator>* restrict other, 
+                     const val_t& a, const val_t& b, const bool adjust,
+                     const float dense_threshold) 
     const restrict_this
   {
     if ((sparse == this->kind) and (sparse == other->kind)) {
@@ -223,30 +217,30 @@ namespace rheinfall {
         // FIXME: could merge ctor+elimination in one funcall
         DenseRow<val_t,coord_t,allocator>* dense_other(new DenseRow<val_t,coord_t,allocator>(s2));
         delete other;
-        return s1->gaussian_elimination(dense_other, a, b);
+        return s1->linear_combination(dense_other, a, b, adjust);
       }
       else { // `other` kept sparse
-        return s1->gaussian_elimination(s2, a, b);
+        return s1->linear_combination(s2, a, b, adjust);
       }; // if (fill_in > ...)
     }
     else if ((sparse == this->kind) and (dense == other->kind)) {
       SparseRow<val_t,coord_t,allocator> const* s = static_cast<SparseRow<val_t,coord_t,allocator> const*>(this);
       DenseRow<val_t,coord_t,allocator>* d = static_cast<DenseRow<val_t,coord_t,allocator>*>(other);
-      return s->gaussian_elimination(d, a, b);
+      return s->linear_combination(d, a, b, adjust);
     }
     else if ((dense == this->kind) and (sparse == other->kind)) {
       DenseRow<val_t,coord_t,allocator> const* d = static_cast<DenseRow<val_t,coord_t,allocator> const*>(this);
       SparseRow<val_t,coord_t,allocator>* s = static_cast<SparseRow<val_t,coord_t,allocator>*>(other);
-      return d->gaussian_elimination(s, a, b);
+      return d->linear_combination(s, a, b, adjust);
     }
     else if ((dense == this->kind) and (dense == other->kind)) {
       DenseRow<val_t,coord_t,allocator> const* d1 = static_cast<DenseRow<val_t,coord_t,allocator> const*>(this);
       DenseRow<val_t,coord_t,allocator>* d2 = static_cast<DenseRow<val_t,coord_t,allocator>*>(other);
-      return d1->gaussian_elimination(d2, a, b);
+      return d1->linear_combination(d2, a, b, adjust);
     }
     else
       // should not happen!
-      throw std::logic_error("Unhandled row type combination in Row::gaussian_elimination()");
+      throw std::logic_error("Unhandled row type combination in Row::linear_combination()");
   };
 
 

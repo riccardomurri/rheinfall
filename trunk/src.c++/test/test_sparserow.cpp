@@ -90,26 +90,6 @@ BOOST_AUTO_TEST_CASE( check_sparserow_get_set )
 }
 
 
-BOOST_AUTO_TEST_CASE( check_denserow_add_to_entry )
-{
-  SparseRow<int,int> s(0, 100, 0);
-
-  for(int i = 0; i < 10; ++i)
-    for (int j = i; j < 10; ++j)
-      s.add_to_entry(j*j, 1);
-  BOOST_CHECK_EQUAL( s.first_nonzero_column(), 0 );
-
-  int j = 0;
-  for(int i = 0; i < s.size(); ++i)
-    if (j*j == i) {
-      BOOST_CHECK_EQUAL(s.get(i), j+1);
-      j++;
-    }
-    else 
-      BOOST_CHECK_EQUAL(s.get(i), 0);
-}
-
-
 BOOST_AUTO_TEST_CASE( check_sparserow_ctor_from_iter1 )
 {
   // m = { 0:0, 1:1, 2:4, 3:9, ... }
@@ -198,7 +178,8 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ge_with_sparse0 )
 
   // check elimination
   int a, b;
-  SparseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
+  get_row_multipliers<int>(p1->leading_term_, p2->leading_term_, a, b);
+  SparseRow<int,int>* p3 = p1->linear_combination(p2, a, b, true);
   BOOST_CHECK_EQUAL( p3, (static_cast<SparseRow<int,int>*>(NULL)) );
 }
 
@@ -218,7 +199,8 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ge_with_sparse1 )
   // check elimination
   const int result_size = p2->size() - 1; // p2 will be invalid after GE
   int a, b;
-  SparseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
+  get_row_multipliers<int>(p1->leading_term_, p2->leading_term_, a, b);
+  SparseRow<int,int>* p3 = p1->linear_combination(p2, a, b, true);
   BOOST_CHECK ( p1 != p3 );
   BOOST_CHECK ( p2 != p3 );
   BOOST_CHECK_EQUAL( (p3->Row<int,int>::starting_column_), 77 );
@@ -242,7 +224,8 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ge_with_sparse2 )
   // check elimination
   const int result_size = p1->size() + p2->size() - 1; // p2 will be invalid after GE
   int a, b;
-  SparseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
+  get_row_multipliers<int>(p1->leading_term_, p2->leading_term_, a, b);
+  SparseRow<int,int>* p3 = p1->linear_combination(p2, a, b, true);
   BOOST_CHECK_EQUAL( p3->size(), result_size );
   BOOST_CHECK_EQUAL( (p3->Row<int,int>::starting_column_), 1 );
   BOOST_CHECK_EQUAL( p3->first_nonzero_column(), 1 );
@@ -269,7 +252,8 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ge_with_dense0 )
 
   // check elimination
   int a, b;
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
+  get_row_multipliers<int>(p1->leading_term_, p2->leading_term_, a, b);
+  DenseRow<int,int>* p3 = p1->linear_combination(p2, a, b, true);
   BOOST_CHECK_EQUAL( p3, (static_cast<DenseRow<int,int>*>(NULL)) );
 }
 
@@ -289,7 +273,8 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ge_with_dense1 )
   // check elimination
   const int result_size = p2->size() - 2; // p2 will be invalid after GE
   int a, b;
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
+  get_row_multipliers<int>(p1->leading_term_, p2->leading_term_, a, b);
+  DenseRow<int,int>* p3 = p1->linear_combination(p2, a, b, true);
   BOOST_CHECK_EQUAL( p3->size(), result_size );
   BOOST_CHECK_EQUAL( (p3->Row<int,int>::starting_column_), 2 );
   BOOST_CHECK_EQUAL( p3->first_nonzero_column(), 2 );
