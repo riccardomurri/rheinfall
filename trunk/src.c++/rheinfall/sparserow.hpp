@@ -116,20 +116,27 @@ namespace rheinfall {
     /** Return a copy of the element stored at column @c col */
     virtual val_t get(const coord_t col) const;
 
-    /** Perform Gaussian elimination: sum a multiple of this row to
-        (a multiple of) row @c r so that the combination has its
-        first nonzero entry at a column index strictly larger than
-        the one of both rows. Return pointer to the combined row, which
-        could possibly be this row if in-place update took place. */
-    SparseRow<val_t,coord_t,allocator>* gaussian_elimination(SparseRow<val_t,coord_t,allocator>* other) const;
+    /** Perform Gaussian elimination: sum a multiple of this row to (a
+        multiple of) row @c other so that the combination has its first
+        nonzero entry at a column index strictly larger than the one
+        of both rows. Return pointer to the combined row, which could
+        possibly be the @p other row if in-place update took place.
+        The two coefficients used for the linear combination are
+        written into @a a (multiplier for this row) and @a b
+        (multiplier for the @a other row). */
+    SparseRow<val_t,coord_t,allocator>* gaussian_elimination(SparseRow<val_t,coord_t,allocator>* other,
+                                                             val_t& a, val_t& b) const;
 
-    /** Perform Gaussian elimination: sum a multiple of this row to
-        (a multiple of) row @c r so that the combination has its
-        first nonzero entry at a column index strictly larger than
-        the one of both rows. Return pointer to the combined row, which
-        could possibly be this row if in-place update took place. 
-        Elimination on a dense row returns a dense row. */
-    DenseRow<val_t,coord_t,allocator>* gaussian_elimination(DenseRow<val_t,coord_t,allocator>* other) const;
+    /** Perform Gaussian elimination: sum a multiple of this row to (a
+        multiple of) row @c other so that the combination has its first
+        nonzero entry at a column index strictly larger than the one
+        of both rows. Return pointer to the combined row, which could
+        possibly be the @p other row if in-place update took place.
+        The two coefficients used for the linear combination are
+        written into @a a (multiplier for this row) and @a b
+        (multiplier for the @a other row). */
+    DenseRow<val_t,coord_t,allocator>* gaussian_elimination(DenseRow<val_t,coord_t,allocator>* other, 
+                                                            val_t& a, val_t& b) const;
 
   protected:
 
@@ -356,14 +363,14 @@ namespace rheinfall {
             template<typename T> class allocator>
   SparseRow<val_t,coord_t,allocator>* 
   SparseRow<val_t,coord_t,allocator>::
-  gaussian_elimination(SparseRow<val_t,coord_t,allocator>* restrict other) 
+  gaussian_elimination(SparseRow<val_t,coord_t,allocator>* restrict other,
+                       val_t& a, val_t& b) 
     const restrict_this
   {
     assert(this->__ok());
     assert(other->__ok());
     assert(this->starting_column_ == other->starting_column_);
 
-    val_t a, b;
     rheinfall::get_row_multipliers<val_t>(this->leading_term_,
                                           other->leading_term_,
                                           a, b);
@@ -462,7 +469,8 @@ namespace rheinfall {
             template<typename T> class allocator>
   DenseRow<val_t,coord_t,allocator>* 
   SparseRow<val_t,coord_t,allocator>::
-  gaussian_elimination(DenseRow<val_t,coord_t,allocator>* restrict other) 
+  gaussian_elimination(DenseRow<val_t,coord_t,allocator>* restrict other,
+                       val_t& a, val_t& b) 
     const restrict_this
   {
     assert(this->starting_column_ == other->starting_column_);
@@ -470,7 +478,6 @@ namespace rheinfall {
     assert(other->__ok());
     assert(not is_zero(other->leading_term_));
 
-    val_t a, b;
     rheinfall::get_row_multipliers(this->leading_term_,
                                    other->leading_term_,
                                    a, b);
