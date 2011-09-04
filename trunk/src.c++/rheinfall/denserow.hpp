@@ -87,6 +87,9 @@ namespace rheinfall {
       /** Return number of allocated entries. */
       virtual size_t size() const;
 
+      /** Add @a value to the entry in column @a col. */
+      virtual void add_to_entry(const coord_t col, const val_t value);
+
       /** Set the element stored at column @c col */
       virtual void set(const coord_t col, const val_t value);
 
@@ -235,6 +238,20 @@ namespace rheinfall {
     return true;
   };
 #endif
+
+
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline void
+  DenseRow<val_t,coord_t,allocator>::
+  add_to_entry(const coord_t col, const val_t value) 
+  {
+    assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
+    if (col == Row_::starting_column_)
+      Row_::leading_term_ += value;
+    else
+      storage[storage.size()-1 - (col - (Row_::starting_column_ + 1))] += value;
+  };
 
 
   template <typename val_t, typename coord_t, 

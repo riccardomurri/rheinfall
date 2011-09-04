@@ -84,6 +84,26 @@ BOOST_AUTO_TEST_CASE( check_sparserow_get_set )
 }
 
 
+BOOST_AUTO_TEST_CASE( check_denserow_add_to_entry )
+{
+  SparseRow<int,int> s(0, 100, 0);
+
+  for(int i = 0; i < 10; ++i)
+    for (int j = i; j < 10; ++j)
+      s.add_to_entry(j*j, 1);
+  BOOST_CHECK_EQUAL( s.first_nonzero_column(), 0 );
+
+  int j = 0;
+  for(int i = 0; i < s.size(); ++i)
+    if (j*j == i) {
+      BOOST_CHECK_EQUAL(s.get(i), j+1);
+      j++;
+    }
+    else 
+      BOOST_CHECK_EQUAL(s.get(i), 0);
+}
+
+
 BOOST_AUTO_TEST_CASE( check_sparserow_ctor_from_iter1 )
 {
   // m = { 0:0, 1:1, 2:4, 3:9, ... }

@@ -73,6 +73,26 @@ BOOST_AUTO_TEST_CASE( check_denserow_get_set )
 }
 
 
+BOOST_AUTO_TEST_CASE( check_denserow_add_to_entry )
+{
+  DenseRow<int,int> d(0,100);
+
+  for(int i = 0; i < 10; ++i)
+    for (int j = i; j < 10; ++j)
+      d.add_to_entry(j*j, 1);
+  BOOST_CHECK_EQUAL( d.first_nonzero_column(), 0 );
+
+  int j = 0;
+  for(int i = 0; i < d.size(); ++i)
+    if (j*j == i) {
+      BOOST_CHECK_EQUAL(d.get(i), j+1);
+      j++;
+    }
+    else 
+      BOOST_CHECK_EQUAL(d.get(i), 0);
+}
+
+
 BOOST_AUTO_TEST_CASE( check_denserow_adjust0 )
 {
   // `adjust` is protected, so we need a subclass to test it

@@ -107,6 +107,9 @@ namespace rheinfall {
     /** Return number of allocated (i.e., non-zero) entries. */
     virtual size_t size() const;
 
+    /** Add @a value to the entry in column @a col. */
+    virtual void add_to_entry(const coord_t col, const val_t value);
+
     /** Set the element stored at column @c col */
     virtual void set(const coord_t col, const val_t value);
 
@@ -284,6 +287,36 @@ namespace rheinfall {
     return true;
   };
 #endif
+
+
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline void
+  SparseRow<val_t,coord_t,allocator>::
+  add_to_entry(const coord_t col, const val_t value) 
+  {
+    assert(col >= Row_::starting_column_ and col <= Row_::ending_column_);
+    if (col == Row_::starting_column_) {
+      Row_::leading_term_ += value;
+      return;
+    };
+    // else, fast-forward to place where element is/would be stored
+    size_t jj = 0;
+    while (jj < storage.size() and storage[jj].first < col)
+      ++jj;
+    // set element accordingly
+    if (storage.size() == jj) {
+      // end of list reached, `col` is larger than any index in this row
+      storage.push_back(std::make_pair<size_t,val_t>(col,value));
+    }
+    else if (col == storage[jj].first) 
+      storage[jj].second += value;
+    else { // storage[jj].first > col, insert new pair before `jj`
+      storage.insert(storage.begin()+jj, 
+                     std::make_pair<size_t,val_t>(col,value));
+    };
+    //assert(this->__ok());
+  }; // SparseRow::add_to_entry(...)
 
 
   template <typename val_t, typename coord_t, 
