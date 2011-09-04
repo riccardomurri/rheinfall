@@ -26,6 +26,12 @@
  *
  */
 
+// ensure assertions are enabled in test cases
+#ifdef NDEBUG
+# undef NDEBUG
+#endif
+
+
 #include <config.h>
 // ignore GMP even if defined, since we're not going to test it
 #ifdef HAVE_GMPXX

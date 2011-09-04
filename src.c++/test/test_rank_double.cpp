@@ -1,5 +1,5 @@
 /**
- * @file   test_rank_long.cpp
+ * @file   test_rank_double.cpp
  *
  * Correctness test for the `Rheinfall` C++ implementation, with `long
  * double` coefficients.
@@ -26,6 +26,12 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  *
  */
+
+// ensure assertions are enabled in test cases
+#ifdef NDEBUG
+# undef NDEBUG
+#endif
+
 
 #include <config.h>
 // ignore GMP even if defined, since we're not going to test it
