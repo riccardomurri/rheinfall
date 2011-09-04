@@ -66,6 +66,15 @@ namespace rheinfall {
         subclass is a @ref SparseRow or a @ref DenseRow */
     const kind_t kind;
 
+    /** Original row number. (As read from the file or the original matrix.) */
+    coord_t h0;
+
+    /** Row number after the initial reordering step. */
+    coord_t h1;
+
+    /** Final row number. */
+    coord_t h2;
+
     /** Constructor. */
     Row(const kind_t kind_, 
         const coord_t starting_column, const coord_t ending_column, 
@@ -94,7 +103,7 @@ namespace rheinfall {
     Row* gaussian_elimination(Row* other, 
                               const float dense_threshold) const;
 
-    /** Print a textual representation of the row to stream @c o.
+    /** Print a textual representation of the row to stream @c out.
         See http://www.parashift.com/c++-faq-lite/input-output.html#faq-15.11 */
     friend std::ostream& operator<< (std::ostream& out, 
                                      Row<val_t,coord_t,allocator> const& row) {
@@ -102,8 +111,7 @@ namespace rheinfall {
       return out;
     };
 
-    //protected:
-  public:
+  protected:
     /** Index of the first column where a nonzero element is stored. */
     coord_t starting_column_; // would-be `const`: can only be modified by ctor and serialization
     /** Index of the last column in the matrix. */
@@ -124,6 +132,7 @@ namespace rheinfall {
     void serialize(Archive& ar, const unsigned int version);
 #endif
 
+  public:
 #ifdef RF_COUNT_OPS
     unsigned long *ops_count_ptr;
 #endif 
@@ -149,6 +158,9 @@ namespace rheinfall {
       const coord_t ending_column, 
       const val_t leading_term)
     : kind(kind_)
+    , h0(-1)  // XXX: use boost::optional instead
+    , h1(-1)
+    , h2(-1)
     , starting_column_(starting_column)
     , ending_column_(ending_column)
     , leading_term_(leading_term)
@@ -236,6 +248,9 @@ namespace rheinfall {
     // & operator is defined similar to <<.  Likewise, when the class Archive
     // is a type of input archive the & operator is defined similar to >>.
     ar 
+      & h0
+      & h1
+      & h2
       & starting_column_
       & ending_column_ 
       & leading_term_;
