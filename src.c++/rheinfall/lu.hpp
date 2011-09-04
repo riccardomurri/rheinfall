@@ -1,7 +1,7 @@
 /**
- * @file   rank.hpp
+ * @file   lu.hpp
  *
- * Interface of the rheinfall class.
+ * Interface of the rheinfall class for computing LU decompositions.
  *
  * @author  riccardo.murri@gmail.com
  * @version $Revision$
@@ -26,15 +26,15 @@
  *
  */
 
-#ifndef RANK_HPP
-#define RANK_HPP 1
+#ifndef LU_HPP
+#define LU_HPP 1
 
 
 #include "config.hpp"
-#include "types.hpp"
 #include "row.hpp"
 #include "sparserow.hpp"
 #include "denserow.hpp"
+#include "types.hpp"
 
 #ifdef _OPENMP
 # include <omp.h>
@@ -51,31 +51,31 @@
 
 namespace rheinfall {
 
-  /** Implements the `Rheinfall` algorithm for the computation of matrix
-      rank. */
+  /** Implements the `Rheinfall` algorithm for the computation of a
+      matrix LU decomposition. */
   template <typename val_t, typename coord_t = int, 
             template<typename T> class allocator = std::allocator >
-  class Rank {
+  class LU {
 
 public:
 
     /** Constructor. If compiled with MPI, will use the default
         communicator @c MPI_COMM_WORLD */
-    Rank(const coord_t ncols, 
-         const coord_t width = 1,
-         const float dense_threshold = 40.0);
+    LU(const coord_t ncols, 
+       const coord_t width = 1,
+       const float dense_threshold = 40.0);
     
 #ifdef WITH_MPI
     /** Constructor, taking explicit MPI communicator. */
-    Rank(mpi::communicator& comm, 
-         const coord_t ncols,
-         const coord_t width = 1,
-         const float dense_threshold = 40.0);
+    LU(mpi::communicator& comm, 
+       const coord_t ncols,
+       const coord_t width = 1,
+       const float dense_threshold = 40.0);
 #endif // WITH_MPI
 
     /** Destructor. When using OpenMP and MPI serialization, destroys
         the @c mpi_send_lock_; otherwise, does nothing. */
-    ~Rank();
+    ~LU();
   
 
     /** Read a matrix stream into the processors.  Return number of
@@ -149,8 +149,14 @@ public:
     coord_t read_sms(std::istream& input, coord_t& nrows, coord_t& ncols, 
                      const bool local_only=true, const bool transpose=false);
 
-    /** Return rank of matrix after in-place destructive computation. */
-    coord_t rank();
+    /** Generic type of a matrix row. */
+    typedef Row<val_t,coord_t,allocator> row_t;
+
+    /** Compute LU decomposition and store the result into @a l and @a
+     u.  When using MPI, only the locally-computed rows are stored
+     into @a l and @a u; it is the caller's responsibility to collect
+     them all. */
+    void lu(std::vector<row_t*>& l, std::vector<row_t*>& u);
     
     /** A row will switch its storage to dense format when the percent
         of nonzero entries w.r.t. total length exceeds this
@@ -159,7 +165,7 @@ public:
 
 #ifdef RF_COUNT_OPS
     /// Return count of arithmetic operations done so far. Note that
-    /// this is only meaningful @a after a @c rank() invocation has
+    /// this is only meaningful @a after a @c lu() invocation has
     /// completed.
     unsigned long get_ops_count() const { return ops_count; };
 #endif
@@ -172,19 +178,25 @@ public:
     public:
       /** Constructor, taking parent instance and index of the columns
           to process. */
-      Processor(Rank& parent, const coord_t column);
+      Processor(LU& parent, const coord_t column);
       /** Destructor. Releases OpenMP lock and frees up remaining memory. */
       ~Processor();
       
     protected:     
       /** Parent instance. */
-      Rank<val_t,coord_t,allocator>& parent_;
+      LU<val_t,coord_t,allocator>& parent_;
       /** Index of matrix column to process. */
       const coord_t column_;
-      friend class Rank<val_t,coord_t,allocator>; // XXX: see rank()
+      friend class LU<val_t,coord_t,allocator>; // XXX: see rank()
       
+      typedef LU<val_t,coord_t,allocator>::row_t row_t;
+      typedef SparseRow<val_t,coord_t,allocator> sparserow_t;
+      typedef DenseRow<val_t,coord_t,allocator> denserow_t;
+
       /** Row used for elimination */
-      Row<val_t,coord_t,allocator>* u;
+      row_t* u0;
+      /** Corresponding row in the L matrix. */
+      row_t* l0;
       
       /** Processor state: it is @c running when Gaussian elimination
           operations are being carried out regularly; it turns @c ending
@@ -194,12 +206,15 @@ public:
       enum { running, ending, done } phase;
       
       /** A block of rows. */
-      typedef std::list< Row<val_t,coord_t,allocator>*, 
-                         allocator<Row<val_t,coord_t,allocator>*> > row_list;
+      typedef std::list< row_t*, 
+                         allocator<row_t*> > row_list;
       /** The block of rows that will be eliminated next time @c step() is called. */
-      row_list rows;
+      row_list u_rows;
+      /** The corresponding block of rows from the L matrix. */
+      row_list l_rows;
+
       /** List of incoming rows from other processors. */
-      row_list inbox;
+      row_list inbox_u, inbox_l;
 #ifdef _OPENMP
       /** Lock for accessing the @c inbox */
       omp_lock_t inbox_lock_;
@@ -208,15 +223,13 @@ public:
 #ifdef WITH_MPI
       /** Type used for storing the list of rows sent to other
           processors and the associated MPI request. */
-      typedef std::list< std::pair< mpi::request, Row<val_t,coord_t,allocator>* >,
-                         allocator< std::pair< mpi::request, Row<val_t,coord_t,allocator>* > > > outbox_t;
+      // XXX: use boost::tuple ?
+      typedef std::list< std::pair< mpi::request, std::pair<row_t*,row_t*> >,
+                         allocator< std::pair< mpi::request, std::pair<row_t*,row_t*> > > > outbox_t;
       /** List of rows sent to other processors and the associated MPI request. 
           We need to keep track of these in order to free the resources when we're done. */
       outbox_t outbox;
 #endif
-
-      /** Stores the result of the last invocation of @c step(). */
-      coord_t result_;
 
 #ifdef _OPENMP
     private:
@@ -230,12 +243,15 @@ public:
       
     public: 
 
-      /** Append the given row to @c inbox */
-      void recv_row(Row<val_t,coord_t,allocator>* new_row);
+      /** Initialize a new matrix row with the given content. */
+      void recv_row(row_t* new_row);
+
+      /** Add the given pair to @c inbox. */
+      void recv_pair(row_t* u, row_t* l);
       
       /** Make a pass over the block of rows and return either 0 or 1
           (depending whether elimination took place or not). */
-      coord_t step();
+      void step();
       
       /** Switch processor to @c ending state: after one final round of
           elimination, a @c TAG_END message will be sent to the next
@@ -289,15 +305,27 @@ public:
     //
 
     /** MPI tags used to discriminate various types of messages. */
-    enum { TAG_END=0, TAG_ROW_SPARSE=1, TAG_ROW_DENSE=2 };
+    enum { 
+      TAG_END=0, 
+      TAG_ROW_SPARSE=1, 
+      TAG_ROW_DENSE=2,
+      TAG_PAIR_SPARSE_SPARSE=3,
+      TAG_PAIR_SPARSE_DENSE=4,
+      TAG_PAIR_DENSE_SPARSE=5,
+      TAG_PAIR_DENSE_DENSE=6
+    };
     
     /** Send the termination signal to the processor owning the block
         starting at @c col. */
     void send_end(const Processor& origin, const coord_t column) const;
 
     /** Send the row data pointed by @c row to the processor owning the
-        block starting at @c col. Frees up @c row */
-    void send_row(Processor& source, Row<val_t,coord_t,allocator>* row);
+        block starting at @c col. Frees @c row */
+    void send_row(Processor& source, row_t* row);
+
+    /** Send the row data pointed by @c row to the processor owning the
+        block starting at @c col. Frees @c row */
+    void send_pair(Processor& source, row_t* u, row_t* l);
 
 #ifdef WITH_MPI
     /** Receive messages that have arrived during a computation cycle. */
@@ -307,7 +335,7 @@ public:
     /** Lock used to to serialize all outgoing MPI calls
         (receives are already done by the master thread only) */
     // XXX: being an instance variable, this won't serialize
-    // MPI calls if there are two concurrent `Rank` operating...
+    // MPI calls if there are two concurrent `LU` operating...
     mutable omp_lock_t mpi_send_lock_;
 # endif
 #endif // WITH_MPI
@@ -335,10 +363,10 @@ public:
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  Rank<val_t,coord_t,allocator>::
-  Rank(const coord_t ncols, 
-            const coord_t width,
-            const float dense_threshold)
+  LU<val_t,coord_t,allocator>::
+  LU(const coord_t ncols, 
+     const coord_t width,
+     const float dense_threshold)
     : ncols_(ncols)
     , vpus()
     , w_(width)
@@ -361,7 +389,7 @@ public:
     vpus.reserve(nmemb);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
-        vpus.push_back(new Rank<val_t,coord_t,allocator>::Processor(*this, c));
+        vpus.push_back(new LU<val_t,coord_t,allocator>::Processor(*this, c));
     // internal check that the size of the data structure is actually correct
     assert(vpus.size() <= nmemb);
 #ifdef RF_COUNT_OPS
@@ -374,11 +402,11 @@ public:
 #ifdef WITH_MPI
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  Rank<val_t,coord_t,allocator>::
-  Rank(mpi::communicator& comm, 
-       const coord_t ncols, 
-       const coord_t width,
-       const float dense_threshold)
+  LU<val_t,coord_t,allocator>::
+  LU(mpi::communicator& comm, 
+     const coord_t ncols, 
+     const coord_t width,
+     const float dense_threshold)
   : ncols_(ncols)
   , vpus()
   , comm_(comm)
@@ -394,7 +422,7 @@ public:
   vpus.reserve(1 + ncols_ / nprocs_);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
-        vpus.push_back(new Rank<val_t,coord_t,allocator>::Processor(*this, c));
+        vpus.push_back(new LU<val_t,coord_t,allocator>::Processor(*this, c));
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_init_lock(& mpi_send_lock_); 
 # endif // _OPENMP && WITH_MPI_SERIALIZED
@@ -408,7 +436,7 @@ public:
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  Rank<val_t,coord_t,allocator>::~Rank()
+  LU<val_t,coord_t,allocator>::~LU()
   {
 #if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_destroy_lock(& mpi_send_lock_); 
@@ -419,7 +447,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   coord_t
-  Rank<val_t,coord_t,allocator>::
+  LU<val_t,coord_t,allocator>::
   read_sms(std::istream& input,  
            coord_t& nrows, coord_t& ncols, 
            const bool local_only,
@@ -501,7 +529,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   coord_t
-  Rank<val_t,coord_t,allocator>::
+  LU<val_t,coord_t,allocator>::
   read_triples(std::istream& input,  coord_t& nrows, coord_t& ncols, 
                const bool local_only, const bool transpose)
   {
@@ -596,24 +624,21 @@ public:
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  coord_t 
-  Rank<val_t,coord_t,allocator>::
-  rank() 
+  void 
+  LU<val_t,coord_t,allocator>::
+  lu(std::vector<row_t*> &l, std::vector<row_t*> &u) 
   {
     // kickstart termination signal
     if (is_local(0)) {
       vpu_for_column(0)->end_phase();
     };
 
-    // where to collect (partial) ranks
-    std::vector<coord_t, allocator<coord_t> > r(vpus.size(), 0);
-  
     coord_t n0 = 0;
     while(n0 < vpus.size()) {
       // n0 incremented each time a processor goes into `done` state 
       while (n0 < vpus.size() and vpus[n0]->is_done()) {
-        delete vpus[n0];
-        vpus[n0] = NULL; // faster SIGSEGV
+        //delete vpus[n0];
+        //vpus[n0] = NULL; // faster SIGSEGV
         ++n0;
       };
       if (n0 >= vpus.size())
@@ -622,10 +647,24 @@ public:
 # pragma omp parallel for schedule(static,w_)
 #endif // _OPENMP
       for (coord_t n = n0; n < vpus.size(); ++n)
-        r[n] = vpus[n]->step();
+        vpus[n]->step();
 #ifdef WITH_MPI
       while (boost::optional<mpi::status> status = comm_.iprobe()) { 
         switch(status->tag()) {
+        case TAG_END: {
+          // "end" message received; no new rows will be coming.
+          // But some other rows could have arrived or could
+          // already be in the `inbox`, so we need to make another
+          // pass anyway.  All this boils down to: set a flag,
+          // make another iteration, and end the loop next time.
+          coord_t column = -1;
+          comm_.recv(status->source(), status->tag(), column);
+          assert(column >= 0 and is_local(column));
+          Processor* vpu = vpu_for_column(column);
+          assert(NULL != vpu);
+          vpu->end_phase();
+          break;
+        };
         case TAG_ROW_SPARSE: {
           SparseRow<val_t,coord_t,allocator>* new_row = 
             SparseRow<val_t,coord_t,allocator>::new_from_mpi_message(comm_, status->source(), status->tag());
@@ -644,18 +683,48 @@ public:
           vpu->recv_row(new_row);
           break;
         };
-        case TAG_END: {
-          // "end" message received; no new rows will be coming.
-          // But some other rows could have arrived or could
-          // already be in the `inbox`, so we need to make another
-          // pass anyway.  All this boils down to: set a flag,
-          // make another iteration, and end the loop next time.
-          coord_t column = -1;
-          comm_.recv(status->source(), status->tag(), column);
-          assert(column >= 0 and is_local(column));
-          Processor* vpu = vpu_for_column(column);
+        case TAG_PAIR_SPARSE_SPARSE: {
+          std::pair<sparserow_t*, sparserow_t*> payload;
+          payload.first = new  SparseRow<val_t,coord_t,allocator>();
+          payload.second = new  SparseRow<val_t,coord_t,allocator>();
+          comm_.recv(status->source(), status->tag(), payload);
+          assert(is_local(payload.first->first_nonzero_column()));
+          Processor* vpu = vpu_for_column(payload.first->first_nonzero_column());
           assert(NULL != vpu);
-          vpu->end_phase();
+          vpu->recv_pair(payload.first, payload.second);
+          break;
+        };
+        case TAG_PAIR_SPARSE_DENSE: {
+          std::pair<sparserow_t*, sparserow_t*> payload;
+          payload.first = new  SparseRow<val_t,coord_t,allocator>();
+          payload.second = new  DenseRow<val_t,coord_t,allocator>();
+          comm_.recv(status->source(), status->tag(), payload);
+          assert(is_local(payload.first->first_nonzero_column()));
+          Processor* vpu = vpu_for_column(payload.first->first_nonzero_column());
+          assert(NULL != vpu);
+          vpu->recv_pair(payload.first, payload.second);
+          break;
+        };
+        case TAG_PAIR_DENSE_SPARSE: {
+          std::pair<sparserow_t*, sparserow_t*> payload;
+          payload.first = new  DenseRow<val_t,coord_t,allocator>();
+          payload.second = new  SparseRow<val_t,coord_t,allocator>();
+          comm_.recv(status->source(), status->tag(), payload);
+          assert(is_local(payload.first->first_nonzero_column()));
+          Processor* vpu = vpu_for_column(payload.first->first_nonzero_column());
+          assert(NULL != vpu);
+          vpu->recv_pair(payload.first, payload.second);
+          break;
+        };
+        case TAG_PAIR_DENSE_DENSE: {
+          std::pair<sparserow_t*, sparserow_t*> payload;
+          payload.first = new  DenseRow<val_t,coord_t,allocator>();
+          payload.second = new  DenseRow<val_t,coord_t,allocator>();
+          comm_.recv(status->source(), status->tag(), payload);
+          assert(is_local(payload.first->first_nonzero_column()));
+          Processor* vpu = vpu_for_column(payload.first->first_nonzero_column());
+          assert(NULL != vpu);
+          vpu->recv_pair(payload.first, payload.second);
           break;
         };
         }; // switch(status->tag())
@@ -663,34 +732,32 @@ public:
 #endif // WITH_MPI
     }; // end while(n0 < vpus.size())
 
-    // the partial rank is computed as the sum of all ranks computed
-    // by local processors
-    coord_t local_rank = std::accumulate(r.begin(), r.end(), 0);
-
 #ifdef WITH_MPI
     // wait until all processors have done running
     comm_.barrier();
 
-    // collect the partial ranks for all processes
-    coord_t rank = 0;
-    mpi::all_reduce(comm_, local_rank, rank, std::plus<int>());
-
+# ifdef RF_COUNT_OPS
     // likewise, sum ops count from all processes
     unsigned long total_ops_count = 0;
     mpi::all_reduce(comm_, ops_count, total_ops_count, std::plus<int>());
     ops_count = total_ops_count;
-#else
-    const coord_t rank = local_rank;
-#endif
+# endif // RF_COUNT_OPS
+#endif // WITH_MPI
 
-    return rank;
+    // append local results to u, l
+    for (coord_t n = 0; n < vpus.size(); ++n)
+      u.push_back(vpus[n]->u0);
+    for (coord_t n = 0; n < vpus.size(); ++n)
+      l.push_back(vpus[n]->l0);
+
+    return;
   };
 
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline bool 
-  Rank<val_t,coord_t,allocator>::
+  LU<val_t,coord_t,allocator>::
   is_local(const coord_t c) const 
   { 
 #ifdef WITH_MPI
@@ -704,7 +771,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline coord_t 
-  Rank<val_t,coord_t,allocator>::
+  LU<val_t,coord_t,allocator>::
   vpu_index_for_column(const coord_t c) const
   { 
     assert(c >= 0 and c < ncols_);
@@ -714,8 +781,8 @@ public:
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  inline typename Rank<val_t,coord_t,allocator>::Processor*
-  Rank<val_t,coord_t,allocator>::
+  inline typename LU<val_t,coord_t,allocator>::Processor*
+  LU<val_t,coord_t,allocator>::
   vpu_for_column(const coord_t c) const
   { 
     return vpus[vpu_index_for_column(c)]; 
@@ -725,7 +792,7 @@ public:
 #ifdef WITH_MPI
   template <typename val_t, typename coord_t, template<typename T> class allocator>
   inline int 
-  Rank<val_t,coord_t,allocator>::owner(const coord_t c) const
+  LU<val_t,coord_t,allocator>::owner(const coord_t c) const
   { 
     assert(c >= 0 and c < ncols_);
     return ((c/w_) % nprocs_); 
@@ -736,7 +803,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline void
-  Rank<val_t,coord_t,allocator>::
+  LU<val_t,coord_t,allocator>::
   send_row(Processor& source, Row<val_t,coord_t,allocator>* row) 
 {
   coord_t column = row->first_nonzero_column();
@@ -760,11 +827,58 @@ public:
                         *(static_cast<DenseRow<val_t,coord_t,allocator>*>(row)));
     else 
       // should not happen!
-      throw std::logic_error("Unhandled row kind in Rank::send_row()");
+      throw std::logic_error("Unhandled row kind in LU::send_row()");
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(& mpi_send_lock_);
 # endif
-    source.outbox.push_back(std::make_pair(req,row));
+    source.outbox.push_back(std::make_pair(req, std::make_pair(row,NULL)));
+  };
+#endif // WITH_MPI
+};
+
+
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline void
+  LU<val_t,coord_t,allocator>::
+  send_pair(Processor& source, row_t* u_row, row_t* l_row) 
+{
+  coord_t column = u_row->first_nonzero_column();
+  assert(column >= 0 and column < ncols_);
+  if (is_local(column)) {
+    Processor* vpu = vpu_for_column(column);
+    assert(NULL != vpu);
+    vpu->recv_pair(u_row, l_row);
+  }
+#ifdef WITH_MPI
+  else { // ship to remote process
+    mpi::request req;
+# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+    omp_set_lock(& mpi_send_lock_);
+# endif
+    if (u_row->kind == row_t::sparse and l_row->kind == row_t::sparse) 
+      req = comm_.issend(owner(column), TAG_PAIR_SPARSE_SPARSE, 
+                         std::make_pair(*(static_cast<sparserow_t*>(u_row)),
+                                        *(static_cast<sparserow_t*>(l_row))));
+    else if (u_row->kind == row_t::sparse and l_row->kind == row_t::dense) 
+      req = comm_.issend(owner(column), TAG_PAIR_SPARSE_DENSE, 
+                         std::make_pair(*(static_cast<sparserow_t*>(u_row)),
+                                        *(static_cast<denserow_t*>(l_row))));
+    else if (u_row->kind == row_t::dense and l_row->kind == row_t::sparse) 
+      req = comm_.issend(owner(column), TAG_PAIR_DENSE_SPARSE, 
+                         std::make_pair(*(static_cast<denserow_t*>(u_row)),
+                                        *(static_cast<sparserow_t*>(l_row))));
+    else if (u_row->kind == row_t::dense and l_row->kind == row_t::sparse) 
+      req = comm_.issend(owner(column), TAG_PAIR_DENSE_DENSE, 
+                         std::make_pair(*(static_cast<denserow_t*>(u_row)),
+                                        *(static_cast<denserow_t*>(l_row))));
+    else 
+      // should not happen!
+      throw std::logic_error("Unhandled row kind in LU::send_pair()");
+# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+    omp_unset_lock(& mpi_send_lock_);
+# endif
+    source.outbox.push_back(std::make_pair(req, std::make_pair(u_row,l_row)));
   };
 #endif // WITH_MPI
 };
@@ -773,7 +887,7 @@ public:
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
 inline void 
-Rank<val_t,coord_t,allocator>::
+LU<val_t,coord_t,allocator>::
 send_end(Processor const& origin, const coord_t column) const
 {
   if (column >= ncols_)
@@ -803,19 +917,18 @@ send_end(Processor const& origin, const coord_t column) const
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  Rank<val_t,coord_t,allocator>::Processor::
-  Processor(Rank<val_t,coord_t,allocator>& parent, 
+  LU<val_t,coord_t,allocator>::Processor::
+  Processor(LU<val_t,coord_t,allocator>& parent, 
             const coord_t column)
-      : parent_(parent),
-        column_(column), 
-        u(NULL), 
-        phase(running), 
-        rows(), 
-        inbox(), 
+      : parent_(parent)
+      , column_(column)
+      , u0(NULL), l0(NULL)
+      , phase(running)
+      , u_rows(), l_rows()
+      , inbox_u(), inbox_l()
 #ifdef WITH_MPI
-        outbox(), 
+      , outbox()
 #endif
-        result_(0)
     { 
 #ifdef _OPENMP
       omp_init_lock(&inbox_lock_);
@@ -826,38 +939,48 @@ send_end(Processor const& origin, const coord_t column) const
 
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
-Rank<val_t,coord_t,allocator>::Processor::
+LU<val_t,coord_t,allocator>::Processor::
 ~Processor()
 {
 #ifdef _OPENMP
       omp_destroy_lock(&inbox_lock_);
       omp_destroy_lock(&processing_lock_);
 #endif
-      if (NULL != u)
-        delete u;
-      assert(rows.empty());
-      assert(inbox.empty());
+      assert(u_rows.empty());
+      assert(l_rows.empty());
+      assert(inbox_u.empty());
+      assert(inbox_l.empty());
 }
 
 
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
 inline void 
-Rank<val_t,coord_t,allocator>::Processor::
-recv_row(Row<val_t,coord_t,allocator>* new_row) 
+LU<val_t,coord_t,allocator>::Processor::
+recv_row(Row<val_t,coord_t,allocator>* new_u_row) 
   {
     assert(running == phase);
-    assert((Row<val_t,coord_t,allocator>::sparse == new_row->kind 
-            or Row<val_t,coord_t,allocator>::dense == new_row->kind));
-    assert(column_ == new_row->starting_column_);
+    assert((Row<val_t,coord_t,allocator>::sparse == new_u_row->kind 
+            or Row<val_t,coord_t,allocator>::dense == new_u_row->kind));
+    assert(column_ == new_u_row->starting_column_);
+    // make a corresponding row from the identity matrix
+    // note: the starting column in L rows is always 0, since
+    // L is lower triangular
+    SparseRow<val_t,coord_t,allocator>* new_l_row = 
+      new SparseRow<val_t,coord_t,allocator>(0, new_u_row->ending_column_, 0);
+    new_l_row->set(new_u_row->h0, 1);
+    new_l_row->h0 = new_u_row->h0;
 #ifdef RF_COUNT_OPS
-    if (NULL != this->ops_count_ptr)
-      new_row->ops_count_ptr = this->ops_count_ptr;
+    if (NULL != this->ops_count_ptr) {
+      new_u_row->ops_count_ptr = this->ops_count_ptr;
+      new_l_row->ops_count_ptr = this->ops_count_ptr;
+    }
 #endif
 #ifdef _OPENMP
     omp_set_lock(&inbox_lock_);
 #endif
-    inbox.push_back(new_row);
+    inbox_u.push_back(new_u_row);
+    inbox_l.push_back(new_l_row);
 #ifdef _OPENMP
     omp_unset_lock(&inbox_lock_);
 #endif
@@ -866,8 +989,39 @@ recv_row(Row<val_t,coord_t,allocator>* new_row)
 
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
-coord_t
-Rank<val_t,coord_t,allocator>::Processor::
+inline void 
+LU<val_t,coord_t,allocator>::Processor::
+recv_pair(Row<val_t,coord_t,allocator>* new_u_row, 
+          Row<val_t,coord_t,allocator>* new_l_row) 
+  {
+    assert(running == phase);
+    assert((Row<val_t,coord_t,allocator>::sparse == new_u_row->kind 
+            or Row<val_t,coord_t,allocator>::dense == new_u_row->kind));
+    assert((Row<val_t,coord_t,allocator>::sparse == new_l_row->kind 
+            or Row<val_t,coord_t,allocator>::dense == new_l_row->kind));
+    assert(column_ == new_u_row->starting_column_);
+    assert(0 == new_l_row->starting_column_);
+#ifdef RF_COUNT_OPS
+    if (NULL != this->ops_count_ptr) {
+      new_u_row->ops_count_ptr = this->ops_count_ptr;
+      new_l_row->ops_count_ptr = this->ops_count_ptr;
+    }
+#endif
+#ifdef _OPENMP
+    omp_set_lock(&inbox_lock_);
+#endif
+    inbox_u.push_back(new_u_row);
+    inbox_l.push_back(new_l_row);
+#ifdef _OPENMP
+    omp_unset_lock(&inbox_lock_);
+#endif
+  };
+
+
+template <typename val_t, typename coord_t, 
+          template<typename T> class allocator>
+void
+LU<val_t,coord_t,allocator>::Processor::
 step() 
 {
 #ifdef _OPENMP
@@ -875,71 +1029,90 @@ step()
 #endif
 
   if (is_done())
-    return result_;
+    return;
 
   // receive new rows
 #ifdef _OPENMP
   omp_set_lock(&inbox_lock_);
 #endif
-  std::swap(inbox, rows);
-  assert(inbox.empty());
+  std::swap(inbox_u, u_rows);
+  assert(inbox_u.empty());
+  std::swap(inbox_l, l_rows);
+  assert(inbox_l.empty());
 #ifdef _OPENMP
   omp_unset_lock(&inbox_lock_);
 #endif
 
-  if (not rows.empty()) {
+  if (not u_rows.empty()) {
     // ensure there is one row for elimination
-    if (NULL == u) {
-      u = rows.front();
-      rows.pop_front();
+    if (NULL == u0) {
+      u0 = u_rows.front();
+      u_rows.pop_front();
+      l0 = l_rows.front();
+      l_rows.pop_front();
     }
+    assert (NULL != u0);
 
-    assert (NULL != u);
-    for (typename row_list::iterator it = rows.begin(); it != rows.end(); ++it) {
-      // swap `u` and the new row if the new row is shorter, or has "better" leading term
-      if (Row<val_t,coord_t,allocator>::sparse == (*it)->kind) {
-        SparseRow<val_t,coord_t,allocator>* s = 
-          static_cast<SparseRow<val_t,coord_t,allocator>*>(*it);
-        if (Row<val_t,coord_t,allocator>::sparse == u->kind) {
-          // if `*it` (new row) is shorter, it becomes the new pivot row
-          if (s->size() < u->size())
-            std::swap(u, *it);
+    typename row_list::iterator iter_u, iter_l;
+    assert(u_rows.size() == l_rows.size());
+    for (iter_u = u_rows.begin(), iter_l = l_rows.begin(); 
+         iter_u != u_rows.end(); 
+         ++iter_u, ++iter_l) 
+      {
+        // swap `u` and the new row if the new row is shorter, or has "better" leading term
+        if (Row<val_t,coord_t,allocator>::sparse == (*iter_u)->kind) {
+          SparseRow<val_t,coord_t,allocator>* s = 
+            static_cast<SparseRow<val_t,coord_t,allocator>*>(*iter_u);
+          if (Row<val_t,coord_t,allocator>::sparse == u0->kind) {
+            // if `*iter_u` (new row) is shorter, it becomes the new pivot row
+            if (s->size() < u0->size()) {
+              std::swap(u0, *iter_u);
+              std::swap(l0, *iter_l);
+            }
+          }
+          else if (Row<val_t,coord_t,allocator>::dense == u0->kind) {
+            std::swap(u0, *iter_u);
+            std::swap(l0, *iter_l);
+          }
+          else 
+            assert(false); // forgot one kind in chained `if`s?
         }
-        else if (Row<val_t,coord_t,allocator>::dense == u->kind)
-          std::swap(u, *it);
-        else 
-          assert(false); // forgot one kind in chained `if`s?
-      }
-      else if (Row<val_t,coord_t,allocator>::dense == (*it)->kind) {
-        if (Row<val_t,coord_t,allocator>::dense == u->kind) {
-          // swap `u` and `row` iff `row`'s leading term is "better"
-          if (first_is_better_pivot<val_t>
-              (static_cast<DenseRow<val_t,coord_t,allocator>*>(*it)->leading_term_,
-               static_cast<DenseRow<val_t,coord_t,allocator>*>(u)->leading_term_))
-            // swap `u` and `row`
-            std::swap(u, *it);
+        else if (Row<val_t,coord_t,allocator>::dense == (*iter_u)->kind) {
+          if (Row<val_t,coord_t,allocator>::dense == u0->kind) {
+            // swap `u0` and `row` iff `row`'s leading term is "better"
+            if (first_is_better_pivot<val_t>
+                (static_cast<DenseRow<val_t,coord_t,allocator>*>(*iter_u)->leading_term_,
+                 static_cast<DenseRow<val_t,coord_t,allocator>*>(u0)->leading_term_)) {
+              // swap `u0` and `row`
+              std::swap(u0, *iter_u);
+              std::swap(l0, *iter_l);
+            };
         };
-        // else, if `u` is a sparse row, no need to check further
+        // else, if `u0` is a sparse row, no need to check further
       }
       else
         assert(false); // forgot a row kind in `if` chain?
 
       // perform elimination -- return NULL in case resulting row is full of zeroes
       val_t a, b;
-      get_row_multipliers<val_t>((u)->leading_term_, (*it)->leading_term_, 
+      get_row_multipliers<val_t>(u0->leading_term_, 
+                                 (*iter_u)->leading_term_, 
                                  a, b);
-      Row<val_t,coord_t,allocator>* new_row = 
-        u->linear_combination(*it, a, b, true, parent_.dense_threshold);
+      row_t* new_u_row = 
+        u0->linear_combination(*iter_u, a, b, true, parent_.dense_threshold);
       // ship reduced rows to other processors
-      if (NULL != new_row) {
-        assert(new_row->starting_column_ > this->column_);
-        parent_.send_row(*this, new_row);
+      if (NULL != new_u_row) {
+        assert(new_u_row->starting_column_ > this->column_);
+        *iter_l = l0->linear_combination(*iter_l, a, b, false);
+        assert(NULL != *iter_l);
+        parent_.send_pair(*this, new_u_row, (*iter_l));
       };
     }; // end for (it = rows.begin(); ...)
-    rows.clear();
-    result_ = (NULL == u? 0 : 1);
+    u_rows.clear();
+    l_rows.clear();
   }; // end if not rows.empty()
-  assert(rows.empty());
+  assert(u_rows.empty());
+  assert(l_rows.empty());
 
   if (running == phase) {
 #ifdef WITH_MPI
@@ -980,7 +1153,7 @@ step()
   else { // `phase == ending`: end message already received
 #ifdef WITH_MPI        
     if (outbox.size() > 0) {
-      // wait untill all sent messages have arrived
+      // wait until all sent messages have arrived
       std::vector< mpi::request, allocator<mpi::request> > reqs;
       reqs.reserve(outbox.size());
       for (typename outbox_t::iterator it = outbox.begin();
@@ -1013,15 +1186,14 @@ step()
 #ifdef _OPENMP
   omp_unset_lock(&processing_lock_);
 #endif
-  // exit with 0 only if we never processed any row
-  return result_;
+  return;
 }
 
 
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
 inline void 
-Rank<val_t,coord_t,allocator>::Processor::
+LU<val_t,coord_t,allocator>::Processor::
 end_phase() 
 { 
   phase = ending; 
@@ -1031,7 +1203,7 @@ end_phase()
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
 inline bool 
-Rank<val_t,coord_t,allocator>::Processor::
+LU<val_t,coord_t,allocator>::Processor::
 is_done() const 
 { 
   return (done == phase); 
@@ -1041,4 +1213,4 @@ is_done() const
 }; // namespace rheinfall
 
 
-#endif // RANK_HPP
+#endif // LU_HPP

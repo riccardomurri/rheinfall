@@ -79,26 +79,6 @@ BOOST_AUTO_TEST_CASE( check_denserow_get_set )
 }
 
 
-BOOST_AUTO_TEST_CASE( check_denserow_add_to_entry )
-{
-  DenseRow<int,int> d(0,100);
-
-  for(int i = 0; i < 10; ++i)
-    for (int j = i; j < 10; ++j)
-      d.add_to_entry(j*j, 1);
-  BOOST_CHECK_EQUAL( d.first_nonzero_column(), 0 );
-
-  int j = 0;
-  for(int i = 0; i < d.size(); ++i)
-    if (j*j == i) {
-      BOOST_CHECK_EQUAL(d.get(i), j+1);
-      j++;
-    }
-    else 
-      BOOST_CHECK_EQUAL(d.get(i), 0);
-}
-
-
 BOOST_AUTO_TEST_CASE( check_denserow_adjust0 )
 {
   // `adjust` is protected, so we need a subclass to test it
@@ -144,7 +124,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_dense0 )
 
   // check elimination
   int a, b;
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
+  get_row_multipliers<int>(p1->leading_term_, p2->leading_term_, a, b);
+  DenseRow<int,int>* p3 = p1->linear_combination(p2, a, b, true);
   BOOST_CHECK_EQUAL( p3, (static_cast<DenseRow<int,int>*>(NULL)) );
 }
 
@@ -164,7 +145,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_dense1 )
 
   // check elimination
   int a, b;
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
+  get_row_multipliers<int>(p1->leading_term_, p2->leading_term_, a, b);
+  DenseRow<int,int>* p3 = p1->linear_combination(p2, a, b, true);
   BOOST_CHECK ( p1 != p3 );
   BOOST_CHECK ( p2 != p3 );
   BOOST_CHECK_EQUAL( p3->first_nonzero_column(), 77 );
@@ -192,7 +174,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_dense2 )
 
   // check elimination
   int a, b;
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
+  get_row_multipliers<int>(p1->leading_term_, p2->leading_term_, a, b);
+  DenseRow<int,int>* p3 = p1->linear_combination(p2, a, b, true);
   BOOST_CHECK_EQUAL( p3->size(), p1->size()-1 );
   BOOST_CHECK_EQUAL( p3->first_nonzero_column(), 1 );
   for (int i = 1; i <= 100; ++i)
@@ -273,7 +256,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_sparse0 )
 
   // check elimination
   int a, b;
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
+  get_row_multipliers<int>(p1->leading_term_, p2->leading_term_, a, b);
+  DenseRow<int,int>* p3 = p1->linear_combination(p2, a, b, true);
   BOOST_CHECK_EQUAL( p3, (static_cast<DenseRow<int,int>*>(NULL)) );
 }
 
@@ -288,7 +272,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_sparse1 )
 
   // check elimination
   int a, b;
-  DenseRow<int,int>* dd = d->gaussian_elimination(s, a, b);
+  get_row_multipliers<int>(d->leading_term_, s->leading_term_, a, b);
+  DenseRow<int,int>* dd = d->linear_combination(s, a, b, true);
   BOOST_CHECK ( d != dd );
   BOOST_CHECK_EQUAL( dd->first_nonzero_column(), 90 );
   BOOST_CHECK_EQUAL( dd->get(dd->first_nonzero_column()), -9 );
@@ -311,7 +296,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_sparse2 )
 
   // check elimination
   int a, b;
-  DenseRow<int,int>* dd = d->gaussian_elimination(s, a, b);
+  get_row_multipliers<int>(d->leading_term_, s->leading_term_, a, b);
+  DenseRow<int,int>* dd = d->linear_combination(s, a, b, true);
   BOOST_CHECK_EQUAL( dd->size(), d->size()-1 );
   BOOST_CHECK_EQUAL( dd->first_nonzero_column(), 1 );
   for (int i = 1; i <= 100; ++i)

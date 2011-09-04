@@ -87,36 +87,35 @@ namespace rheinfall {
       /** Return number of allocated entries. */
       virtual size_t size() const;
 
-      /** Add @a value to the entry in column @a col. */
-      virtual void add_to_entry(const coord_t col, const val_t value);
-
       /** Set the element stored at column @c col */
       virtual void set(const coord_t col, const val_t value);
 
       /** Return a copy of the element stored at column @c col */
       virtual val_t get(const coord_t col) const;
 
-    /** Perform Gaussian elimination: sum a multiple of this row to (a
-        multiple of) row @c other so that the combination has its first
-        nonzero entry at a column index strictly larger than the one
-        of both rows. Return pointer to the combined row, which could
-        possibly be the @p other row if in-place update took place.
-        The coefficients actually used for the linear combination are
-        written into @a a (multiplier for this row) and @a b
-        (multiplier for the @a other row). */
-      DenseRow<val_t,coord_t,allocator>* gaussian_elimination(const SparseRow<val_t,coord_t,allocator>* other,
-                                                              val_t& a, val_t& b) const;
+    /** Return a pointer to a linear combination of this row with row
+        @c other.  The returned pointer could possibly be the @p other
+        row if in-place update took place.  The two coefficients used
+        for the linear combination are given by @a a (multiplier for
+        this row) and @a b (multiplier for the @a other row).
 
-    /** Perform Gaussian elimination: sum a multiple of this row to (a
-        multiple of) row @c other so that the combination has its first
-        nonzero entry at a column index strictly larger than the one
-        of both rows. Return pointer to the combined row, which could
-        possibly be the @p other row if in-place update took place.
-        The coefficients actually used for the linear combination are
-        written into @a a (multiplier for this row) and @a b
-        (multiplier for the @a other row). */
-      DenseRow<val_t,coord_t,allocator>* gaussian_elimination(DenseRow<val_t,coord_t,allocator>* other, 
-                                                              val_t& a, val_t& b) const;
+        If this row is sparse and its fill-in percentage exceeds @a
+        dense_threshold, convert it to dense format storage before
+        performing elimination. */
+      DenseRow<val_t,coord_t,allocator>* linear_combination(const SparseRow<val_t,coord_t,allocator>* other,
+                                                            const val_t& a, const val_t& b, const bool adjust) const;
+
+    /** Return a pointer to a linear combination of this row with row
+        @c other.  The returned pointer could possibly be the @p other
+        row if in-place update took place.  The two coefficients used
+        for the linear combination are given by @a a (multiplier for
+        this row) and @a b (multiplier for the @a other row).
+
+        If this row is sparse and its fill-in percentage exceeds @a
+        dense_threshold, convert it to dense format storage before
+        performing elimination. */
+      DenseRow<val_t,coord_t,allocator>* linear_combination(DenseRow<val_t,coord_t,allocator>* other, 
+                                                            const val_t& a, const val_t& b, const bool adjust) const;
 
     protected:
       typedef Row<val_t,coord_t,allocator> Row_; //< Nickname for base class; used to shorten templatized expressions
@@ -138,15 +137,17 @@ namespace rheinfall {
 
       /** Perform Gaussian Elimination, adding a suitable multiple of
           @a this to @p other, in-place.  Return pointer to @p other. */
-      DenseRow<val_t,coord_t,allocator>* gaussian_elimination_impl(mpl::true_ inplace_update, 
-                                                                   DenseRow<val_t,coord_t,allocator>* restrict other,
-                                                                   val_t& a, val_t& b) const; 
+      DenseRow<val_t,coord_t,allocator>* linear_combination_impl(mpl::true_ inplace_update, 
+                                                                 DenseRow<val_t,coord_t,allocator>* restrict other,
+                                                                 const val_t& a, const val_t& b,
+                                                                 const bool adjust) const; 
       /** Perform Gaussian Elimination, storing a suitable linear
           combination of @a this and @p other into a newly-allocated
           @c DenseRow.  Return pointer the new row and delete @p other. */
-      DenseRow<val_t,coord_t,allocator>* gaussian_elimination_impl(mpl::false_ inplace_update, 
-                                                                   const DenseRow<val_t,coord_t,allocator>* restrict other,
-                                                                   val_t& a, val_t& b) const;
+      DenseRow<val_t,coord_t,allocator>* linear_combination_impl(mpl::false_ inplace_update, 
+                                                                 const DenseRow<val_t,coord_t,allocator>* restrict other,
+                                                                 const val_t& a, const val_t& b,
+                                                                 const bool adjust) const;
 
 #ifdef WITH_MPI
       /** Default constructor, needed by boost::serialize.
@@ -243,25 +244,11 @@ namespace rheinfall {
   {
     assert(0 <= this->starting_column_);
     assert(this->starting_column_ <= this->ending_column_);
-    assert(not is_zero(this->leading_term_));
+    //assert(not is_zero(this->leading_term_));
     assert(storage.size() == this->ending_column_ - this->starting_column_);
     return true;
   };
 #endif
-
-
-  template <typename val_t, typename coord_t, 
-            template<typename T> class allocator>
-  inline void
-  DenseRow<val_t,coord_t,allocator>::
-  add_to_entry(const coord_t col, const val_t value) 
-  {
-    assert(col >= this->starting_column_ and col <= this->ending_column_);
-    if (col == this->starting_column_)
-      this->leading_term_ += value;
-    else
-      storage[storage.size()-1 - (col - (this->starting_column_ + 1))] += value;
-  };
 
 
   template <typename val_t, typename coord_t, 
@@ -296,8 +283,8 @@ namespace rheinfall {
             template<typename T> class allocator>
   inline DenseRow<val_t,coord_t,allocator>* 
   DenseRow<val_t,coord_t,allocator>::
-  gaussian_elimination(const SparseRow<val_t,coord_t,allocator>* restrict other,
-                       val_t& a, val_t& b) 
+  linear_combination(const SparseRow<val_t,coord_t,allocator>* restrict other,
+                     const val_t& a, const val_t& b, const bool adjust) 
     const restrict_this
   {
     assert(this->starting_column_ == other->starting_column_);
@@ -310,16 +297,16 @@ namespace rheinfall {
     // anyway
     DenseRow<val_t,coord_t,allocator>* dense_other(new DenseRow<val_t,coord_t,allocator>(other));
     delete other;
-    return this->gaussian_elimination(dense_other, a, b);
-  }; // DenseRow<val_t,coord_t,allocator>* gaussian_elimination(SparseRow<val_t,coord_t,allocator>* other)
+    return this->linear_combination(dense_other, a, b, adjust);
+  }; // DenseRow<val_t,coord_t,allocator>* linear_combination(SparseRow<val_t,coord_t,allocator>* other)
 
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline DenseRow<val_t,coord_t,allocator>*
   DenseRow<val_t,coord_t,allocator>::
-  gaussian_elimination(DenseRow<val_t,coord_t,allocator>* restrict other,
-                       val_t& a, val_t& b) 
+  linear_combination(DenseRow<val_t,coord_t,allocator>* restrict other,
+                     const val_t& a, const val_t& b, const bool adjust) 
     const restrict_this
   {
     assert(this->starting_column_ == other->starting_column_);
@@ -328,54 +315,48 @@ namespace rheinfall {
     assert(not is_zero(other->leading_term_));
     assert(this->size() == other->size());
 
-    return this->gaussian_elimination_impl(use_inplace_update<val_t>(), other, a, b);
-  }; // dense_row_ptr gaussian_elimination(dense_row_ptr other)
+    return this->linear_combination_impl(use_inplace_update<val_t>(), other, a, b, adjust);
+  }; // dense_row_ptr linear_combination(dense_row_ptr other)
 
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline DenseRow<val_t,coord_t,allocator>*
   DenseRow<val_t,coord_t,allocator>::
-  gaussian_elimination_impl(mpl::true_ inplace_update, 
+  linear_combination_impl(mpl::true_ inplace_update, 
                             DenseRow<val_t,coord_t,allocator>* restrict other,
-                            val_t& a, val_t& b) 
+                          const val_t& a, const val_t& b, const bool adjust) 
     const restrict_this
   {
-    get_row_multipliers<val_t>(this->leading_term_, 
-                               other->leading_term_, 
-                               a, b);
-
     for (size_t j = 0; j <= this->size()-1; ++j) {
       other->storage[j] *= b;
       other->storage[j] += a*this->storage[j];
-#ifdef RF_COUNT_OPS
-      if (this->ops_count_ptr != NULL)
-        *(this->ops_count_ptr) += 3;
-#endif
     };
+#ifdef RF_COUNT_OPS
+    if (this->ops_count_ptr != NULL)
+      *(this->ops_count_ptr) += 3 * this->size();
+#endif
     other->leading_term_ = 0;
 
     DenseRow<val_t,coord_t,allocator>* const result = 
-      other->adjust(); // update done, adjust size and starting column
+      (adjust?
+       other->adjust() // update done, adjust size and starting column
+       : other);
     assert(NULL == result 
-           or result->starting_column_ > this->starting_column_);
+           or (adjust and result->starting_column_ > this->starting_column_));
     return result;
-  }; // dense_row_ptr gaussian_elimination_impl(mpl::true_, dense_row_ptr other)
+  }; // dense_row_ptr linear_combination_impl(mpl::true_, dense_row_ptr other)
 
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline DenseRow<val_t,coord_t,allocator>*
   DenseRow<val_t,coord_t,allocator>::
-  gaussian_elimination_impl(mpl::false_ inplace_update, 
+  linear_combination_impl(mpl::false_ inplace_update, 
                             const DenseRow<val_t,coord_t,allocator>* restrict other,
-                            val_t& a, val_t& b) 
+                          const val_t& a, const val_t& b, const bool adjust) 
     const restrict_this
   {
-    get_row_multipliers<val_t>(this->leading_term_, 
-                               other->leading_term_, 
-                               a, b);
-
     DenseRow<val_t,coord_t,allocator>* restrict result = 
       new DenseRow(1 + this->starting_column_, this->ending_column_);
     assert(result->size() == this->size() - 1);
@@ -394,11 +375,13 @@ namespace rheinfall {
 #endif
     delete other;
 
-    result = result->adjust(); // update done, adjust size and starting column
+    result = (adjust?
+              result->adjust() // update done, adjust size and starting column
+              : result);
     assert(NULL == result 
-           or result->starting_column_ > this->starting_column_);
+           or (adjust and result->starting_column_ > this->starting_column_));
     return result;
-  }; // dense_row_ptr gaussian_elimination_impl(mpl::false_, dense_row_ptr other)
+  }; // dense_row_ptr linear_combination_impl(mpl::false_, dense_row_ptr other)
 
 
   template <typename val_t, typename coord_t, 
