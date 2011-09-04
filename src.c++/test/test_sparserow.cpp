@@ -197,7 +197,8 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ge_with_sparse0 )
     p2->set(i, 5);
 
   // check elimination
-  SparseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  int a, b;
+  SparseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
   BOOST_CHECK_EQUAL( p3, (static_cast<SparseRow<int,int>*>(NULL)) );
 }
 
@@ -216,7 +217,8 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ge_with_sparse1 )
 
   // check elimination
   const int result_size = p2->size() - 1; // p2 will be invalid after GE
-  SparseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  int a, b;
+  SparseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
   BOOST_CHECK ( p1 != p3 );
   BOOST_CHECK ( p2 != p3 );
   BOOST_CHECK_EQUAL( (p3->Row<int,int>::starting_column_), 77 );
@@ -239,7 +241,8 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ge_with_sparse2 )
 
   // check elimination
   const int result_size = p1->size() + p2->size() - 1; // p2 will be invalid after GE
-  SparseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  int a, b;
+  SparseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
   BOOST_CHECK_EQUAL( p3->size(), result_size );
   BOOST_CHECK_EQUAL( (p3->Row<int,int>::starting_column_), 1 );
   BOOST_CHECK_EQUAL( p3->first_nonzero_column(), 1 );
@@ -265,7 +268,8 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ge_with_dense0 )
     p2->set(i, 5);
 
   // check elimination
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  int a, b;
+  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
   BOOST_CHECK_EQUAL( p3, (static_cast<DenseRow<int,int>*>(NULL)) );
 }
 
@@ -284,7 +288,8 @@ BOOST_AUTO_TEST_CASE( check_sparserow_ge_with_dense1 )
 
   // check elimination
   const int result_size = p2->size() - 2; // p2 will be invalid after GE
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  int a, b;
+  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
   BOOST_CHECK_EQUAL( p3->size(), result_size );
   BOOST_CHECK_EQUAL( (p3->Row<int,int>::starting_column_), 2 );
   BOOST_CHECK_EQUAL( p3->first_nonzero_column(), 2 );

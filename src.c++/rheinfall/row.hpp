@@ -98,13 +98,21 @@ namespace rheinfall {
     /** Return number of allocated (i.e., non-zero) entries. */
     virtual size_t size() const = 0;
 
-    /** Perform Gaussian elimination: sum a multiple of this row to
-        (a multiple of) row @c r so that the combination has its
-        first nonzero entry at a column index strictly larger than
-        the one of both rows. Return pointer to the combined row, which
-        could possibly be this row if in-place update took place. */
+    /** Perform Gaussian elimination: sum a multiple of this row to (a
+        multiple of) row @c other so that the combination has its first
+        nonzero entry at a column index strictly larger than the one
+        of both rows. Return pointer to the combined row, which could
+        possibly be the @p other row if in-place update took place.
+        The two coefficients used for the linear combination are
+        written into @a a (multiplier for this row) and @a b
+        (multiplier for the @a other row).  
+
+        If this row is sparse and its fill-in percentage exceeds @a
+        dense_threshold, convert it to dense format storage before
+        performing elimination. */
     Row* gaussian_elimination(Row* other, 
-                              const float dense_threshold) const;
+                              val_t& a, val_t& b,
+                              const float dense_threshold = 100.0) const;
 
     /** Print a textual representation of the row to stream @c out.
         See http://www.parashift.com/c++-faq-lite/input-output.html#faq-15.11 */
@@ -204,6 +212,7 @@ namespace rheinfall {
   inline Row<val_t,coord_t,allocator>*
   Row<val_t,coord_t,allocator>::
   gaussian_elimination(Row<val_t,coord_t,allocator>* restrict other, 
+                       val_t& a, val_t& b,
                        const float dense_threshold) 
     const restrict_this
   {
@@ -214,26 +223,26 @@ namespace rheinfall {
         // FIXME: could merge ctor+elimination in one funcall
         DenseRow<val_t,coord_t,allocator>* dense_other(new DenseRow<val_t,coord_t,allocator>(s2));
         delete other;
-        return s1->gaussian_elimination(dense_other);
+        return s1->gaussian_elimination(dense_other, a, b);
       }
       else { // `other` kept sparse
-        return s1->gaussian_elimination(s2);
+        return s1->gaussian_elimination(s2, a, b);
       }; // if (fill_in > ...)
     }
     else if ((sparse == this->kind) and (dense == other->kind)) {
       SparseRow<val_t,coord_t,allocator> const* s = static_cast<SparseRow<val_t,coord_t,allocator> const*>(this);
       DenseRow<val_t,coord_t,allocator>* d = static_cast<DenseRow<val_t,coord_t,allocator>*>(other);
-      return s->gaussian_elimination(d);
+      return s->gaussian_elimination(d, a, b);
     }
     else if ((dense == this->kind) and (sparse == other->kind)) {
       DenseRow<val_t,coord_t,allocator> const* d = static_cast<DenseRow<val_t,coord_t,allocator> const*>(this);
       SparseRow<val_t,coord_t,allocator>* s = static_cast<SparseRow<val_t,coord_t,allocator>*>(other);
-      return d->gaussian_elimination(s);
+      return d->gaussian_elimination(s, a, b);
     }
     else if ((dense == this->kind) and (dense == other->kind)) {
       DenseRow<val_t,coord_t,allocator> const* d1 = static_cast<DenseRow<val_t,coord_t,allocator> const*>(this);
       DenseRow<val_t,coord_t,allocator>* d2 = static_cast<DenseRow<val_t,coord_t,allocator>*>(other);
-      return d1->gaussian_elimination(d2);
+      return d1->gaussian_elimination(d2, a, b);
     }
     else
       // should not happen!

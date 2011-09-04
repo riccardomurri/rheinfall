@@ -925,8 +925,9 @@ step()
         assert(false); // forgot a row kind in `if` chain?
 
       // perform elimination -- return NULL in case resulting row is full of zeroes
+      val_t a, b;
       Row<val_t,coord_t,allocator>* new_row = 
-        u->gaussian_elimination(*it, parent_.dense_threshold);
+        u->gaussian_elimination(*it, a, b, parent_.dense_threshold);
       // ship reduced rows to other processors
       if (NULL != new_row) {
         assert(new_row->starting_column_ > this->column_);

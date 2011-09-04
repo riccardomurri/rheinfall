@@ -143,7 +143,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_dense0 )
     p2->set(i, 5);
 
   // check elimination
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  int a, b;
+  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
   BOOST_CHECK_EQUAL( p3, (static_cast<DenseRow<int,int>*>(NULL)) );
 }
 
@@ -162,7 +163,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_dense1 )
   BOOST_CHECK_EQUAL( p2->get(77), 7 );
 
   // check elimination
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  int a, b;
+  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
   BOOST_CHECK ( p1 != p3 );
   BOOST_CHECK ( p2 != p3 );
   BOOST_CHECK_EQUAL( p3->first_nonzero_column(), 77 );
@@ -189,7 +191,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_dense2 )
     p2->set(i, 7);
 
   // check elimination
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  int a, b;
+  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
   BOOST_CHECK_EQUAL( p3->size(), p1->size()-1 );
   BOOST_CHECK_EQUAL( p3->first_nonzero_column(), 1 );
   for (int i = 1; i <= 100; ++i)
@@ -269,7 +272,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_sparse0 )
     p2->set(i, 2);
 
   // check elimination
-  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2);
+  int a, b;
+  DenseRow<int,int>* p3 = p1->gaussian_elimination(p2, a, b);
   BOOST_CHECK_EQUAL( p3, (static_cast<DenseRow<int,int>*>(NULL)) );
 }
 
@@ -283,7 +287,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_sparse1 )
   SparseRow<int,int>* s = new SparseRow<int,int>(0,100, 1);  
 
   // check elimination
-  DenseRow<int,int>* dd = d->gaussian_elimination(s);
+  int a, b;
+  DenseRow<int,int>* dd = d->gaussian_elimination(s, a, b);
   BOOST_CHECK ( d != dd );
   BOOST_CHECK_EQUAL( dd->first_nonzero_column(), 90 );
   BOOST_CHECK_EQUAL( dd->get(dd->first_nonzero_column()), -9 );
@@ -305,7 +310,8 @@ BOOST_AUTO_TEST_CASE( check_denserow_ge_with_sparse2 )
     s->set(i, 3);
 
   // check elimination
-  DenseRow<int,int>* dd = d->gaussian_elimination(s);
+  int a, b;
+  DenseRow<int,int>* dd = d->gaussian_elimination(s, a, b);
   BOOST_CHECK_EQUAL( dd->size(), d->size()-1 );
   BOOST_CHECK_EQUAL( dd->first_nonzero_column(), 1 );
   for (int i = 1; i <= 100; ++i)
