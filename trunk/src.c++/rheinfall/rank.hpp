@@ -1,5 +1,5 @@
 /**
- * @file   rheinfall.hpp
+ * @file   rank.hpp
  *
  * Interface of the rheinfall class.
  *
@@ -26,8 +26,8 @@
  *
  */
 
-#ifndef RHEINFALL_HPP
-#define RHEINFALL_HPP 1
+#ifndef RANK_HPP
+#define RANK_HPP 1
 
 
 #include "config.hpp"
@@ -55,27 +55,27 @@ namespace rheinfall {
       rank. */
   template <typename val_t, typename coord_t = int, 
             template<typename T> class allocator = std::allocator >
-  class Rheinfall {
+  class Rank {
 
 public:
 
     /** Constructor. If compiled with MPI, will use the default
         communicator @c MPI_COMM_WORLD */
-    Rheinfall(const coord_t ncols, 
-              const coord_t width = 1,
-              const float dense_threshold = 40.0);
+    Rank(const coord_t ncols, 
+         const coord_t width = 1,
+         const float dense_threshold = 40.0);
     
 #ifdef WITH_MPI
     /** Constructor, taking explicit MPI communicator. */
-    Rheinfall(mpi::communicator& comm, 
-              const coord_t ncols,
-              const coord_t width = 1,
-              const float dense_threshold = 40.0);
+    Rank(mpi::communicator& comm, 
+         const coord_t ncols,
+         const coord_t width = 1,
+         const float dense_threshold = 40.0);
 #endif // WITH_MPI
 
     /** Destructor. When using OpenMP and MPI serialization, destroys
         the @c mpi_send_lock_; otherwise, does nothing. */
-    ~Rheinfall();
+    ~Rank();
   
 
     /** Read a matrix stream into the processors.  Return number of
@@ -172,16 +172,16 @@ public:
     public:
       /** Constructor, taking parent instance and index of the columns
           to process. */
-      Processor(Rheinfall& parent, const coord_t column);
+      Processor(Rank& parent, const coord_t column);
       /** Destructor. Releases OpenMP lock and frees up remaining memory. */
       ~Processor();
       
     protected:     
       /** Parent instance. */
-      Rheinfall<val_t,coord_t,allocator>& parent_;
+      Rank<val_t,coord_t,allocator>& parent_;
       /** Index of matrix column to process. */
       const coord_t column_;
-      friend class Rheinfall<val_t,coord_t,allocator>; // XXX: see rank()
+      friend class Rank<val_t,coord_t,allocator>; // XXX: see rank()
       
       /** Row used for elimination */
       Row<val_t,coord_t,allocator>* u;
@@ -307,7 +307,7 @@ public:
     /** Lock used to to serialize all outgoing MPI calls
         (receives are already done by the master thread only) */
     // XXX: being an instance variable, this won't serialize
-    // MPI calls if there are two concurrent `Rheinfall` operating...
+    // MPI calls if there are two concurrent `Rank` operating...
     mutable omp_lock_t mpi_send_lock_;
 # endif
 #endif // WITH_MPI
@@ -335,8 +335,8 @@ public:
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  Rheinfall<val_t,coord_t,allocator>::
-  Rheinfall(const coord_t ncols, 
+  Rank<val_t,coord_t,allocator>::
+  Rank(const coord_t ncols, 
             const coord_t width,
             const float dense_threshold)
     : ncols_(ncols)
@@ -361,7 +361,7 @@ public:
     vpus.reserve(nmemb);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
-        vpus.push_back(new Rheinfall<val_t,coord_t,allocator>::Processor(*this, c));
+        vpus.push_back(new Rank<val_t,coord_t,allocator>::Processor(*this, c));
     // internal check that the size of the data structure is actually correct
     assert(vpus.size() <= nmemb);
 #ifdef RF_COUNT_OPS
@@ -374,11 +374,11 @@ public:
 #ifdef WITH_MPI
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  Rheinfall<val_t,coord_t,allocator>::
-  Rheinfall(mpi::communicator& comm, 
-            const coord_t ncols, 
-            const coord_t width,
-            const float dense_threshold)
+  Rank<val_t,coord_t,allocator>::
+  Rank(mpi::communicator& comm, 
+       const coord_t ncols, 
+       const coord_t width,
+       const float dense_threshold)
   : ncols_(ncols)
   , vpus()
   , comm_(comm)
@@ -394,7 +394,7 @@ public:
   vpus.reserve(1 + ncols_ / nprocs_);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
-        vpus.push_back(new Rheinfall<val_t,coord_t,allocator>::Processor(*this, c));
+        vpus.push_back(new Rank<val_t,coord_t,allocator>::Processor(*this, c));
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_init_lock(& mpi_send_lock_); 
 # endif // _OPENMP && WITH_MPI_SERIALIZED
@@ -408,7 +408,7 @@ public:
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  Rheinfall<val_t,coord_t,allocator>::~Rheinfall()
+  Rank<val_t,coord_t,allocator>::~Rank()
   {
 #if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_destroy_lock(& mpi_send_lock_); 
@@ -419,7 +419,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   coord_t
-  Rheinfall<val_t,coord_t,allocator>::
+  Rank<val_t,coord_t,allocator>::
   read_sms(std::istream& input,  
            coord_t& nrows, coord_t& ncols, 
            const bool local_only,
@@ -501,7 +501,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   coord_t
-  Rheinfall<val_t,coord_t,allocator>::
+  Rank<val_t,coord_t,allocator>::
   read_triples(std::istream& input,  coord_t& nrows, coord_t& ncols, 
                const bool local_only, const bool transpose)
   {
@@ -597,7 +597,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   coord_t 
-  Rheinfall<val_t,coord_t,allocator>::
+  Rank<val_t,coord_t,allocator>::
   rank() 
   {
     // kickstart termination signal
@@ -690,7 +690,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline bool 
-  Rheinfall<val_t,coord_t,allocator>::
+  Rank<val_t,coord_t,allocator>::
   is_local(const coord_t c) const 
   { 
 #ifdef WITH_MPI
@@ -704,7 +704,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline coord_t 
-  Rheinfall<val_t,coord_t,allocator>::
+  Rank<val_t,coord_t,allocator>::
   vpu_index_for_column(const coord_t c) const
   { 
     assert(c >= 0 and c < ncols_);
@@ -714,8 +714,8 @@ public:
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  inline typename Rheinfall<val_t,coord_t,allocator>::Processor*
-  Rheinfall<val_t,coord_t,allocator>::
+  inline typename Rank<val_t,coord_t,allocator>::Processor*
+  Rank<val_t,coord_t,allocator>::
   vpu_for_column(const coord_t c) const
   { 
     return vpus[vpu_index_for_column(c)]; 
@@ -725,7 +725,7 @@ public:
 #ifdef WITH_MPI
   template <typename val_t, typename coord_t, template<typename T> class allocator>
   inline int 
-  Rheinfall<val_t,coord_t,allocator>::owner(const coord_t c) const
+  Rank<val_t,coord_t,allocator>::owner(const coord_t c) const
   { 
     assert(c >= 0 and c < ncols_);
     return ((c/w_) % nprocs_); 
@@ -736,7 +736,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline void
-  Rheinfall<val_t,coord_t,allocator>::
+  Rank<val_t,coord_t,allocator>::
   send_row(Processor& source, Row<val_t,coord_t,allocator>* row) 
 {
   coord_t column = row->first_nonzero_column();
@@ -760,7 +760,7 @@ public:
                         *(static_cast<DenseRow<val_t,coord_t,allocator>*>(row)));
     else 
       // should not happen!
-      throw std::logic_error("Unhandled row kind in Rheinfall::send_row()");
+      throw std::logic_error("Unhandled row kind in Rank::send_row()");
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_unset_lock(& mpi_send_lock_);
 # endif
@@ -773,7 +773,7 @@ public:
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
 inline void 
-Rheinfall<val_t,coord_t,allocator>::
+Rank<val_t,coord_t,allocator>::
 send_end(Processor const& origin, const coord_t column) const
 {
   if (column >= ncols_)
@@ -803,8 +803,8 @@ send_end(Processor const& origin, const coord_t column) const
 
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
-  Rheinfall<val_t,coord_t,allocator>::Processor::
-  Processor(Rheinfall<val_t,coord_t,allocator>& parent, 
+  Rank<val_t,coord_t,allocator>::Processor::
+  Processor(Rank<val_t,coord_t,allocator>& parent, 
             const coord_t column)
       : parent_(parent),
         column_(column), 
@@ -826,7 +826,7 @@ send_end(Processor const& origin, const coord_t column) const
 
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
-Rheinfall<val_t,coord_t,allocator>::Processor::
+Rank<val_t,coord_t,allocator>::Processor::
 ~Processor()
 {
 #ifdef _OPENMP
@@ -843,7 +843,7 @@ Rheinfall<val_t,coord_t,allocator>::Processor::
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
 inline void 
-Rheinfall<val_t,coord_t,allocator>::Processor::
+Rank<val_t,coord_t,allocator>::Processor::
 recv_row(Row<val_t,coord_t,allocator>* new_row) 
   {
     assert(running == phase);
@@ -867,7 +867,7 @@ recv_row(Row<val_t,coord_t,allocator>* new_row)
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
 coord_t
-Rheinfall<val_t,coord_t,allocator>::Processor::
+Rank<val_t,coord_t,allocator>::Processor::
 step() 
 {
 #ifdef _OPENMP
@@ -1019,7 +1019,7 @@ step()
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
 inline void 
-Rheinfall<val_t,coord_t,allocator>::Processor::
+Rank<val_t,coord_t,allocator>::Processor::
 end_phase() 
 { 
   phase = ending; 
@@ -1029,7 +1029,7 @@ end_phase()
 template <typename val_t, typename coord_t, 
           template<typename T> class allocator>
 inline bool 
-Rheinfall<val_t,coord_t,allocator>::Processor::
+Rank<val_t,coord_t,allocator>::Processor::
 is_done() const 
 { 
   return (done == phase); 
@@ -1039,4 +1039,4 @@ is_done() const
 }; // namespace rheinfall
 
 
-#endif // RHEINFALL_HPP
+#endif // RANK_HPP

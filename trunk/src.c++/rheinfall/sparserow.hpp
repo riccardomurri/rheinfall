@@ -57,7 +57,7 @@ namespace rheinfall {
 
   // forward declaration of needed classes
   // (otherwise we have circular dependency problems)
-  template <typename val_t, typename coord_t, template<typename T> class allocator> class Rheinfall;
+  template <typename val_t, typename coord_t, template<typename T> class allocator> class Rank;
   template <typename val_t, typename coord_t, template<typename T> class allocator> class Row;
   template <typename val_t, typename coord_t, template<typename T> class allocator> class SparseRow;
   template <typename val_t, typename coord_t, template<typename T> class allocator> class DenseRow;
@@ -154,7 +154,7 @@ namespace rheinfall {
     /** Print a textual representation of the row to stream @c o. */
     virtual void print_on(std::ostream& o) const;
 
-    friend class Rheinfall<val_t,coord_t,allocator>; // read*() needs to call the above ctor
+    friend class Rank<val_t,coord_t,allocator>; // read*() needs to call the above ctor
     friend class DenseRow<val_t,coord_t,allocator>;
 
     /** Default constructor, needed by boost::serialize.

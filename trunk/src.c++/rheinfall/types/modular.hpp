@@ -137,7 +137,7 @@ BOOST_IS_MPI_DATATYPE(modular::Modular<long long>)
 #endif
 
 namespace rheinfall {
-  // inform Rheinfall how Modolar<> classes should be treated
+  // inform Rheinfall how Modular<> classes should be treated
   RF_TYPE_IS_MODULAR_RING(modular::Modular<int>)
   RF_TYPE_IS_MODULAR_RING(modular::Modular<long>)
 #ifdef HAVE_LONG_LONG_INT

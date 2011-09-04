@@ -1,7 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
 # this is an include-only library
-nobase_include_HEADERS = rheinfall/rheinfall.hpp rheinfall/row.hpp rheinfall/sparserow.hpp rheinfall/denserow.hpp rheinfall/types.hpp rheinfall/types/gmpxx.hpp rheinfall/types/modular.hpp rheinfall/types/xint.hpp
+nobase_include_HEADERS = rheinfall/rank.hpp rheinfall/row.hpp rheinfall/sparserow.hpp rheinfall/denserow.hpp rheinfall/types.hpp rheinfall/types/gmpxx.hpp rheinfall/types/modular.hpp rheinfall/types/xint.hpp
 
 # build example programs
 bin_PROGRAMS = rank-int rank-double rank-mod 
