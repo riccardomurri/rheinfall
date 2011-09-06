@@ -442,6 +442,9 @@ public:
         std::swap(nrows, ncols);
     };
     
+#ifdef WITH_MPI
+    std::list< mpi::request, allocator<mpi::request> > outbox;
+#endif
     coord_t last_row_index = -1;
     coord_t i, j;
     val_t value;
@@ -494,6 +497,11 @@ public:
       row->set(j, value);
     }; // while (! eof)
     
+#ifdef WITH_MPI
+    // wait for all sent rows to arrive
+    mpi::wait_all(outbox.begin(), outbox.end());
+#endif
+
     return nnz;
   };
 
@@ -675,10 +683,12 @@ public:
     coord_t rank = 0;
     mpi::all_reduce(comm_, local_rank, rank, std::plus<int>());
 
+# ifdef RF_COUNT_OPS
     // likewise, sum ops count from all processes
     unsigned long total_ops_count = 0;
     mpi::all_reduce(comm_, ops_count, total_ops_count, std::plus<int>());
     ops_count = total_ops_count;
+# endif // RF_COUNT_OPS
 #else
     const coord_t rank = local_rank;
 #endif
