@@ -77,6 +77,8 @@ public:
         the @c mpi_send_lock_; otherwise, does nothing. */
     ~LU();
   
+    typedef SparseRow<val_t,coord_t,allocator> sparserow_t;
+    typedef DenseRow<val_t,coord_t,allocator> denserow_t;
 
     /** Read a matrix stream into the processors.  Return number of
         nonzero entries read.
@@ -470,6 +472,9 @@ public:
         std::swap(nrows, ncols);
     };
     
+#ifdef WITH_MPI
+    std::list< mpi::request, allocator<mpi::request> > outbox;
+#endif
     coord_t last_row_index = -1;
     coord_t i, j;
     val_t value;
@@ -522,6 +527,10 @@ public:
       row->set(j, value);
     }; // while (! eof)
     
+#ifdef WITH_MPI
+    // wait for all sent rows to arrive
+    mpi::wait_all(outbox.begin(), outbox.end());
+#endif
     return nnz;
   };
 
@@ -695,7 +704,7 @@ public:
           break;
         };
         case TAG_PAIR_SPARSE_DENSE: {
-          std::pair<sparserow_t*, sparserow_t*> payload;
+          std::pair<sparserow_t*, denserow_t*> payload;
           payload.first = new  SparseRow<val_t,coord_t,allocator>();
           payload.second = new  DenseRow<val_t,coord_t,allocator>();
           comm_.recv(status->source(), status->tag(), payload);
@@ -706,7 +715,7 @@ public:
           break;
         };
         case TAG_PAIR_DENSE_SPARSE: {
-          std::pair<sparserow_t*, sparserow_t*> payload;
+          std::pair<denserow_t*, sparserow_t*> payload;
           payload.first = new  DenseRow<val_t,coord_t,allocator>();
           payload.second = new  SparseRow<val_t,coord_t,allocator>();
           comm_.recv(status->source(), status->tag(), payload);
@@ -717,7 +726,7 @@ public:
           break;
         };
         case TAG_PAIR_DENSE_DENSE: {
-          std::pair<sparserow_t*, sparserow_t*> payload;
+          std::pair<denserow_t*, denserow_t*> payload;
           payload.first = new  DenseRow<val_t,coord_t,allocator>();
           payload.second = new  DenseRow<val_t,coord_t,allocator>();
           comm_.recv(status->source(), status->tag(), payload);
@@ -1143,7 +1152,8 @@ step()
       // now the range [completed, end) contains the completed requests
       for (current = completed; current != outbox.end(); ++current) {
         // free message payloads
-        delete current->second;
+        delete current->second.first;
+        delete current->second.second;
       };
       // finally, erase all completed requests
       outbox.erase(completed, outbox.end());
@@ -1170,8 +1180,11 @@ step()
       // finally, free message payloads and erase all requests
       for (typename outbox_t::iterator it = outbox.begin();
            it != outbox.end();
-           ++it)
-        delete it->second;
+           ++it) {
+        // free message payloads
+        delete it->second.first;
+        delete it->second.second;
+      };
       outbox.clear();
     };
 #endif
