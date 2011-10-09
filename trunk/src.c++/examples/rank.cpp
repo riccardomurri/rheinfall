@@ -397,17 +397,19 @@ main(int argc, char** argv)
 
   // parse command-line options
   static struct option long_options[] = {
-    {"help",    0, 0, 'h'},
+    {"dense-threshold", 1, 0, 'd'},
+    {"help",            0, 0, 'h'},
 #ifdef WITH_MODULAR_VALUES
-    {"modulus", 1, 0, 'p'},
+    {"modulus",         1, 0, 'p'},
 #endif
-    {"tranpose",0, 0, 't'},
-    {"verbose", 0, 0, 'v'},
-    {"width",   1, 0, 'w'},
+    {"tranpose",        0, 0, 't'},
+    {"verbose",         0, 0, 'v'},
+    {"width",           1, 0, 'w'},
     {0, 0, 0, 0}
   };
 
   coord_t width = 1;
+  float dense_threshold = 40.0;
   bool transpose = false;
 
 #ifdef WITH_MODULAR_VALUES
@@ -416,17 +418,33 @@ main(int argc, char** argv)
 
   int c;
   while (true) {
-    c = getopt_long(argc, argv, "hp:tvw:",
+    c = getopt_long(argc, argv, "d:hp:tvw:",
                     long_options, NULL);
     if (-1 == c)
       break;
-    else if ('h' == c) {
+    else if ('d' == c) {
+      // threshold for transitioning to dense storage
+      std::istringstream arg(optarg);
+      arg >> dense_threshold;
+      if (dense_threshold <= 0.0 or dense_threshold >= 100.0) {
+        std::cerr << "Argument to option -d/--dense-threshold must be a percentage,"
+                  << " strictly contained between 0.0 and 100.0."
+                  << " Aborting." << std::endl;
+        return 1;
+      };
+      
+    }
+    else if ('h' == c) { 
+      // print help text and exit successfully
       usage(std::cout, argc, argv);
       return 0;
     }
-    else if ('v' == c)
+    else if ('v' == c) {
+      // enable verbose reporting
       verbose = 1;
+    }
     else if ('w' == c) {
+      // stripewidth for MPI column-to-process distribution
       std::istringstream arg(optarg);
       arg >> width;
       if (width < 1) {
@@ -437,6 +455,7 @@ main(int argc, char** argv)
     }
 #ifdef WITH_MODULAR_VALUES
     else if ('p' == c) {
+      // modulus to use in modular arithmetic
       mod_int_t p;
       std::istringstream arg(optarg);
       arg >> p;
@@ -444,6 +463,7 @@ main(int argc, char** argv)
     }
 #endif
     else if ('t' == c) {
+      // transpose matrix when reading it
       transpose = true;
     }
     else {
@@ -524,9 +544,9 @@ main(int argc, char** argv)
 #endif
 
 #ifdef WITH_MPI
-      rheinfall::Rank<val_t, coord_t, allocator> rf(world, cols, width);
+      rheinfall::Rank<val_t, coord_t, allocator> rf(world, cols, width, dense_threshold);
 #else
-      rheinfall::Rank<val_t, coord_t, allocator> rf(cols, width);
+      rheinfall::Rank<val_t, coord_t, allocator> rf(cols, width, dense_threshold);
 #endif
 
       coord_t nnz = rf.read_triples(input, rows, cols, true, transpose);
