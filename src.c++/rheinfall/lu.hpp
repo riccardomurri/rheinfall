@@ -165,11 +165,16 @@ public:
         value. Default is to switch to dense storage at 40% fill-in. */
     float dense_threshold;
 
-#ifdef RF_COUNT_OPS
-    /// Return count of arithmetic operations done so far. Note that
-    /// this is only meaningful @a after a @c lu() invocation has
-    /// completed.
-    unsigned long get_ops_count() const { return ops_count; };
+#ifdef RF_ENABLE_STATS
+    /** Keep counts of various kinds of operations. */
+    Stats stats;
+
+    /** Copy the global collected statistics into @a global_stats. */
+    void get_global_stats(Stats& global_stats) const;
+
+    /** Copy the statistics of the local processing units into @a local_stats. 
+        This is the same as taking a copy of the @c stats member attribute directly. */
+    void get_local_stats(Stats& local_stats) const;
 #endif
 
 
@@ -239,8 +244,8 @@ public:
       omp_lock_t processing_lock_;
 #endif
 
-#ifdef RF_COUNT_OPS
-      unsigned long *ops_count_ptr;
+#ifdef RF_ENABLE_STATS
+      Stats *stats_ptr;
 #endif
       
     public: 
@@ -349,11 +354,6 @@ public:
                       allocator< std::pair< coord_t, 
                                             SparseRow<val_t,coord_t,allocator>* > > > _rowmap_t;
 
-#ifdef RF_COUNT_OPS
-    /// count of arithmetic operations
-    unsigned long ops_count;
-#endif
-
 };
 
 
@@ -378,8 +378,8 @@ public:
     , nprocs_(comm_.size())
 #endif
     , dense_threshold(dense_threshold)
-#ifdef RF_COUNT_OPS
-    , ops_count(0)
+#ifdef RF_ENABLE_STATS
+    , stats()
 #endif
   {  
     // setup the array of processors
@@ -394,9 +394,9 @@ public:
         vpus.push_back(new LU<val_t,coord_t,allocator>::Processor(*this, c));
     // internal check that the size of the data structure is actually correct
     assert(vpus.size() <= nmemb);
-#ifdef RF_COUNT_OPS
+#ifdef RF_ENABLE_STATS
     for (typename vpu_array_t::iterator vpu = vpus.begin(); vpu != vpus.end(); ++vpu)
-      (*vpu)->ops_count_ptr = &ops_count;
+      (*vpu)->stats_ptr = &stats;
 #endif
   };
 
@@ -416,8 +416,8 @@ public:
   , nprocs_(comm.size())
   , w_(width)
   , dense_threshold(dense_threshold)
-#ifdef RF_COUNT_OPS
-  , ops_count(0)
+#ifdef RF_ENABLE_STATS
+  , stats()
 #endif
 {  
   // setup the array of processors
@@ -428,9 +428,9 @@ public:
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_init_lock(& mpi_send_lock_); 
 # endif // _OPENMP && WITH_MPI_SERIALIZED
-#ifdef RF_COUNT_OPS
+#ifdef RF_ENABLE_STATS
     for (typename vpu_array_t::iterator vpu = vpus.begin(); vpu != vpus.end(); ++vpu)
-      (*vpu)->ops_count_ptr = &ops_count;
+      (*vpu)->stats_ptr = &stats;
 #endif
 };
 #endif
@@ -744,13 +744,6 @@ public:
 #ifdef WITH_MPI
     // wait until all processors have done running
     comm_.barrier();
-
-# ifdef RF_COUNT_OPS
-    // likewise, sum ops count from all processes
-    unsigned long total_ops_count = 0;
-    mpi::all_reduce(comm_, ops_count, total_ops_count, std::plus<int>());
-    ops_count = total_ops_count;
-# endif // RF_COUNT_OPS
 #endif // WITH_MPI
 
     // append local results to u, l
@@ -761,6 +754,37 @@ public:
 
     return;
   };
+
+
+#ifdef RF_ENABLE_STATS
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline void
+  Rank<val_t,coord_t,allocator>::
+  get_global_stats(Stats& global_stats) const 
+  { 
+# ifdef WITH_MPI
+    // sum stats count from all processes
+    mpi::all_reduce(comm_, stats.ops_count, global_stats.ops_count, std::plus<int>());
+    mpi::all_reduce(comm_, stats.sparserow_count, global_stats.sparserow_count, std::plus<int>());
+    mpi::all_reduce(comm_, stats.sparserow_elts, global_stats.sparserow_elts, std::plus<int>());
+    mpi::all_reduce(comm_, stats.denserow_count, global_stats.denserow_count, std::plus<int>());
+    mpi::all_reduce(comm_, stats.denserow_elts, global_stats.denserow_elts, std::plus<int>());
+# else
+    global_stats = stats;
+# endif
+  };
+
+
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline void
+  Rank<val_t,coord_t,allocator>::
+  get_local_stats(Stats& local_stats) const
+  { 
+    local_stats = stats;
+  };
+#endif // RF_ENABLE_STATS
 
 
   template <typename val_t, typename coord_t, 
@@ -979,10 +1003,10 @@ recv_row(Row<val_t,coord_t,allocator>* new_u_row)
       new SparseRow<val_t,coord_t,allocator>(0, new_u_row->ending_column_, 0);
     new_l_row->set(new_u_row->h0, 1);
     new_l_row->h0 = new_u_row->h0;
-#ifdef RF_COUNT_OPS
-    if (NULL != this->ops_count_ptr) {
-      new_u_row->ops_count_ptr = this->ops_count_ptr;
-      new_l_row->ops_count_ptr = this->ops_count_ptr;
+#ifdef RF_ENABLE_STATS
+    if (NULL != this->stats_ptr->ops_count) {
+      new_u_row->stats_ptr->ops_count = this->stats_ptr->ops_count;
+      new_l_row->stats_ptr->ops_count = this->stats_ptr->ops_count;
     }
 #endif
 #ifdef _OPENMP
@@ -1010,10 +1034,10 @@ recv_pair(Row<val_t,coord_t,allocator>* new_u_row,
             or Row<val_t,coord_t,allocator>::dense == new_l_row->kind));
     assert(column_ == new_u_row->starting_column_);
     assert(0 == new_l_row->starting_column_);
-#ifdef RF_COUNT_OPS
-    if (NULL != this->ops_count_ptr) {
-      new_u_row->ops_count_ptr = this->ops_count_ptr;
-      new_l_row->ops_count_ptr = this->ops_count_ptr;
+#ifdef RF_ENABLE_STATS
+    if (NULL != this->stats_ptr->ops_count) {
+      new_u_row->stats_ptr->ops_count = this->stats_ptr->ops_count;
+      new_l_row->stats_ptr->ops_count = this->stats_ptr->ops_count;
     }
 #endif
 #ifdef _OPENMP

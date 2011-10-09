@@ -380,9 +380,9 @@ namespace rheinfall {
         assert(not is_zero(entry));
         coord = other_col;
 #endif
-#ifdef RF_COUNT_OPS
-        if ((this->ops_count_ptr) != NULL)
-          *(this->ops_count_ptr) += 1;
+#ifdef RF_ENABLE_STATS
+        if (this->stats_ptr != NULL)
+          this->stats_ptr->ops_count += 1;
 #endif
       }
       else if (other_col == this_col) {
@@ -393,9 +393,9 @@ namespace rheinfall {
           coord = this_col;
         ++this_i;
         ++other_i;
-#ifdef RF_COUNT_OPS
-        if ((this->ops_count_ptr) != NULL)
-          *(this->ops_count_ptr) += 3;
+#ifdef RF_ENABLE_STATS
+        if (this->stats_ptr != NULL)
+          this->stats_ptr->ops_count += 3;
 #endif
       }
       else if (other_col > this_col) {
@@ -411,9 +411,9 @@ namespace rheinfall {
         assert(not is_zero(entry));
         coord = this_col;
 #endif
-#ifdef RF_COUNT_OPS
-        if ((this->ops_count_ptr) != NULL)
-          *(this->ops_count_ptr) += 1;
+#ifdef RF_ENABLE_STATS
+        if (this->stats_ptr != NULL)
+          this->stats_ptr->ops_count += 1;
 #endif
       }
       else 
@@ -435,11 +435,21 @@ namespace rheinfall {
             result->set(coord, entry);
             assert(result->storage.size() == 1);
           };
+#ifdef RF_ENABLE_STATS
+          if (this->stats_ptr != NULL) {
+            this->stats_ptr->sparserow_count += 1;
+          };
+#endif
           assert(storage.size() + other->storage.size() <= result->storage.max_size());
           result->storage.reserve(storage.size() + other->storage.size());
         }
         else {
           result->storage.push_back(std::make_pair(coord, entry));
+#ifdef RF_ENABLE_STATS
+          if (this->stats_ptr != NULL) {
+            this->stats_ptr->sparserow_elts += 1;
+          };
+#endif
         }; 
       }; 
     }; // while(this_i < storage.end() ...)
@@ -472,17 +482,22 @@ namespace rheinfall {
     assert(other->__ok());
     assert(not is_zero(other->leading_term_));
 
-    for (size_t j = 0; j < other->size(); ++j) 
+    for (size_t j = 0; j < other->size(); ++j)  {
       other->storage[j] *= b;
+    };
+#ifdef RF_ENABLE_STATS
+    if (this->stats_ptr != NULL)
+      this->stats_ptr->ops_count += other->size();
+#endif
     for (typename storage_t::const_iterator it = storage.begin();
          it != storage.end();
          ++it)
       {
         assert(it->first > this->starting_column_ and it->first <= this->ending_column_);
         other->storage[other->size()-1 - (it->first - (other->starting_column_ + 1))] += a * it->second;
-#ifdef RF_COUNT_OPS
-        if ((this->ops_count_ptr) != NULL)
-          *(this->ops_count_ptr) += 2;
+#ifdef RF_ENABLE_STATS
+        if (this->stats_ptr != NULL)
+          this->stats_ptr->ops_count += 2;
 #endif
       };
     other->leading_term_ = 0; // by construction
@@ -577,12 +592,22 @@ namespace rheinfall {
     if (storage.size() == jj) {
       // end of list reached, `col` is larger than any index in this row
       storage.push_back(std::make_pair<size_t,val_t>(col,value));
+#ifdef RF_ENABLE_STATS
+      if (this->stats_ptr != NULL) {
+        this->stats_ptr->sparserow_elts += 1;
+      };
+#endif
     }
     else if (col == storage[jj].first) 
       storage[jj].second = value;
     else { // storage[jj].first > col, insert new pair before `jj`
       storage.insert(storage.begin()+jj, 
                      std::make_pair<size_t,val_t>(col,value));
+#ifdef RF_ENABLE_STATS
+      if (this->stats_ptr != NULL) {
+        this->stats_ptr->sparserow_elts += 1;
+      };
+#endif
     };
     //assert(this->__ok());
   }; // SparseRow::set(...)

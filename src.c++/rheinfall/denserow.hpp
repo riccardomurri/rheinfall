@@ -298,6 +298,11 @@ namespace rheinfall {
     // non-zero entries from `this` would made it pretty dense
     // anyway
     DenseRow<val_t,coord_t,allocator>* dense_other(new DenseRow<val_t,coord_t,allocator>(other));
+#ifdef RF_ENABLE_STATS
+    if (this->stats_ptr != NULL) {
+      this->stats_ptr->denserow_count += 1;
+    };
+#endif
     delete other;
     return this->linear_combination(dense_other, a, b, adjust);
   }; // DenseRow<val_t,coord_t,allocator>* linear_combination(SparseRow<val_t,coord_t,allocator>* other)
@@ -334,9 +339,11 @@ namespace rheinfall {
       other->storage[j] *= b;
       other->storage[j] += a*this->storage[j];
     };
-#ifdef RF_COUNT_OPS
-    if (this->ops_count_ptr != NULL)
-      *(this->ops_count_ptr) += 3 * this->size();
+#ifdef RF_ENABLE_STATS
+    if (this->stats_ptr != NULL) {
+      this->stats_ptr->ops_count += 3 * this->size();
+      this->stats_ptr->denserow_elts += this->size();
+    };
 #endif
     other->leading_term_ = 0;
 
@@ -365,15 +372,14 @@ namespace rheinfall {
     size_t j = 0;
     for (; j < this->size()-1; ++j) {
        result->storage[j] = b*other->storage[j] + a*this->storage[j];
-#ifdef RF_COUNT_OPS
-       if ((this->ops_count_ptr) != NULL)
-         *(this->ops_count_ptr) += 3;
-#endif
     };
     result->leading_term_ = b*other->storage[j] + a*this->storage[j];
-#ifdef RF_COUNT_OPS
-    if ((this->ops_count_ptr) != NULL)
-      *(this->ops_count_ptr) += 3;
+#ifdef RF_ENABLE_STATS
+    if (this->stats_ptr != NULL) {
+      this->stats_ptr->denserow_count += 1;
+      this->stats_ptr->denserow_elts += this->size();
+      this->stats_ptr->ops_count += 3 * this->size();
+    };
 #endif
     delete other;
 

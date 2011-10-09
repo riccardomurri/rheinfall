@@ -31,7 +31,7 @@
 
 
 // uncomment/define to enable computing the arithmetic operations count
-//#define RF_COUNT_OPS
+#define RF_ENABLE_STATS
 
 
 // use WITH_MPI_SERIALIZED / WITH_MPI_MULTIPLE to select which
