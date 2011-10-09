@@ -580,9 +580,16 @@ main(int argc, char** argv)
         std::cout << " cputime:" << std::fixed << std::setprecision(6) << consumed;
       if (0 == myid)
         std::cout << " wctime:" << std::fixed << std::setprecision(6) << elapsed;
-#ifdef RF_COUNT_OPS
-      if (0== myid)
-        std::cout << " ops:" << rf.get_ops_count();
+#ifdef RF_ENABLE_STATS
+      rheinfall::Stats stats;
+      rf.get_global_stats(stats);
+      if (0== myid) {
+        std::cout << " ops:" << stats.ops_count;
+        std::cout << " sparserow_nr:" << stats.sparserow_count;
+        std::cout << " sparserow_elts:" << stats.sparserow_elts;
+        std::cout << " denserow_nr:" << stats.denserow_count;
+        std::cout << " denserow_elts:" << stats.denserow_elts;
+      };
 #endif
       if (0 == myid)
         std::cout << std::endl;

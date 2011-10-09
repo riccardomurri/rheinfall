@@ -141,8 +141,8 @@ namespace rheinfall {
 #endif
 
   public:
-#ifdef RF_COUNT_OPS
-    unsigned long *ops_count_ptr;
+#ifdef RF_ENABLE_STATS
+    Stats *stats_ptr;
 #endif 
 
   }; // class Row
@@ -172,8 +172,8 @@ namespace rheinfall {
     , starting_column_(starting_column)
     , ending_column_(ending_column)
     , leading_term_(leading_term)
-#ifdef RF_COUNT_OPS
-    , ops_count_ptr(NULL)
+#ifdef RF_ENABLE_STATS
+    , stats_ptr(NULL)
 #endif
     { 
       // init-only ctor
@@ -216,6 +216,12 @@ namespace rheinfall {
       if (s2->fill_in() > dense_threshold) {
         // FIXME: could merge ctor+elimination in one funcall
         DenseRow<val_t,coord_t,allocator>* dense_other(new DenseRow<val_t,coord_t,allocator>(s2));
+#ifdef RF_ENABLE_STATS
+        if (this->stats_ptr != NULL) {
+          this->stats_ptr->denserow_count += 1;
+          this->stats_ptr->denserow_elts += dense_other->size();
+        };
+#endif
         delete other;
         return s1->linear_combination(dense_other, a, b, adjust);
       }
