@@ -88,6 +88,8 @@ namespace rheinfall {
       /** Return number of allocated entries. */
       virtual size_t size() const;
 
+      virtual double weight() const;
+
       /** Set the element stored at column @c col */
       virtual void set(const coord_t col, const val_t value);
 
@@ -456,6 +458,16 @@ namespace rheinfall {
   inline size_t 
   DenseRow<val_t,coord_t,allocator>::
   size() const 
+  { 
+    return storage.size(); 
+  };
+
+
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline double
+  DenseRow<val_t,coord_t,allocator>::
+  weight() const 
   { 
     return storage.size(); 
   };

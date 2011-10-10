@@ -31,6 +31,7 @@
 
 
 #include "config.hpp"
+#include "stats.hpp"
 #include "row.hpp"
 #include "sparserow.hpp"
 #include "denserow.hpp"
@@ -62,6 +63,7 @@ public:
     /** Constructor. If compiled with MPI, will use the default
         communicator @c MPI_COMM_WORLD */
     LU(const coord_t ncols, 
+       const val_t pivoting_threshold,
        const coord_t width = 1,
        const float dense_threshold = 40.0);
     
@@ -69,6 +71,7 @@ public:
     /** Constructor, taking explicit MPI communicator. */
     LU(mpi::communicator& comm, 
        const coord_t ncols,
+       const val_t pivoting_threshold,
        const coord_t width = 1,
        const float dense_threshold = 40.0);
 #endif // WITH_MPI
@@ -165,6 +168,9 @@ public:
         value. Default is to switch to dense storage at 40% fill-in. */
     float dense_threshold;
 
+    /** Coefficient for threshold pivoting. */
+    const val_t pivoting_threshold;
+
 #ifdef RF_ENABLE_STATS
     /** Keep counts of various kinds of operations. */
     Stats stats;
@@ -214,14 +220,14 @@ public:
       
       /** A block of rows. */
       typedef std::list< row_t*, 
-                         allocator<row_t*> > row_list;
+                         allocator<row_t*> > row_block;
       /** The block of rows that will be eliminated next time @c step() is called. */
-      row_list u_rows;
+      row_block u_rows;
       /** The corresponding block of rows from the L matrix. */
-      row_list l_rows;
+      row_block l_rows;
 
       /** List of incoming rows from other processors. */
-      row_list inbox_u, inbox_l;
+      row_block inbox_u, inbox_l;
 #ifdef _OPENMP
       /** Lock for accessing the @c inbox */
       omp_lock_t inbox_lock_;
@@ -367,6 +373,7 @@ public:
             template<typename T> class allocator>
   LU<val_t,coord_t,allocator>::
   LU(const coord_t ncols, 
+     const val_t pivoting_threshold,
      const coord_t width,
      const float dense_threshold)
     : ncols_(ncols)
@@ -378,6 +385,7 @@ public:
     , nprocs_(comm_.size())
 #endif
     , dense_threshold(dense_threshold)
+    , pivoting_threshold(pivoting_threshold)
 #ifdef RF_ENABLE_STATS
     , stats()
 #endif
@@ -407,6 +415,7 @@ public:
   LU<val_t,coord_t,allocator>::
   LU(mpi::communicator& comm, 
      const coord_t ncols, 
+     const val_t pivoting_threshold,
      const coord_t width,
      const float dense_threshold)
   : ncols_(ncols)
@@ -416,6 +425,7 @@ public:
   , nprocs_(comm.size())
   , w_(width)
   , dense_threshold(dense_threshold)
+  , pivoting_threshold(pivoting_threshold)
 #ifdef RF_ENABLE_STATS
   , stats()
 #endif
@@ -760,7 +770,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline void
-  Rank<val_t,coord_t,allocator>::
+  LU<val_t,coord_t,allocator>::
   get_global_stats(Stats& global_stats) const 
   { 
 # ifdef WITH_MPI
@@ -779,7 +789,7 @@ public:
   template <typename val_t, typename coord_t, 
             template<typename T> class allocator>
   inline void
-  Rank<val_t,coord_t,allocator>::
+  LU<val_t,coord_t,allocator>::
   get_local_stats(Stats& local_stats) const
   { 
     local_stats = stats;
@@ -1004,7 +1014,7 @@ recv_row(Row<val_t,coord_t,allocator>* new_u_row)
     new_l_row->set(new_u_row->h0, 1);
     new_l_row->h0 = new_u_row->h0;
 #ifdef RF_ENABLE_STATS
-    if (NULL != this->stats_ptr->ops_count) {
+    if (NULL != this->stats_ptr) {
       new_u_row->stats_ptr->ops_count = this->stats_ptr->ops_count;
       new_l_row->stats_ptr->ops_count = this->stats_ptr->ops_count;
     }
@@ -1035,7 +1045,7 @@ recv_pair(Row<val_t,coord_t,allocator>* new_u_row,
     assert(column_ == new_u_row->starting_column_);
     assert(0 == new_l_row->starting_column_);
 #ifdef RF_ENABLE_STATS
-    if (NULL != this->stats_ptr->ops_count) {
+    if (NULL != this->stats_ptr) {
       new_u_row->stats_ptr->ops_count = this->stats_ptr->ops_count;
       new_l_row->stats_ptr->ops_count = this->stats_ptr->ops_count;
     }
@@ -1086,61 +1096,82 @@ step()
     }
     assert (NULL != u0);
 
-    typename row_list::iterator iter_u, iter_l;
+    assert(u_rows.size() == l_rows.size());
+#if 0
+    // find the row with "best" pivot
+    val_t best = u0->leading_term_;
+    for (typename row_block::iterator it = u_rows.begin(); it != u_rows.end(); ++it) {
+      if (first_is_better_pivot<val_t> ((*it)->leading_term_, best)) {
+        best = (*it)->leading_term_;
+      };
+    }; // end for (it = rows.begin(); ...)
+
+    // now choose the "more sparse" row among those whose leading term
+    // is within a certain factor of the absolute best pivot
+    // (threshold pivoting)
+    val_t new_pivot = u0->leading_term_;
+    double new_pivot_row_weight = u0->weight();
+    boost::optional<typename row_block::iterator> new_u0_row_loc;
+    boost::optional<typename row_block::iterator> new_l0_row_loc;
+    typename row_block::iterator iter_u, iter_l;
+    for (iter_u = u_rows.begin(), iter_l = l_rows.begin(); 
+         iter_u != u_rows.end(); 
+         ++iter_u, ++iter_l) 
+      {
+        if (not good_enough_pivot(best, parent_.pivoting_threshold, 
+                                  (*iter_u)->leading_term_))
+          continue;
+        // pivot for sparsity and break ties by usual algorithm
+        if (((*iter_u)->weight() < new_pivot_row_weight)
+            or ((*iter_u)->weight() == new_pivot_row_weight 
+                and first_is_better_pivot<val_t>((*iter_u)->leading_term_, new_pivot))) 
+          {
+            new_pivot = (*iter_u)->leading_term_;
+            new_pivot_row_weight = (*iter_u)->weight();
+            new_u0_row_loc = iter_u;
+            new_l0_row_loc = iter_l;
+          };
+      }; // end for (it = rows.begin(); ...)
+    if (!!new_u0_row_loc) 
+      {
+        assert(!!new_l0_row_loc);
+        std::swap(u0, *(new_u0_row_loc.get()));
+        std::swap(l0, *(new_l0_row_loc.get()));
+      };
+#endif // if 0
+
+    typename row_block::iterator iter_u, iter_l;
     assert(u_rows.size() == l_rows.size());
     for (iter_u = u_rows.begin(), iter_l = l_rows.begin(); 
          iter_u != u_rows.end(); 
          ++iter_u, ++iter_l) 
       {
-        // swap `u` and the new row if the new row is shorter, or has "better" leading term
-        if (Row<val_t,coord_t,allocator>::sparse == (*iter_u)->kind) {
-          SparseRow<val_t,coord_t,allocator>* s = 
-            static_cast<SparseRow<val_t,coord_t,allocator>*>(*iter_u);
-          if (Row<val_t,coord_t,allocator>::sparse == u0->kind) {
-            // if `*iter_u` (new row) is shorter, it becomes the new pivot row
-            if (s->size() < u0->size()) {
-              std::swap(u0, *iter_u);
-              std::swap(l0, *iter_l);
-            }
-          }
-          else if (Row<val_t,coord_t,allocator>::dense == u0->kind) {
+#if 1
+        // pivot for sparsity and break ties by usual algorithm
+        if (((*iter_u)->weight() < u0->weight())
+            or ((*iter_u)->weight() == u0->weight()
+                and first_is_better_pivot<val_t>((*iter_u)->leading_term_, u0->leading_term_)))
+          {
             std::swap(u0, *iter_u);
             std::swap(l0, *iter_l);
-          }
-          else 
-            assert(false); // forgot one kind in chained `if`s?
-        }
-        else if (Row<val_t,coord_t,allocator>::dense == (*iter_u)->kind) {
-          if (Row<val_t,coord_t,allocator>::dense == u0->kind) {
-            // swap `u0` and `row` iff `row`'s leading term is "better"
-            if (first_is_better_pivot<val_t>
-                (static_cast<DenseRow<val_t,coord_t,allocator>*>(*iter_u)->leading_term_,
-                 static_cast<DenseRow<val_t,coord_t,allocator>*>(u0)->leading_term_)) {
-              // swap `u0` and `row`
-              std::swap(u0, *iter_u);
-              std::swap(l0, *iter_l);
-            };
-        };
-        // else, if `u0` is a sparse row, no need to check further
-      }
-      else
-        assert(false); // forgot a row kind in `if` chain?
+          };
+#endif // if 1
 
-      // perform elimination -- return NULL in case resulting row is full of zeroes
-      val_t a, b;
-      get_row_multipliers<val_t>(u0->leading_term_, 
-                                 (*iter_u)->leading_term_, 
-                                 a, b);
-      row_t* new_u_row = 
-        u0->linear_combination(*iter_u, a, b, true, parent_.dense_threshold);
-      // ship reduced rows to other processors
-      if (NULL != new_u_row) {
-        assert(new_u_row->starting_column_ > this->column_);
-        *iter_l = l0->linear_combination(*iter_l, a, b, false);
-        assert(NULL != *iter_l);
-        parent_.send_pair(*this, new_u_row, (*iter_l));
-      };
-    }; // end for (it = rows.begin(); ...)
+        // perform elimination -- return NULL in case resulting row is full of zeroes
+        val_t a, b;
+        get_row_multipliers<val_t>(u0->leading_term_, (*iter_u)->leading_term_, 
+                                   a, b);
+        row_t* new_u_row = 
+          u0->linear_combination(*iter_u, a, b, true, parent_.dense_threshold);
+        // ship reduced rows to other processors
+        if (NULL != new_u_row) 
+          {
+            assert(new_u_row->starting_column_ > this->column_);
+            *iter_l = l0->linear_combination(*iter_l, a, b, false);
+            assert(NULL != *iter_l);
+            parent_.send_pair(*this, new_u_row, (*iter_l));
+          };
+      }; // end for (iter_u = u_rows.begin(); ...)
     u_rows.clear();
     l_rows.clear();
   }; // end if not rows.empty()
