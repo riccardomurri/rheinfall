@@ -399,9 +399,10 @@ main(int argc, char** argv)
   static struct option long_options[] = {
     {"dense-threshold", 1, 0, 'd'},
     {"help",            0, 0, 'h'},
-    {"pivot-threshold", 1, 0, 'm'},
 #ifdef WITH_MODULAR_VALUES
-    {"modulus",         1, 0, 'p'},
+    {"modulus",         1, 0, 'm'},
+#else
+    {"pivot-threshold", 1, 0, 'p'},
 #endif
     {"tranpose",        0, 0, 't'},
     {"verbose",         0, 0, 'v'},
@@ -440,23 +441,24 @@ main(int argc, char** argv)
       usage(std::cout, argc, argv);
       return 0;
     }
-    else if ('m' == c) {
-      // threshold for pivoting
-      std::istringstream arg(optarg);
-      arg >> pivot_threshold;
-      if (pivot_threshold <= 0) {
-        std::cerr << "Argument to option -m/--pivot-threshold must be a positive number."
-                  << " Aborting." << std::endl;
-        return 1;
-      };
-    }
 #ifdef WITH_MODULAR_VALUES
-    else if ('p' == c) {
+    else if ('m' == c) {
       // modulus to use in modular arithmetic
       mod_int_t p;
       std::istringstream arg(optarg);
       arg >> p;
       modular::Modular<mod_int_t>::global_set_modulus(p);
+    }
+#else
+    else if ('p' == c) {
+      // threshold for pivoting
+      std::istringstream arg(optarg);
+      arg >> pivot_threshold;
+      if (pivot_threshold <= 0) {
+        std::cerr << "Argument to option -p/--pivot-threshold must be a positive number."
+                  << " Aborting." << std::endl;
+        return 1;
+      };
     }
 #endif
     else if ('t' == c) {
