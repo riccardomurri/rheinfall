@@ -39,8 +39,9 @@
 
 #ifdef _OPENMP
 # include <omp.h>
-# include <boost/optional.hpp>
 #endif
+
+# include <boost/optional.hpp>
 
 #include <bits/allocator.h>
 #include <iostream>
@@ -63,6 +64,7 @@ public:
     /** Constructor. If compiled with MPI, will use the default
         communicator @c MPI_COMM_WORLD */
     Rank(const coord_t ncols, 
+         const val_t pivoting_threshold,
          const coord_t width = 1,
          const float dense_threshold = 40.0);
     
@@ -70,6 +72,7 @@ public:
     /** Constructor, taking explicit MPI communicator. */
     Rank(mpi::communicator& comm, 
          const coord_t ncols,
+         const val_t pivoting_threshold,
          const coord_t width = 1,
          const float dense_threshold = 40.0);
 #endif // WITH_MPI
@@ -156,7 +159,10 @@ public:
     /** A row will switch its storage to dense format when the percent
         of nonzero entries w.r.t. total length exceeds this
         value. Default is to switch to dense storage at 40% fill-in. */
-    float dense_threshold;
+    const float dense_threshold;
+
+    /** Coefficient for threshold pivoting. */
+    const val_t pivoting_threshold;
 
 #ifdef RF_ENABLE_STATS
     /** Keep counts of various kinds of operations. */
@@ -200,11 +206,11 @@ public:
       
       /** A block of rows. */
       typedef std::list< Row<val_t,coord_t,allocator>*, 
-                         allocator<Row<val_t,coord_t,allocator>*> > row_list;
+                         allocator<Row<val_t,coord_t,allocator>*> > row_block;
       /** The block of rows that will be eliminated next time @c step() is called. */
-      row_list rows;
+      row_block rows;
       /** List of incoming rows from other processors. */
-      row_list inbox;
+      row_block inbox;
 #ifdef _OPENMP
       /** Lock for accessing the @c inbox */
       omp_lock_t inbox_lock_;
@@ -337,8 +343,9 @@ public:
             template<typename T> class allocator>
   Rank<val_t,coord_t,allocator>::
   Rank(const coord_t ncols, 
-            const coord_t width,
-            const float dense_threshold)
+       const val_t pivoting_threshold,
+       const coord_t width,
+       const float dense_threshold)
     : ncols_(ncols)
     , vpus()
     , w_(width)
@@ -348,6 +355,7 @@ public:
     , nprocs_(comm_.size())
 #endif
     , dense_threshold(dense_threshold)
+    , pivoting_threshold(pivoting_threshold)
 #ifdef RF_ENABLE_STATS
     , stats()
 #endif
@@ -377,6 +385,7 @@ public:
   Rank<val_t,coord_t,allocator>::
   Rank(mpi::communicator& comm, 
        const coord_t ncols, 
+       const val_t pivoting_threshold,
        const coord_t width,
        const float dense_threshold)
   : ncols_(ncols)
@@ -386,9 +395,10 @@ public:
   , nprocs_(comm.size())
   , w_(width)
   , dense_threshold(dense_threshold)
-#ifdef RF_ENABLE_STATS
+  , pivoting_threshold(pivoting_threshold)
+# ifdef RF_ENABLE_STATS
   , stats()
-#endif
+# endif
 {  
   // setup the array of processors
   vpus.reserve(1 + ncols_ / nprocs_);
@@ -398,12 +408,12 @@ public:
 # if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
     omp_init_lock(& mpi_send_lock_); 
 # endif // _OPENMP && WITH_MPI_SERIALIZED
-#ifdef RF_ENABLE_STATS
+# ifdef RF_ENABLE_STATS
     for (typename vpu_array_t::iterator vpu = vpus.begin(); vpu != vpus.end(); ++vpu)
       (*vpu)->stats_ptr = &stats;
-#endif
+# endif
 };
-#endif
+#endif // WITH_MPI
 
 
   template <typename val_t, typename coord_t, 
@@ -927,38 +937,48 @@ step()
       u = rows.front();
       rows.pop_front();
     }
-
     assert (NULL != u);
-    for (typename row_list::iterator it = rows.begin(); it != rows.end(); ++it) {
-      // swap `u` and the new row if the new row is shorter, or has "better" leading term
-      if (Row<val_t,coord_t,allocator>::sparse == (*it)->kind) {
-        SparseRow<val_t,coord_t,allocator>* s = 
-          static_cast<SparseRow<val_t,coord_t,allocator>*>(*it);
-        if (Row<val_t,coord_t,allocator>::sparse == u->kind) {
-          // if `*it` (new row) is shorter, it becomes the new pivot row
-          if (s->size() < u->size())
-            std::swap(u, *it);
-        }
-        else if (Row<val_t,coord_t,allocator>::dense == u->kind)
-          std::swap(u, *it);
-        else 
-          assert(false); // forgot one kind in chained `if`s?
-      }
-      else if (Row<val_t,coord_t,allocator>::dense == (*it)->kind) {
-        if (Row<val_t,coord_t,allocator>::dense == u->kind) {
-          // swap `u` and `row` iff `row`'s leading term is "better"
-          if (first_is_better_pivot<val_t>
-              (static_cast<DenseRow<val_t,coord_t,allocator>*>(*it)->leading_term_,
-               static_cast<DenseRow<val_t,coord_t,allocator>*>(u)->leading_term_))
-            // swap `u` and `row`
-            std::swap(u, *it);
-        };
-        // else, if `u` is a sparse row, no need to check further
-      }
-      else
-        assert(false); // forgot a row kind in `if` chain?
 
-      // perform elimination -- return NULL in case resulting row is full of zeroes
+#if 0
+    // find the row with "best" pivot
+    val_t best = u->leading_term_;
+    for (typename row_block::iterator it = rows.begin(); it != rows.end(); ++it) {
+      if (first_is_better_pivot<val_t> ((*it)->leading_term_, best)) {
+        best = (*it)->leading_term_;
+      };
+    }; // end for (it = rows.begin(); ...)
+
+    // now choose the "more sparse" row among those whose leading term
+    // is within a certain factor of the absolute best pivot
+    // (threshold pivoting)
+    val_t new_pivot = u->leading_term_;
+    double new_pivot_row_weight = u->weight();
+    boost::optional<typename row_block::iterator> new_pivot_row_loc;
+    for (typename row_block::iterator it = rows.begin(); it != rows.end(); ++it) {
+      if (not good_enough_pivot(best, parent_.pivoting_threshold, (*it)->leading_term_))
+        continue;
+      // pivot for sparsity and break ties by usual algorithm
+      if (((*it)->weight() < new_pivot_row_weight)
+          or ((*it)->weight() == new_pivot_row_weight 
+              and first_is_better_pivot<val_t>((*it)->leading_term_, new_pivot))) {
+        new_pivot = (*it)->leading_term_;
+        new_pivot_row_weight = (*it)->weight();
+        new_pivot_row_loc = it;
+      };
+    }; // end for (it = rows.begin(); ...)
+    if (!!new_pivot_row_loc) {
+      std::swap(u, *(new_pivot_row_loc.get()));
+    };
+#endif // if 0
+    // perform elimination -- return NULL in case resulting row is full of zeroes
+    for (typename row_block::iterator it = rows.begin(); it != rows.end(); ++it) {
+#if 1
+      // pivot for sparsity and break ties by usual algorithm
+      if (((*it)->weight() < u->weight())
+          or ((*it)->weight() == u->weight()
+              and first_is_better_pivot<val_t>((*it)->leading_term_, u->leading_term_)))
+        std::swap(u, *it);
+#endif // if 1
       val_t a, b;
       get_row_multipliers<val_t>((u)->leading_term_, (*it)->leading_term_, 
                                  a, b);

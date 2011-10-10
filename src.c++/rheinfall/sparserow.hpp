@@ -108,6 +108,10 @@ namespace rheinfall {
     /** Return number of allocated (i.e., non-zero) entries. */
     virtual size_t size() const;
 
+    /** Return the "weight" of this row. (The weight is defined as the
+        sum of inverses of column index of nonzero entries.) */
+    virtual double weight() const;
+
     /** Set the element stored at column @c col */
     virtual void set(const coord_t col, const val_t value);
 
@@ -153,6 +157,9 @@ namespace rheinfall {
         (see @ref Row::leading_term_). */
     storage_t storage;
 
+    /** Weight of this row.  Updated by any content-changing call. */
+    double weight_;
+
     /** Print a textual representation of the row to stream @c o. */
     virtual void print_on(std::ostream& o) const;
 
@@ -197,8 +204,9 @@ namespace rheinfall {
   SparseRow(const coord_t starting_column, 
             const coord_t ending_column, 
             const val_t leading_term) 
-    : Row_::Row(Row_::sparse, starting_column, ending_column, leading_term),
-      storage() 
+    : Row_::Row(Row_::sparse, starting_column, ending_column, leading_term)
+    , storage()
+    , weight_(0)
   { 
     // init-only ctor
   };
@@ -208,8 +216,9 @@ namespace rheinfall {
             template<typename T> class allocator>
   inline
   SparseRow<val_t,coord_t,allocator>::SparseRow() 
-    : Row_::Row(Row_::sparse, -1, -1, 0),
-      storage() 
+    : Row_::Row(Row_::sparse, -1, -1, 0)
+    , storage() 
+    , weight_(0)
   { 
     // init-only ctor
   };
@@ -286,6 +295,7 @@ namespace rheinfall {
     //assert(not is_zero(this->leading_term_));
     // entries in `this->storage` are *always* ordered by increasing column index
     coord_t s1 = this->starting_column_;
+    double computed_weight = 0;
     for (typename storage_t::const_iterator it = storage.begin(); 
          it < storage.end(); 
          ++it) {
@@ -293,7 +303,9 @@ namespace rheinfall {
       assert(it->first <= this->ending_column_);
       assert(not is_zero(it->second));
       s1 = it->first;
+      computed_weight += (1.0 / s1);
     };
+    assert(this->weight_ == computed_weight);
     return true;
   };
 #endif
@@ -445,6 +457,7 @@ namespace rheinfall {
         }
         else {
           result->storage.push_back(std::make_pair(coord, entry));
+          result->weight_ += (1.0 / coord);
 #ifdef RF_ENABLE_STATS
           if (this->stats_ptr != NULL) {
             this->stats_ptr->sparserow_elts += 1;
@@ -567,7 +580,8 @@ namespace rheinfall {
     // is a type of input archive the & operator is defined similar to >>.
     ar 
       & boost::serialization::base_object< Row<val_t,coord_t,allocator> >(*this) 
-      & storage;
+      & storage
+      & weight_;
     assert(this->__ok());
   }; // SparseRow::serialize(...)
 #endif // WITH_MPI
@@ -592,6 +606,7 @@ namespace rheinfall {
     if (storage.size() == jj) {
       // end of list reached, `col` is larger than any index in this row
       storage.push_back(std::make_pair<size_t,val_t>(col,value));
+      weight_ += (1.0 / col);
 #ifdef RF_ENABLE_STATS
       if (this->stats_ptr != NULL) {
         this->stats_ptr->sparserow_elts += 1;
@@ -603,6 +618,7 @@ namespace rheinfall {
     else { // storage[jj].first > col, insert new pair before `jj`
       storage.insert(storage.begin()+jj, 
                      std::make_pair<size_t,val_t>(col,value));
+      weight_ += (1.0 / col);
 #ifdef RF_ENABLE_STATS
       if (this->stats_ptr != NULL) {
         this->stats_ptr->sparserow_elts += 1;
@@ -619,6 +635,15 @@ namespace rheinfall {
   SparseRow<val_t,coord_t,allocator>::size() const 
   { 
     return storage.size(); 
+  };
+
+
+  template <typename val_t, typename coord_t, 
+            template<typename T> class allocator>
+  inline double
+  SparseRow<val_t,coord_t,allocator>::weight() const 
+  { 
+    return weight_;
   };
 
 

@@ -361,6 +361,7 @@ main(int argc, char** argv)
   static struct option long_options[] = {
     {"dense-threshold", 1, 0, 'd'},
     {"help",            0, 0, 'h'},
+    {"pivot-threshold", 1, 0, 'm'},
 #ifdef WITH_MODULAR_VALUES
     {"modulus",         1, 0, 'p'},
 #endif
@@ -372,6 +373,7 @@ main(int argc, char** argv)
 
   coord_t width = 1;
   float dense_threshold = 40.0;
+  val_t pivot_threshold = 1;
   bool transpose = false;
 
 #ifdef WITH_MODULAR_VALUES
@@ -380,7 +382,7 @@ main(int argc, char** argv)
 
   int c;
   while (true) {
-    c = getopt_long(argc, argv, "d:hp:tvw:",
+    c = getopt_long(argc, argv, "d:hm:p:tvw:",
                     long_options, NULL);
     if (-1 == c)
       break;
@@ -400,6 +402,16 @@ main(int argc, char** argv)
       // print help text and exit successfully
       usage(std::cout, argc, argv);
       return 0;
+    }
+    else if ('m' == c) {
+      // threshold for pivoting
+      std::istringstream arg(optarg);
+      arg >> pivot_threshold;
+      if (pivot_threshold <= 0) {
+        std::cerr << "Argument to option -m/--pivot-threshold must be a positive number."
+                  << " Aborting." << std::endl;
+        return 1;
+      };
     }
     else if ('v' == c) {
       // enable verbose reporting
@@ -508,9 +520,9 @@ main(int argc, char** argv)
 #endif
 
 #ifdef WITH_MPI
-      rheinfall::LU<val_t, coord_t, allocator> algo(world, cols, width, dense_threshold);
+      rheinfall::LU<val_t, coord_t, allocator> algo(world, cols, pivot_threshold, width, dense_threshold);
 #else
-      rheinfall::LU<val_t, coord_t, allocator> algo(cols, width, dense_threshold);
+      rheinfall::LU<val_t, coord_t, allocator> algo(cols, pivot_threshold, width, dense_threshold);
 #endif
       std::vector<rheinfall::Row<val_t,coord_t,allocator>*> l,u; 
 
@@ -566,7 +578,7 @@ main(int argc, char** argv)
         std::cout << " wctime:" << std::fixed << std::setprecision(6) << elapsed;
 #ifdef RF_ENABLE_STATS
       rheinfall::Stats stats;
-      rf.get_global_stats(stats);
+      algo.get_global_stats(stats);
       if (0== myid) {
         std::cout << " ops:" << stats.ops_count;
         std::cout << " sparserow_nr:" << stats.sparserow_count;

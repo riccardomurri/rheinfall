@@ -76,7 +76,7 @@ typedef int32_t val_t;
 
 #elif defined(WITH_INT64_VALUES)
 
-// we do not know where int32_t is defined; we just know that is, somewhere...
+// we do not know where int64_t is defined; we just know that is, somewhere...
 # if defined(HAVE_STDINT_H)
 #  include <stdint.h>
 # endif
@@ -399,6 +399,7 @@ main(int argc, char** argv)
   static struct option long_options[] = {
     {"dense-threshold", 1, 0, 'd'},
     {"help",            0, 0, 'h'},
+    {"pivot-threshold", 1, 0, 'm'},
 #ifdef WITH_MODULAR_VALUES
     {"modulus",         1, 0, 'p'},
 #endif
@@ -410,6 +411,7 @@ main(int argc, char** argv)
 
   coord_t width = 1;
   float dense_threshold = 40.0;
+  val_t pivot_threshold = 1;
   bool transpose = false;
 
 #ifdef WITH_MODULAR_VALUES
@@ -418,7 +420,7 @@ main(int argc, char** argv)
 
   int c;
   while (true) {
-    c = getopt_long(argc, argv, "d:hp:tvw:",
+    c = getopt_long(argc, argv, "d:hm:p:tvw:",
                     long_options, NULL);
     if (-1 == c)
       break;
@@ -432,23 +434,18 @@ main(int argc, char** argv)
                   << " Aborting." << std::endl;
         return 1;
       };
-      
     }
     else if ('h' == c) { 
       // print help text and exit successfully
       usage(std::cout, argc, argv);
       return 0;
     }
-    else if ('v' == c) {
-      // enable verbose reporting
-      verbose = 1;
-    }
-    else if ('w' == c) {
-      // stripewidth for MPI column-to-process distribution
+    else if ('m' == c) {
+      // threshold for pivoting
       std::istringstream arg(optarg);
-      arg >> width;
-      if (width < 1) {
-        std::cerr << "Argument to option -w/--width must be a positive integer."
+      arg >> pivot_threshold;
+      if (pivot_threshold <= 0) {
+        std::cerr << "Argument to option -m/--pivot-threshold must be a positive number."
                   << " Aborting." << std::endl;
         return 1;
       };
@@ -466,12 +463,26 @@ main(int argc, char** argv)
       // transpose matrix when reading it
       transpose = true;
     }
+    else if ('v' == c) {
+      // enable verbose reporting
+      verbose = 1;
+    }
+    else if ('w' == c) {
+      // stripewidth for MPI column-to-process distribution
+      std::istringstream arg(optarg);
+      arg >> width;
+      if (width < 1) {
+        std::cerr << "Argument to option -w/--width must be a positive integer."
+                  << " Aborting." << std::endl;
+        return 1;
+      };
+    }
     else {
       std::cerr << "Unknown option; type '" << argv[0] << " --help' to get usage help."
                 << std::endl;
       return 1;
     };
-  };
+  }; // while(true)
 
   // install signal handlers only if not running MPI: OpenMPI does a
   // better job at it than the simple-minded functions here.
@@ -544,9 +555,9 @@ main(int argc, char** argv)
 #endif
 
 #ifdef WITH_MPI
-      rheinfall::Rank<val_t, coord_t, allocator> rf(world, cols, width, dense_threshold);
+      rheinfall::Rank<val_t, coord_t, allocator> rf(world, cols, pivot_threshold, width, dense_threshold);
 #else
-      rheinfall::Rank<val_t, coord_t, allocator> rf(cols, width, dense_threshold);
+      rheinfall::Rank<val_t, coord_t, allocator> rf(cols, pivot_threshold, width, dense_threshold);
 #endif
 
       coord_t nnz = rf.read_triples(input, rows, cols, true, transpose);

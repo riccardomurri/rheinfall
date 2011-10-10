@@ -57,6 +57,22 @@ namespace rheinfall {
   }
 
 
+  /** Return @c true if value @a candidate satisfies the "threshold
+      pivoting" constraint, given the "best" pivot value @a best and
+      the threshold @a ths.  The default implementation always returns
+      @c false so that any pivot is considered a candidate; see
+      `Processor::step()`.  (The reason this is implemented as a
+      function here is that the "threshold pivoting" relation is
+      different on the integers and on floating-point numbers.) */
+  template <typename val_t>
+  static inline
+  bool good_enough_pivot(val_t const& best, val_t const& ths, 
+                         val_t const& candidate)
+  {
+    return true;
+  }
+
+
   /** Given the leading entries of two rows X and Y, set @a a and @a b
       so that a*X+b*Y is a row whose first non-zero entry is strictly
       to the right of the leading entries of X and Y. The generic
@@ -78,11 +94,11 @@ namespace rheinfall {
    *
    * Declare template specializations for instances of a type @c T
    * modeling a ring with a GCD (greatest common divisor) function.
-   * Second argument @c gcd is a function @c {void gcd(T& a, T& p, T& q)}
+   * Second argument @c GCDFUNC is a function @c {void gcd(T& a, T& p, T& q)}
    * that computes the GCD of @c p @c q and stores it into @c a;
    * it must also guarantee that @c a >= 0.
    */
-#define RF_TYPE_IS_GCD_RING(T, GCD)                 \
+#define RF_TYPE_IS_GCD_RING(T, GCDFUNC)             \
   template <>                                       \
   void get_row_multipliers< T >(T const& lead_x,    \
                                 T const& lead_y,    \
@@ -90,7 +106,7 @@ namespace rheinfall {
   {                                                 \
     assert(lead_x != 0);                            \
     T c;                                            \
-    GCD(c, lead_x, lead_y);                         \
+    GCDFUNC(c, lead_x, lead_y);                     \
     assert(c >= 0);                                 \
     a = - lead_y / c;                               \
     b = lead_x / c;                                 \
@@ -117,6 +133,14 @@ namespace rheinfall {
      ((lead_y > 0) ?                                \
       (lead_x > -lead_y)    /* x<0, y>0 */          \
       : (lead_x > lead_y)));  /* x,y < 0  */        \
+  };                                                \
+                                                    \
+  template <>                                       \
+  bool good_enough_pivot(T const& best,             \
+                         T const& ths,              \
+                         T const& candidate)        \
+  {                                                 \
+    return (candidate <= (best*ths));               \
   };                                                \
 
   /// The GCD function for integral types.
@@ -182,6 +206,14 @@ namespace rheinfall {
      ((lead_y > 0) ?                                \
       (lead_x < -lead_y)    /* x<0, y>0 */          \
       : (lead_x < lead_y)));  /* x,y < 0  */        \
+  };                                                \
+                                                    \
+  template <>                                       \
+  bool good_enough_pivot(T const& best,             \
+                         T const& ths,              \
+                         T const& candidate)        \
+  {                                                 \
+    return (candidate >= (best*ths));               \
   };                                                \
 
   RF_TYPE_IS_DIVISION_RING(float)

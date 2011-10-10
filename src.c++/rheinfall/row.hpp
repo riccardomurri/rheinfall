@@ -95,6 +95,8 @@ namespace rheinfall {
     /** Return number of allocated (i.e., non-zero) entries. */
     virtual size_t size() const = 0;
 
+    virtual double weight() const = 0;
+
     /** Return a pointer to a linear combination of this row with row
         @c other.  The returned pointer could possibly be the @p other
         row if in-place update took place.  The two coefficients used
