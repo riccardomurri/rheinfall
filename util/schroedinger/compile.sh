@@ -38,11 +38,11 @@ source $libdir/functions.sh \
 ## parse command-line 
 set_mpi_and_compiler_flavor "$@"; shift
 
-CXXFLAGS="$*"
+CXXFLAGS="-g $*"
 if [ -z "$CXXFLAGS" ]; then
   CXXFLAGS='-O3 -DNDEBUG'
 fi
-CFLAGS="$CXXFLAGS"
+CFLAGS="-g $CXXFLAGS"
 
 
 
