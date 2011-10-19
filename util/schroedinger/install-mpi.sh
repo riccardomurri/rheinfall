@@ -113,20 +113,21 @@ case "$mpi" in
             set -x
             # see: /panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/mpi/src/install.info
             ${src_home}/openmpi-${OPENMPI}/configure --prefix=${sw} \
-                --enable-branch-probabilities \
-                --enable-peruse \
-                --enable-per-user-config-files \
-                --enable-cxx-exceptions \
-                --enable-mpi-threads \
-                --enable-openib-ibcm \
-                --enable-openib-rdmacm \
-                --with-sge \
+                --disable-ipv6 \
                 --disable-mem-debug \
                 --disable-mem-profile \
                 --disable-mpi-f77 \
                 --disable-mpi-f90 \
-                --disable-ipv6 \
+                --disable-mpi-threads \
+                --enable-branch-probabilities \
+                --enable-cxx-exceptions \
                 --enable-mpirun-prefix-by-default \
+                --enable-openib-ibcm \
+                --enable-openib-rdmacm \
+                --enable-per-user-config-files \
+                --enable-peruse \
+                --with-sge \
+                --without-mpi-param-check \
                 CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
                 CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}";
             $concurrent_make
