@@ -43,6 +43,9 @@ set_mpi_and_compiler_flavor () {
     # rebuild flavor as a correct filename
     flavor="${rev}-${compiler}-${mpi}"
 
+    ## load modules
+    source /panfs/panfs0.ften.es.hpcn.uzh.ch/share/software/Modules/3.2.8/init/sh
+
     supported_compilers='gcc412 gcc434 gcc441 gcc443 gcc450 icc'
     supported_mpilibs='openmpi parastation parastation-mt mvapich intel none'
 
