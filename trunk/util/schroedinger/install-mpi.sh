@@ -196,7 +196,8 @@ esac
     env \
         CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
         CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}" \
-        ${src_home}/configure --prefix=${sw} --enable-cxx-exceptions
+        ${src_home}/libunwind-${LIBUNWIND}/configure \
+          --prefix=${sw} --enable-cxx-exceptions
     $concurrent_make
     make install
     set +x
@@ -223,11 +224,11 @@ esac
     env \
         CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
         CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}" \
-        ${src_home}/configure --prefix=${sw} \
-        --disable-mpi-io \
-        --enable-demangling=GNU \
-        --enable-collective-report-default \
-        --with-cc=${CC} --with-cxx=${CXX} 
+        ${src_home}/mpiP-${MPIP}/configure --prefix=${sw} \
+          --disable-mpi-io \
+          --enable-demangling=GNU \
+          --enable-collective-report-default \
+          --with-cc=${CC} --with-cxx=${CXX} 
     $concurrent_make
     make install
     set +x
