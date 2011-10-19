@@ -108,8 +108,9 @@ esac
 # use Google's tcmalloc
 LD_PRELOAD=${sw}/lib/libtcmalloc.so
 export LD_PRELOAD
+export OMPI_MCA_memory_ptmalloc2_disable=1
 
-
+set -x
 case "$exec" in
     *rank*-mpi-omp) # hybrid MPI+OpenMP
         np=$(expr $NSLOTS / $cpus_per_node)
@@ -119,8 +120,9 @@ case "$exec" in
                 exit 2
                 ;;
             ompi*) 
-                mpirun -np $np \
-                    --bynode --nooversubscribe $gmca $hostfile \
+                mpirun -np $np --hostfile $hostfile_uniq \
+                    --gmca btl tcp,self -x OMPI_MCA_memory_ptmalloc2_disable \
+                    --bynode --nooversubscribe \
                     -x LD_PRELOAD -x LD_LIBRARY_PATH -x PATH \
                     $libdir/_exec.sh $exec $opts $files 
                 ;;
@@ -153,8 +155,9 @@ case "$exec" in
                 exit 2
                 ;;
             ompi*) 
-                mpirun -np $NSLOTS --gmca btl tcp,sm,self \
-                    --bynode --nooversubscribe --bind-to-core $gmca $hostfile \
+                mpirun -np $NSLOTS --hostfile $hostfile \
+                    --gmca btl tcp,self -x OMPI_MCA_memory_ptmalloc2_disable \
+                    --bynode --nooversubscribe --bind-to-core \
                     -x LD_PRELOAD -x LD_LIBRARY_PATH -x PATH \
                     $libdir/_exec.sh $exec $opts $files 
                 ;;
@@ -184,6 +187,7 @@ case "$exec" in
         fi
 esac
 rc=$?
+set +x
 
 echo === end date ===
 date
