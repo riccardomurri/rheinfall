@@ -3,7 +3,7 @@
 #$ -cwd 
 #$ -S /bin/bash
 #$ -j y
-#$ -N prereq
+#$ -N install-mpi
 
 
 ## Customization section
@@ -12,23 +12,24 @@
 # the required version (or a newer one) installed in the
 # standard PATH/LD_LIBRARY_PATH
 #
-OPENMPI=1.4.3 # http://www.open-mpi.org/software/ompi/v1.4/downloads/openmpi-1.4.3.tar.bz2
-MVAPICH2=1.5 # svn co https://mvapich.cse.ohio-state.edu/svn/mpi/mvapich2/branches/1.5/ mvapich2 
+OPENMPI=1.4.3   # http://www.open-mpi.org/software/ompi/v1.4/downloads/openmpi-1.4.3.tar.bz2
+MVAPICH2=1.5    # svn co https://mvapich.cse.ohio-state.edu/svn/mpi/mvapich2/branches/1.5/ mvapich2 
+MPIP=3.3        # wget http://switch.dl.sourceforge.net/project/mpip/mpiP/mpiP-${MPIP}/mpiP-${MPIP}.tar.gz
+LIBUNWIND=1.0.1 # wget http://download.savannah.gnu.org/releases/libunwind/libunwind-${LIBUNWIND}.tar.gz
 
 ## No customization should be necessary further down here
-
 
 PROG="$(basename $0)"
 
 usage () {
 cat <<EOF
-Usage: $PROG [COMPILER]
+Usage: $PROG COMPILER-MPILIB
 
-Download and install OpenMPI and MVAPICH software into the
-"`pwd`/sw-COMPILER-MPILIB" directory.
+Download and install OpenMPI or MVAPICH software into the
+"$HOME/sw/COMPILER-MPILIB" directory.
 
 First argument COMPILER selects the compiler type (gcc443, gcc450,
-intel); compiler defaults to gcc443.
+intel); second argument MPILIB must be one of 'ompi' or 'mvapich'.
 
 EOF
 }
@@ -125,8 +126,8 @@ case "$mpi" in
                 --disable-mpi-f77 \
                 --disable-mpi-f90 \
                 --disable-ipv6 \
-                --enable-mpirun-prefix-by-default 
-            CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
+                --enable-mpirun-prefix-by-default \
+                CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
                 CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}";
             $concurrent_make
             make install
@@ -173,6 +174,63 @@ case "$mpi" in
         )
         ;; # MVAPICH2
 esac
+
+# libunwind
+(   _ Installing libunwind ${LIBUNWIND} ...
+
+    sw="$HOME/sw/${compiler}-${mpi}"
+    mkdir -p "$sw"
+    cd "$sw"
+    mkdir -p build
+    cd ${sw}/build/
+    PATH=${sw}/bin:$PATH
+    LD_LIBRARY_PATH=${sw}/lib:$LD_LIBRARY_PATH
+            
+    rm -rf libunwind-${LIBUNWIND}
+    #wget http://download.savannah.gnu.org/releases/libunwind/libunwind-${LIBUNWIND}.tar.gz
+    mkdir -p libunwind-${LIBUNWIND}
+    cd libunwind-${LIBUNWIND}
+            
+    set -x
+    env \
+        CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
+        CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}" \
+        ${src_home}/configure --prefix=${sw} --enable-cxx-exceptions
+    $concurrent_make
+    make install
+    set +x
+)     
+
+# mpiP
+(   _ Installing mpiP ${MPIP}
+
+    sw="$HOME/sw/${compiler}-${mpi}"
+    mkdir -p "$sw"
+    cd "$sw"
+    mkdir -p build
+    cd ${sw}/build/
+    PATH=${sw}/bin:$PATH
+    LD_LIBRARY_PATH=${sw}/lib:$LD_LIBRARY_PATH
+            
+    rm -rf mpiP-${MPIP}
+    #wget http://switch.dl.sourceforge.net/project/mpip/mpiP/mpiP-${MPIP}/mpiP-${MPIP}.tar.gz
+    mkdir -p mpiP-${MPIP}
+    cd mpiP-${MPIP}
+            
+    set -x
+    # mpiP's ./configure is too old and cannot cope with CFLAGS=... given on the command-line
+    env \
+        CC=${CC} CFLAGS="${cflags} ${std_cflags}" \
+        CXX=${CXX} CXXFLAGS="${cxxflags} ${std_cxxflags}" \
+        ${src_home}/configure --prefix=${sw} \
+        --disable-mpi-io \
+        --enable-demangling=GNU \
+        --enable-collective-report-default \
+        --with-cc=${CC} --with-cxx=${CXX} 
+    $concurrent_make
+    make install
+    set +x
+)
 
 echo === All done. ===
 exit $rc
