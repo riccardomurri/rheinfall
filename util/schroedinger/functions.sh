@@ -242,13 +242,18 @@ prepare_openmpi_environment () {
         (while read hostname nslots queue rest; 
             do echo "$hostname slots=$nslots"; done) > $TMPDIR/hostfile
 
+    cat $PE_HOSTFILE | \
+        (while read hostname nslots queue rest; 
+            do echo "$hostname"; done) | uniq > $TMPDIR/hostfile.uniq
+
     set -e
     eval `ssh-agent -s`
     ssh-add $HOME/.ssh/id_dsa
     set +e
    
     gmca="--gmca plm_rsh_agent $HOME/bin/qrsh.sh"
-    hostfile="--hostfile $TMPDIR/hostfile"
+    hostfile="$TMPDIR/hostfile"
+    hostfile_uniq="$TMPDIR/hostfile.uniq"
 }
 
 
