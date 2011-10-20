@@ -30,6 +30,27 @@
 #define CONFIG_HPP
 
 
+/// Do not perform any pivoting: the first row to arrive is used for pivoting.
+#define RF_PIVOT_NONE      0
+
+/// Choose the row with less entries as pivot; break ties by choosing
+/// the one with the "best" leading coefficient
+#define RF_PIVOT_SPARSITY  1
+
+/// Choose the row with the less weight as pivot row.
+#define RF_PIVOT_WEIGHT    2
+
+/// Use threshold pivoting in the core elimination algorithm
+#define RF_PIVOT_THRESHOLD 3
+
+/// Strategy to use when picking a pivot row from a block. Must be one of:
+/// - RF_PIVOT_THRESHOLD
+/// - RF_PIVOT_SPARSITY
+/// - RF_PIVOT_WEIGHT
+/// - RF_PIVOT_NONE
+#define RF_PIVOT_STRATEGY 3
+
+
 // uncomment/define to enable computing the arithmetic operations count
 #define RF_ENABLE_STATS
 

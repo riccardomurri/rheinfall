@@ -939,7 +939,7 @@ step()
     }
     assert (NULL != u);
 
-#if 0
+#if (RF_PIVOT_STRATEGY == RF_PIVOT_THRESHOLD)
     // find the row with "best" pivot
     val_t best = u->leading_term_;
     for (typename row_block::iterator it = rows.begin(); it != rows.end(); ++it) {
@@ -969,16 +969,51 @@ step()
     if (!!new_pivot_row_loc) {
       std::swap(u, *(new_pivot_row_loc.get()));
     };
-#endif // if 0
+#endif // if RF_PIVOT_STRATEGY == RF_PIVOT_THRESHOLD
+
     // perform elimination -- return NULL in case resulting row is full of zeroes
     for (typename row_block::iterator it = rows.begin(); it != rows.end(); ++it) {
-#if 1
+#if (RF_PIVOT_STRATEGY == RF_PIVOT_WEIGHT)
       // pivot for sparsity and break ties by usual algorithm
       if (((*it)->weight() < u->weight())
           or ((*it)->weight() == u->weight()
               and first_is_better_pivot<val_t>((*it)->leading_term_, u->leading_term_)))
         std::swap(u, *it);
-#endif // if 1
+#elif (RF_PIVOT_STRATEGY == RF_PIVOT_SPARSITY)
+      // swap `u` and the new row if the new row is shorter, or has "better" leading term
+      if (Row<val_t,coord_t,allocator>::sparse == (*it)->kind) {
+        SparseRow<val_t,coord_t,allocator>* s = 
+          static_cast<SparseRow<val_t,coord_t,allocator>*>(*it);
+        if (Row<val_t,coord_t,allocator>::sparse == u->kind) {
+          // if `*it` (new row) is shorter, it becomes the new pivot row
+          if (s->size() < u->size())
+            std::swap(u, *it);
+        }
+        else if (Row<val_t,coord_t,allocator>::dense == u->kind)
+          std::swap(u, *it);
+        else 
+          assert(false); // forgot one kind in chained `if`s?
+      }
+      else if (Row<val_t,coord_t,allocator>::dense == (*it)->kind) {
+        if (Row<val_t,coord_t,allocator>::dense == u->kind) {
+          // swap `u` and `row` iff `row`'s leading term is "better"
+          if (first_is_better_pivot<val_t>
+              (static_cast<DenseRow<val_t,coord_t,allocator>*>(*it)->leading_term_,
+               static_cast<DenseRow<val_t,coord_t,allocator>*>(u)->leading_term_))
+            // swap `u` and `row`
+            std::swap(u, *it);
+        };
+        // else, if `u` is a sparse row, no need to check further
+      }
+      else
+        assert(false); // forgot a row kind in `if` chain?
+#elif (RF_PIVOT_STRATEGY == RF_PIVOT_NONE)
+      // no row exchanges
+# elif (RF_PIVOT_STRATEGY == RF_PIVOT_THRESHOLD)
+      // already done above
+#else
+# error "RF_PIVOT_STRATEGY should be one of: RF_PIVOT_NONE, RF_PIVOT_SPARSITY, RF_PIVOT_THRESHOLD, RF_PIVOT_WEIGHT"
+#endif // if RF_PIVOT_STRATEGY == ...
       val_t a, b;
       get_row_multipliers<val_t>((u)->leading_term_, (*it)->leading_term_, 
                                  a, b);
