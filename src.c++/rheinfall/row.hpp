@@ -31,6 +31,7 @@
 
 
 #include "config.hpp"
+#include "stats.hpp"
 
 #ifdef WITH_MPI
 // class needs to be serializable for Boost.MPI to handle it
