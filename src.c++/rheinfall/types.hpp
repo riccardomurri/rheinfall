@@ -38,7 +38,8 @@ namespace mpl = boost::mpl;
 
 #include <algorithm>
 #include <cassert>
-#include <cstdlib> // std::abs
+#include <cmath>   // std::abs(float, double, long double)
+#include <cstdlib> // std::abs(int, long it, long long int)
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -59,11 +60,13 @@ namespace rheinfall {
 
   /** Return @c true if value @a candidate satisfies the "threshold
       pivoting" constraint, given the "best" pivot value @a best and
-      the threshold @a ths.  The default implementation always returns
-      @c false so that any pivot is considered a candidate; see
-      `Processor::step()`.  (The reason this is implemented as a
-      function here is that the "threshold pivoting" relation is
-      different on the integers and on floating-point numbers.) */
+      the threshold @a ths.
+
+      The default implementation always returns @c false so that any
+      pivot is considered a candidate; see `Processor::step()`.  (The
+      reason this is implemented as a function here is that the
+      "threshold pivoting" relation is different on the integers and
+      on floating-point numbers.) */
   template <typename val_t>
   static inline
   bool good_enough_pivot(val_t const& best, val_t const& ths, 
@@ -140,7 +143,16 @@ namespace rheinfall {
                          T const& ths,              \
                          T const& candidate)        \
   {                                                 \
-    return (candidate <= (best*ths));               \
+  /* see comment in `first_is_better_pivot` */      \
+    return                                          \
+      ((best > 0) ?                                 \
+       ((candidate > 0) ?                           \
+        (candidate < best*ths)                      \
+        : (-best*ths < candidate))                  \
+        : /* best < 0 */                            \
+       ((candidate > 0) ?                           \
+        (best*ths < -candidate)                     \
+        : (best*ths < candidate)));                 \
   };                                                \
 
   /// The GCD function for integral types.
@@ -213,7 +225,10 @@ namespace rheinfall {
                          T const& ths,              \
                          T const& candidate)        \
   {                                                 \
-    return (candidate >= (best*ths));               \
+    T const ratio = candidate / best;               \
+    return ((ratio > 0)?                            \
+            (ratio >= ths)                          \
+            : (ratio <= -ths));                     \
   };                                                \
 
   RF_TYPE_IS_DIVISION_RING(float)
