@@ -108,10 +108,11 @@ public:
         footer line (consisting of three 0's in a row) is read.  In
         any case, the @a input stream is not closed.
         
-        If @c local_only is @c true (default), only rows assigned to the
-        local MPI rank are retained and other are discarded.  If @c
-        local_only is @c false, rows are sent to the destination MPI
-        rank as soon as they are read; only one rank should do the I/O.
+        If @c local_only is @c true (default), only rows assigned to
+        the local MPI rank are retained and other are discarded.  If
+        @c local_only is @c false, rows are sent to the destination
+        MPI rank as soon as they are read; in this case, only one rank
+        should do the I/O.
         
         If @c transpose is @c true, then row and column values read from
         the stream are exchanged, i.e., the transpose of the matrix is
@@ -127,29 +128,12 @@ public:
         http://www-ljk.imag.fr/membres/Jean-Guillaume.Dumas/simc.html
         for details.  In particular, this implies that entries
         belonging to one row are not interleaved with entries from
-        other rows; i.e., that it can consider reading row @a i
-        complete as soon as it finds a row index @a j!=i. 
-        
-        If arguments @a nrows and @a ncols are null, then the first
-        line read from stream @a input is assumed to be the SMS header
-        line, from which the number of rows and columns is extracted
-        (and written to @a nrows and @a ncols); otherwise, if @a nrows
-        is not zero, no header line is read and @a nrows, @a ncols
-        must contain the exact number of rows and columns in the
-        matrix.
+        other rows; i.e., the algorithm can consider reading row @a i
+        done as soon as it finds a row index @a j!=i. 
 
-        Reading from the stream is terminated by EOF or after the SMS
-        footer line (consisting of three 0's in a row) is read.  In
-        any case, the @a input stream is not closed.
-        
-        If @c local_only is @c true (default), only rows assigned to the
-        local MPI rank are retained and other are discarded.  If @c
-        local_only is @c false, rows are sent to the destination MPI
-        rank as soon as they are read; only one rank should do the I/O.
-        
-        If @c transpose is @c true, then row and column values read from
-        the stream are exchanged, i.e., the transpose of the matrix is
-        read into memory. */
+        For the rest (including meaning of the arguments), this
+        function behaves exacly as @c read_triples (which see).
+    */
     coord_t read_sms(std::istream& input, coord_t& nrows, coord_t& ncols, 
                      const bool local_only=true, const bool transpose=false);
 
@@ -447,7 +431,7 @@ public:
       char M;
       input >> nrows >> ncols >> M;
       if (input.fail() or 'M' != M)
-        throw std::domain_error("Cannot read SMS header");
+        throw std::runtime_error("Cannot read SMS header");
       if (transpose)
         std::swap(nrows, ncols);
     };
@@ -460,16 +444,30 @@ public:
     val_t value;
     while (not input.eof()) {
       input >> i >> j >> value;
-      assert(0 <= i and i <= nrows);
-      assert(0 <= j and j <= ncols);
-      // ignore zero entries in matrix -- they shouldn't be here in the first place
-      if (0 == value and 0 != i and 0 != j) // '0 0 0' is end-of-stream marker
-        continue; 
-      if (transpose)
-        std::swap(i, j);
       // SMS indices are 1-based
       --i;
       --j;
+      // check validity of the data we read; since '0 0 0' is the
+      // end-of-stream marker, we have to case for it separately
+      if (not (-1 == i and -1 == j and 0 == value)) { 
+        if (not(0 <= i and i < nrows)) {
+          std::ostringstream msg; 
+          msg << "Invalid row index '" << (i+1) << "',"
+              << " should be >0 and <" << nrows;
+          throw std::runtime_error(msg.str());
+        };
+        if (not (0 <= j and j < ncols)) {
+          std::ostringstream msg; 
+          msg << "Invalid column index '" << (j+1) << "'"
+              << " should be >0 and <" << ncols;
+          throw std::runtime_error(msg.str());
+        };
+        // ignore zero entries in matrix -- they shouldn't be here in the first place
+        if (0 == value) 
+          continue; 
+      };
+      if (transpose)
+        std::swap(i, j);
       // if row index changes, then a new row is starting, so commit the old one.
       if (i != last_row_index) {
         // set initial row number
@@ -503,8 +501,8 @@ public:
       };
       if (-1 == i and -1 == j and 0 == value)
         break; // end of matrix stream
-      ++nnz;
       row->set(j, value);
+      ++nnz;
     }; // while (! eof)
     
 #ifdef WITH_MPI
@@ -528,7 +526,7 @@ public:
       char M;
       input >> nrows >> ncols >> M;
       if (input.fail() or 'M' != M)
-        throw std::domain_error("Cannot read SMS header");
+        throw std::runtime_error("Cannot read SMS header");
       if (transpose)
         std::swap(nrows, ncols);
     };
@@ -551,18 +549,30 @@ public:
       input >> i >> j >> value;
       if (0 == i and 0 == j and value == 0)
         break; // end of matrix stream
-      if (transpose)
-        std::swap(i, j);
-      // ignore zero entries in matrix -- they shouldn't be there in the first place
-      if (value == 0)
-        continue; 
-      ++nnz;
-      assert(0 <= i and i <= nrows);
-      assert(0 <= j and j <= ncols);
       // SMS indices are 1-based
       --i;
       --j;
+      // check validity of the data we read
+      if (not(0 <= i and i < nrows)) {
+        std::ostringstream msg; 
+        msg << "Invalid row index '" << (i+1) << "',"
+            << " should be >0 and <" << nrows;
+        throw std::runtime_error(msg.str());
+      };
+      if (not (0 <= j and j < ncols)) {
+        std::ostringstream msg; 
+        msg << "Invalid column index '" << (j+1) << "'"
+            << " should be >0 and <" << ncols;
+        throw std::runtime_error(msg.str());
+      };
+      // ignore zero entries in matrix -- they shouldn't be here in the first place
+      if (0 == value) 
+        continue; 
+      // transpose if needed
+      if (transpose)
+        std::swap(i, j);
       m[i][j] = value;
+      ++nnz;
     }; // while(not eof)
 
 #ifdef WITH_MPI
