@@ -415,6 +415,7 @@ main(int argc, char** argv)
 #else
     else if ('p' == c) {
       // threshold for pivoting
+# if (RF_PIVOT_STRATEGY == RF_PIVOT_THRESHOLD)
       std::istringstream arg(optarg);
       arg >> pivot_threshold;
       if (pivot_threshold <= 0) {
@@ -422,6 +423,11 @@ main(int argc, char** argv)
                   << " Aborting." << std::endl;
         return 1;
       };
+# else
+      std::cerr << "Warning: Ignoring option -p/--pivot-threshold,"
+                << " which only makes sense in threshold pivoting mode."
+                << std::endl;
+# endif
     }
 #endif
     else if ('t' == c) {
