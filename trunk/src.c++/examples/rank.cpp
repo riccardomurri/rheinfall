@@ -412,7 +412,7 @@ main(int argc, char** argv)
 
   coord_t width = 1;
   float dense_threshold = 40.0;
-  val_t pivot_threshold = 1;
+  val_t pivot_threshold = 2;
   bool transpose = false;
 
 #ifdef WITH_MODULAR_VALUES

@@ -44,10 +44,10 @@
 #define RF_PIVOT_THRESHOLD 3
 
 /// Strategy to use when picking a pivot row from a block. Must be one of:
-/// - RF_PIVOT_THRESHOLD
-/// - RF_PIVOT_SPARSITY
-/// - RF_PIVOT_WEIGHT
-/// - RF_PIVOT_NONE
+/// 0- RF_PIVOT_NONE
+/// 1- RF_PIVOT_SPARSITY
+/// 2- RF_PIVOT_WEIGHT
+/// 3- RF_PIVOT_THRESHOLD
 #define RF_PIVOT_STRATEGY 3
 
 
