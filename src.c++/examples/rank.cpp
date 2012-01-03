@@ -28,6 +28,69 @@
 
 #include <config.h>
 
+#if 1
+// profile memory allocation times
+// adapted from: http://chkno.net/memory-profiler-c++.html
+//
+
+# include <time.h>    // clock
+# include <cstdlib>   // malloc,free
+# include <stdexcept> // std::bad_alloc
+
+static clock_t total_malloc_time = 0;
+static clock_t total_free_time = 0;
+
+extern void* operator new(size_t size, const std::nothrow_t& nothrow_constant) throw()
+{
+  clock_t const t0 = clock();
+  void* const buf = malloc(size);
+  total_malloc_time += (clock() - t0);
+  return buf;
+}
+
+extern void* operator new(size_t size) throw(std::bad_alloc)
+{
+  clock_t const t0 = clock();
+  void* const buf = malloc(size);
+  total_malloc_time += (clock() - t0);
+  if (!buf) 
+    throw std::bad_alloc();
+  return buf;
+}
+
+extern void* operator new[] (size_t size, const std::nothrow_t& nothrow_constant) throw() 
+{
+  clock_t const t0 = clock();
+  void* const buf = malloc(size);
+  total_malloc_time += (clock() - t0);
+  return buf;
+}
+
+extern void* operator new[] (size_t size) throw(std::bad_alloc) 
+{
+  clock_t const t0 = clock();
+  void* const buf = malloc(size);
+  total_malloc_time += (clock() - t0);
+  if (!buf) 
+    throw std::bad_alloc();
+  return buf;
+}
+
+extern void operator delete (void* data)
+{
+  clock_t const t0 = clock();
+  free(data);
+  total_free_time += (clock() - t0);
+}
+
+extern void operator delete [] (void* data)
+{
+  clock_t const t0 = clock();
+  free(data);
+  total_free_time += (clock() - t0);
+}
+#endif
+
 // matrix dimensions should fit into an `long` integer type
 typedef long coord_t;
 
@@ -187,6 +250,11 @@ typedef boost::xint::integer val_t;
 #include <sstream>
 #include <stdexcept>
 #include <utility>
+
+#if 1
+# define HAVE_EXT_MALLOC_ALLOCATOR_H 1
+# define USE_MALLOC_ALLOCATOR 1
+#endif 
 
 #if defined(HAVE_EXT_MALLOC_ALLOCATOR_H) && defined(USE_MALLOC_ALLOCATOR)
 # include <ext/malloc_allocator.h>
@@ -630,6 +698,12 @@ main(int argc, char** argv)
         std::cout << " denserow_elts:" << stats.denserow_elts;
       };
 #endif
+
+#if 1
+      std::cout << " malloc_time:" << float(total_malloc_time) / CLOCKS_PER_SEC;
+      std::cout << " free_time:" << float(total_free_time) / CLOCKS_PER_SEC;
+#endif
+
       if (0 == myid)
         std::cout << std::endl;
     };

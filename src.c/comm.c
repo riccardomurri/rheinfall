@@ -42,11 +42,6 @@
 #include <stdio.h>
 
 
-#ifdef _OPENMP
-# include <omp.h>
-#endif
-
-
 #ifdef WITH_MPI
 # include <mpi.h>
 /** MPI tags for different message types. */
@@ -57,10 +52,6 @@ enum mpi_tags {
 };
 #endif
 
-
-#if defined(WITH_MPI) && defined(_OPENMP)
-static omp_lock_t mpi_send_lock_;
-#endif
 
 int comm_send_end(const switchboard_t* sb, coord_t dest)
 {
@@ -74,14 +65,8 @@ int comm_send_end(const switchboard_t* sb, coord_t dest)
   }
 #ifdef WITH_MPI
   else { // ship to remote process
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-    omp_set_lock(&mpi_send_lock_);
-# endif
     const int rc = MPI_Send((void*)&dest, 1, mpitype_coord_t, 
                             owner(sb, dest), TAG_END, sb->comm);
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-    omp_unset_lock(&mpi_send_lock_);
-# endif
     return rc;
   };
 #endif
@@ -118,16 +103,10 @@ int comm_send_sparse_row(const switchboard_t* sb, outbox_t* outbox, sparse_row_t
     row_t* row_p = rows_list_extend1(&(outbox->rows));
     row_p->data = row; /* will free row when MPI req is complete */
     row_p->kind = ROW_SPARSE; 
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-    omp_set_lock(&mpi_send_lock_);
-# endif
     /* XXX: send row as a byte string - assume homogeneous arch here */
     const int rc = MPI_Issend(row, sparse_row_ub(row) - sparse_row_lb(row), MPI_BYTE,
                               owner(sb, column), TAG_ROW_SPARSE, MPI_COMM_WORLD,
                               req_p);
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-    omp_unset_lock(&mpi_send_lock_);
-# endif
     return rc;
   };
 #endif // WITH_MPI
@@ -151,16 +130,10 @@ int comm_send_dense_row(const switchboard_t* sb, outbox_t* outbox, dense_row_t* 
     row_t* row_p = rows_list_extend1(&(outbox->rows));
     row_p->data = row; /* will free row when MPI req is complete */
     row_p->kind = ROW_DENSE;
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-    omp_set_lock(&mpi_send_lock_);
-# endif
     /* XXX: send row as a byte string - assume homogeneoys arch here */
     const int rc = MPI_Issend(row, dense_row_ub(row) - dense_row_lb(row), MPI_BYTE,
                               owner(sb, column), TAG_ROW_DENSE, MPI_COMM_WORLD,
                               req_p);
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-    omp_unset_lock(&mpi_send_lock_);
-# endif
     return rc;
   };
 #endif // WITH_MPI
@@ -190,15 +163,9 @@ outbox_t* comm_remove_completed(outbox_t* outbox)
     int count = 0;
     int* completed = xcalloc(sizeof(int), size);
     MPI_Status* statuses = xmalloc(sizeof(MPI_Status)*size);
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-    omp_set_lock(&mpi_send_lock_);
-# endif
     // check if some test messages have arrived...
     MPI_Testsome(size, outbox->requests->storage,
                  &count, completed, statuses);
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-    omp_unset_lock(&mpi_send_lock_);
-# endif
     // ...and copy incomplete requests into a new outbox
     outbox_t* new_outbox = outbox_new(size - count);
     for (int n = 0; n < size; ++n) {
@@ -241,14 +208,8 @@ outbox_t* comm_wait_all_and_then_free(outbox_t* outbox)
   const int size = requests_list_size(outbox->requests);
   if (size > 0) {
     MPI_Status* statuses = calloc(sizeof(MPI_Status), size);
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-    omp_set_lock(&mpi_send_lock_);
-# endif
     // check if some test messages have arrived...
     MPI_Waitall(size, outbox->requests->storage, statuses);
-# if defined(_OPENMP) && defined(WITH_MPI_SERIALIZED)
-    omp_unset_lock(&mpi_send_lock_);
-# endif
     // ...free corresponding rows...
     for (int n = 0; n < size; ++n) {
       if (ROW_SPARSE == outbox->rows->storage[n].kind)

@@ -35,10 +35,6 @@
 #include "rheinfall.h"
 #include "switchboard.h"
 
-#ifdef _OPENMP
-# include <omp.h>
-#endif
-
 #ifdef WITH_MPI
 # include <mpi.h>
 #endif
@@ -53,50 +49,6 @@
 #include <sys/time.h>
 #include <ucontext.h>     // getcontext, setcontext
 #include <unistd.h>
-
-
-#if defined(WITH_MPI_SERIALIZED) || defined(WITH_MPI_MULTIPLE)
-static const char const*
-mpi_threading_model_name(const int provided)
-{
-  if (MPI_THREAD_SINGLE == provided)
-    return "MPI_THREAD_SINGLE";
-  else if (MPI_THREAD_FUNNELED == provided)
-    return "MPI_THREAD_FUNNELED";
-  else if (MPI_THREAD_SERIALIZED == provided)
-    return "MPI_THREAD_SERIALIZED";
-  else if (MPI_THREAD_MULTIPLE == provided)
-    return "MPI_THREAD_MULTIPLE";
-  else 
-    return "an unknown threading model";
-}
-#endif
-
-#ifdef WITH_MPI
-int mpi_init(int* argc_p, char*** argv_p)
-{
-#ifdef _OPENMP
-# ifdef WITH_MPI_SERIALIZED
-  const int required = (1 == omp_get_num_threads() ? MPI_THREAD_SINGLE : MPI_THREAD_SERIALIZED);
-# else
-  const int required = (1 == omp_get_num_threads() ? MPI_THREAD_SINGLE : MPI_THREAD_MULTIPLE);
-# endif // defined(WITH_MPI_SERIALIZED)
-  int provided;
-  const int rc = MPI_Init_thread(argc_p, argv_p, required, &provided);
-  if (required > provided) {
-    int myrank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
-    fprintf(stderr, 
-            "WARNING: MPI rank %d requested %s but the MPI library provided %s\n",
-            myrank, mpi_threading_model_name(required), mpi_threading_model_name(provided));
-  };
-  return rc;
-#else
-  // no OpenMP, use non-threaded MPI
-  return MPI_Init(argc_p, argv_p);
-#endif // defined(_OPENMP)
-}
-#endif // WITH_MPI
 
 
 //
@@ -210,24 +162,8 @@ main(int argc, char** argv)
 
 #ifdef WITH_MPI
   int me;
-# ifdef _OPENMP
-#  ifdef WITH_MPI_SERIALIZED
-  const int required = (1 == omp_get_num_threads() ? MPI_THREAD_SINGLE : MPI_THREAD_SERIALIZED);
-#  else
-  const int required = (1 == omp_get_num_threads() ? MPI_THREAD_SINGLE : MPI_THREAD_MULTIPLE);
-#  endif
-  int provided;
-  MPI_Init_thread(&argc, &argv, required, &provided);
-  MPI_Comm_rank(MPI_COMM_WORLD, &me);
-  if (required > provided) {
-    fprintf(stderr, "WARNING: MPI rank %d requested %s but MPI library provided %s.\n",
-            me, mpi_threading_model_name(required), mpi_threading_model_name(provided));
-  }
-# else
-  // no OpenMP, use non-threaded MPI
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &me);
-# endif
 #else
   const int me = 0;
 #endif // WITH_MPI
@@ -316,9 +252,6 @@ main(int argc, char** argv)
         int mpi_comm_size;
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_comm_size);
         printf(" mpi:%d w:%d", mpi_comm_size, width);
-#endif
-#ifdef _OPENMP
-        printf(" omp:%d", omp_get_max_threads());
 #endif
       }
 

@@ -42,10 +42,6 @@
 typedef struct switchboard_s* switchboard_ptr;
 
 
-#ifdef _OPENMP
-# include <omp.h>
-#endif
-
 #ifdef WITH_MPI
 # include <mpi.h>
 #endif
@@ -108,9 +104,6 @@ struct vpu_s {
   vpu_phase_t phase;
   /** Chosen row for performing elimination. */
   row_t u;
-#ifdef _OPENMP
-  omp_lock_t inbox_lock;
-#endif
   /** Block of rows on which elimination is performed. */
   rows_list_t* workset; 
   /** Block of rows arriving from other VPUs. */ 
