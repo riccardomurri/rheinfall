@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010, 2011 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010, 2011, 2012 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,11 +37,16 @@
 #include "sparserow.hpp"
 #include "denserow.hpp"
 
-#ifdef _OPENMP
-# include <omp.h>
+
+#include <boost/optional.hpp>
+
+#ifdef RF_USE_TBB
+# include <tbb/concurrent_vector.h>
+# include <tbb/mutex.h>
+# include <tbb/parallel_do.h>
+# include <tbb/task.h>
 #endif
 
-# include <boost/optional.hpp>
 
 #include <bits/allocator.h>
 #include <iostream>
@@ -78,7 +83,7 @@ public:
 #endif // WITH_MPI
 
     /** Destructor. When using OpenMP and MPI serialization, destroys
-        the @c mpi_send_lock_; otherwise, does nothing. */
+        the @c mpi_send_mutex_; otherwise, does nothing. */
     ~Rank();
   
 
@@ -158,7 +163,7 @@ public:
     /** Copy the statistics of the local processing units into @a local_stats. 
         This is the same as taking a copy of the @c stats member attribute directly. */
     void get_local_stats(Stats& local_stats) const;
-#endif
+#endif // RF_ENABLE_STATS
 
   protected:
     /** A single processing element. */
@@ -189,15 +194,23 @@ public:
       enum { running, ending, done } phase;
       
       /** A block of rows. */
-      typedef std::list< Row<val_t,coord_t,allocator>*, 
-                         allocator<Row<val_t,coord_t,allocator>*> > row_block;
+#ifndef RF_USE_TBB
+      typedef std::list< 
+        Row<val_t,coord_t,allocator>*, 
+        allocator<Row<val_t,coord_t,allocator>*> > row_block;
+#else
+      typedef tbb::concurrent_vector< 
+        Row<val_t,coord_t,allocator>*, 
+        allocator<Row<val_t,coord_t,allocator>*> > row_block;
+#endif
       /** The block of rows that will be eliminated next time @c step() is called. */
       row_block rows;
       /** List of incoming rows from other processors. */
       row_block inbox;
-#ifdef _OPENMP
-      /** Lock for accessing the @c inbox */
-      omp_lock_t inbox_lock_;
+
+#ifdef RF_USE_TBB
+      /** Locked when a task to process the rows in @c inbox has been already spawned. */
+      tbb::mutex processing_;
 #endif
 
 #ifdef WITH_MPI
@@ -212,12 +225,6 @@ public:
 
       /** Stores the result of the last invocation of @c step(). */
       coord_t result_;
-
-#ifdef _OPENMP
-    private:
-      /** Lock for running the @c step() function. */
-      omp_lock_t processing_lock_;
-#endif
 
 #ifdef RF_ENABLE_STATS
       Stats *stats_ptr;
@@ -240,7 +247,45 @@ public:
       
       /** Return @a true if the processor is in @c done state. */
       bool is_done() const;
-    };
+    }; // class Processor
+
+
+#ifdef RF_USE_TBB
+    /** Wrap a @c Processor::step() invocation so that it can be
+        executed as a TBB task. */
+    class ProcessorStepTask : public tbb::task {
+    public:
+      /** Constructor, taking pointer to a @c rheinfall::Processor instance. */
+      ProcessorStepTask(Processor* const processor)
+        : p_(processor) { }; 
+      
+      /** Copy constructor. */
+      ProcessorStepTask(ProcessorStepTask& other)
+        : p_(other->p_) { }; 
+      
+      /** Invoke @c Processor::step() and then release the @c
+          processing_ lock on the @c Processor instance @c p_. */
+      tbb::task* execute() 
+      { p_->step(); lock_.release(); return NULL; };
+
+    private:
+      Processor* const p_;
+      
+      tbb::mutex::scoped_lock lock_;
+
+      friend class Processor;
+    }; // class ProcessorStepTask
+
+
+    /** Wrap a @c Processor::step() invocation so that it can be
+        executed in TBB @c parallel_for. */
+    class ProcessorStepApply {
+    public:
+        /** Invoke @c Processor::step() */
+        void operator() (Processor* p) const
+        { p->step(); };
+    }; // class ProcessorStepApply
+#endif // RF_USE_TBB
 
 
     /** Number of matrix columns. */
@@ -296,14 +341,14 @@ public:
 
 #ifdef WITH_MPI
     /** Receive messages that have arrived during a computation cycle. */
-    void do_receive(); 
+    void do_mpi_receive(); 
 
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
     /** Lock used to to serialize all outgoing MPI calls
         (receives are already done by the master thread only) */
     // XXX: being an instance variable, this won't serialize
     // MPI calls if there are two concurrent `Rank` operating...
-    mutable omp_lock_t mpi_send_lock_;
+    mutable tbb::mutex mpi_send_mutex_;
 # endif
 #endif // WITH_MPI
 
@@ -383,15 +428,15 @@ public:
 # ifdef RF_ENABLE_STATS
   , stats()
 # endif
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+  , mpi_send_mutex_()
+# endif // RF_USE_TBB && WITH_MPI_SERIALIZED
 {  
   // setup the array of processors
   vpus.reserve(1 + ncols_ / nprocs_);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
         vpus.push_back(new Rank<val_t,coord_t,allocator>::Processor(*this, c));
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-    omp_init_lock(& mpi_send_lock_); 
-# endif // _OPENMP && WITH_MPI_SERIALIZED
 # ifdef RF_ENABLE_STATS
     for (typename vpu_array_t::iterator vpu = vpus.begin(); vpu != vpus.end(); ++vpu)
       (*vpu)->stats_ptr = &stats;
@@ -404,9 +449,7 @@ public:
             template<typename T> class allocator>
   Rank<val_t,coord_t,allocator>::~Rank()
   {
-#if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-    omp_destroy_lock(& mpi_send_lock_); 
-#endif // _OPENMP && WITH_MPI_SERIALIZED
+    // nothing to do
   };
 
   
@@ -482,12 +525,12 @@ public:
 #ifdef WITH_MPI
             if (not local_only) {
               mpi::request req;
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-              omp_set_lock(& mpi_send_lock_);
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+              mpi_send_mutex_.lock();
 # endif 
               req = comm_.isend(owner(starting_column), TAG_ROW_SPARSE, row);
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-              omp_unset_lock(& mpi_send_lock_);
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+              mpi_send_mutex_.unlock();
 # endif
               outbox.push_back(req);
             }; // if not local_only
@@ -598,12 +641,12 @@ public:
 #ifdef WITH_MPI
           if (not local_only) {
             mpi::request req;
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-            omp_set_lock(& mpi_send_lock_);
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+            mpi_send_mutex_.lock();
 # endif 
             req = comm_.isend(owner(starting_column), TAG_ROW_SPARSE, row);
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-            omp_unset_lock(& mpi_send_lock_);
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+            mpi_send_mutex_.unlock();
 # endif
             outbox.push_back(req);
           }; // if not local_only
@@ -635,61 +678,33 @@ public:
 
     // where to collect (partial) ranks
     std::vector<coord_t, allocator<coord_t> > r(vpus.size(), 0);
+
+#ifdef RF_USE_TBB
+    //tbb::parallel_do(vpus.begin(), vpus.end(), ProcessorStepApply());
+#endif
   
     coord_t n0 = 0;
     while(n0 < vpus.size()) {
+      for (coord_t n = n0; n < vpus.size(); ++n) {
+#ifdef RF_USE_TBB
+        // wait for the lock to be released by other processing tasks
+        tbb::mutex::scoped_lock processing_lock(vpus[n]->processing_);
+#endif
+        r[n] = vpus[n]->step();
+#ifdef RF_USE_TBB
+        processing_lock.release();
+#endif
+      };
+#ifdef WITH_MPI
+      do_mpi_receive();
+#endif
       // n0 incremented each time a processor goes into `done` state 
       while (n0 < vpus.size() and vpus[n0]->is_done()) {
         delete vpus[n0];
         vpus[n0] = NULL; // faster SIGSEGV
         ++n0;
       };
-      if (n0 >= vpus.size())
-        break; // exit `while(n0 < vpus.size())` loop
-#ifdef _OPENMP
-# pragma omp parallel for schedule(static,w_)
-#endif // _OPENMP
-      for (coord_t n = n0; n < vpus.size(); ++n)
-        r[n] = vpus[n]->step();
-#ifdef WITH_MPI
-      while (boost::optional<mpi::status> status = comm_.iprobe()) { 
-        switch(status->tag()) {
-        case TAG_ROW_SPARSE: {
-          SparseRow<val_t,coord_t,allocator>* new_row = 
-            SparseRow<val_t,coord_t,allocator>::new_from_mpi_message(comm_, status->source(), status->tag());
-          assert(is_local(new_row->first_nonzero_column()));
-          Processor* vpu = vpu_for_column(new_row->first_nonzero_column());
-          assert(NULL != vpu);
-          vpu->recv_row(new_row);
-          break;
-        };
-        case TAG_ROW_DENSE: {
-          DenseRow<val_t,coord_t,allocator>* new_row = 
-            DenseRow<val_t,coord_t,allocator>::new_from_mpi_message(comm_, status->source(), status->tag());
-          assert(is_local(new_row->first_nonzero_column()));
-          Processor* vpu = vpu_for_column(new_row->first_nonzero_column());
-          assert(NULL != vpu);
-          vpu->recv_row(new_row);
-          break;
-        };
-        case TAG_END: {
-          // "end" message received; no new rows will be coming.
-          // But some other rows could have arrived or could
-          // already be in the `inbox`, so we need to make another
-          // pass anyway.  All this boils down to: set a flag,
-          // make another iteration, and end the loop next time.
-          coord_t column = -1;
-          comm_.recv(status->source(), status->tag(), column);
-          assert(column >= 0 and is_local(column));
-          Processor* vpu = vpu_for_column(column);
-          assert(NULL != vpu);
-          vpu->end_phase();
-          break;
-        };
-        }; // switch(status->tag())
-      }; // while(iprobe)
-#endif // WITH_MPI
-    }; // end while(n0 < vpus.size())
+    } while(n0 < vpus.size());
 
     // the partial rank is computed as the sum of all ranks computed
     // by local processors
@@ -803,8 +818,8 @@ public:
 #ifdef WITH_MPI
   else { // ship to remote process
     mpi::request req;
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-    omp_set_lock(& mpi_send_lock_);
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+    mpi_send_mutex_.lock();
 # endif
     if (row->kind == Row<val_t,coord_t,allocator>::sparse) 
       req = comm_.issend(owner(column), TAG_ROW_SPARSE, 
@@ -815,8 +830,8 @@ public:
     else 
       // should not happen!
       throw std::logic_error("Unhandled row kind in Rank::send_row()");
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-    omp_unset_lock(& mpi_send_lock_);
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+    mpi_send_mutex_.unlock();
 # endif
     source.outbox.push_back(std::make_pair(req,row));
   };
@@ -840,17 +855,63 @@ send_end(Processor const& origin, const coord_t column) const
   }
 #ifdef WITH_MPI
   else { // ship to remote process
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-    omp_set_lock(&mpi_send_lock_);
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+    mpi_send_mutex_.lock();
 # endif
     comm_.send(owner(column), TAG_END, column);
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-    omp_unset_lock(&mpi_send_lock_);
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+    mpi_send_mutex_.unlock();
 # endif
   };
-#endif
+#endif // WITH_MPI
 }; // send_end
-  
+
+
+#ifdef WITH_MPI
+template <typename val_t, typename coord_t, 
+          template<typename T> class allocator>
+inline void 
+Rank<val_t,coord_t,allocator>::
+do_mpi_receive()
+{
+  while (boost::optional<mpi::status> status = comm_.iprobe()) { 
+    switch(status->tag()) {
+    case TAG_ROW_SPARSE: {
+      SparseRow<val_t,coord_t,allocator>* new_row = 
+        SparseRow<val_t,coord_t,allocator>::new_from_mpi_message(comm_, status->source(), status->tag());
+      assert(is_local(new_row->first_nonzero_column()));
+      Processor* vpu = vpu_for_column(new_row->first_nonzero_column());
+      assert(NULL != vpu);
+      vpu->recv_row(new_row);
+      break;
+    };
+    case TAG_ROW_DENSE: {
+      DenseRow<val_t,coord_t,allocator>* new_row = 
+        DenseRow<val_t,coord_t,allocator>::new_from_mpi_message(comm_, status->source(), status->tag());
+      assert(is_local(new_row->first_nonzero_column()));
+      Processor* vpu = vpu_for_column(new_row->first_nonzero_column());
+      assert(NULL != vpu);
+      vpu->recv_row(new_row);
+      break;
+    };
+    case TAG_END: {
+      // "end" message received; no new rows will be coming.
+      // But some other rows could have arrived or could
+      // already be in the `inbox`, so we need to make another
+      // pass anyway.  All this boils down to: set a flag,
+      // make another iteration, and end the loop next time.
+      coord_t column = -1;
+      comm_.recv(status->source(), status->tag(), column);
+      assert(column >= 0 and is_local(column));
+      Processor* vpu = vpu_for_column(column);
+      assert(NULL != vpu);
+      vpu->end_phase();
+      break;
+    };
+    }; // switch(status->tag())
+  }; // while(iprobe)
+}; // do_mpi_receive()
+#endif // WITH_MPI
 
 
 // ------- Processor -------
@@ -860,22 +921,20 @@ send_end(Processor const& origin, const coord_t column) const
   Rank<val_t,coord_t,allocator>::Processor::
   Processor(Rank<val_t,coord_t,allocator>& parent, 
             const coord_t column)
-      : parent_(parent),
-        column_(column), 
-        u(NULL), 
-        phase(running), 
-        rows(), 
-        inbox(), 
+      : parent_(parent)
+      , column_(column)
+      , u(NULL)
+      , phase(running)
+      , rows()
+      , inbox()
+#ifdef RF_USE_TBB
+      , processing_()
+#endif
 #ifdef WITH_MPI
-        outbox(), 
+      , outbox()
 #endif
-        result_(0)
-    { 
-#ifdef _OPENMP
-      omp_init_lock(&inbox_lock_);
-      omp_init_lock(&processing_lock_);
-#endif
-    };
+      , result_(0)
+    { };
 
 
 template <typename val_t, typename coord_t, 
@@ -883,10 +942,6 @@ template <typename val_t, typename coord_t,
 Rank<val_t,coord_t,allocator>::Processor::
 ~Processor()
 {
-#ifdef _OPENMP
-      omp_destroy_lock(&inbox_lock_);
-      omp_destroy_lock(&processing_lock_);
-#endif
       if (NULL != u)
         delete u;
       assert(rows.empty());
@@ -907,13 +962,16 @@ recv_row(Row<val_t,coord_t,allocator>* new_row)
 #ifdef RF_ENABLE_STATS
     if (NULL != this->stats_ptr)
       new_row->stats_ptr = this->stats_ptr;
-#endif
-#ifdef _OPENMP
-    omp_set_lock(&inbox_lock_);
-#endif
     inbox.push_back(new_row);
-#ifdef _OPENMP
-    omp_unset_lock(&inbox_lock_);
+# ifdef RF_USE_TBB
+    ProcessorStepTask* t = new(tbb::task::allocate_root()) ProcessorStepTask(this);
+    // if the lock is held, then a task is already scheduled for
+    // stepping the same @c Processor instance.
+    if (t->lock_.try_acquire(this->processing_))
+      tbb::task::spawn(*t);
+    else
+      tbb::task::destroy(*t);
+# endif
 #endif
   };
 
@@ -924,39 +982,39 @@ coord_t
 Rank<val_t,coord_t,allocator>::Processor::
 step() 
 {
-#ifdef _OPENMP
-  omp_set_lock(&processing_lock_);
-#endif
-
   if (is_done())
     return result_;
 
   // receive new rows
-#ifdef _OPENMP
-  omp_set_lock(&inbox_lock_);
-#endif
   std::swap(inbox, rows);
+#ifndef RF_USE_TBB
+  // this is only true when executing sequentially
   assert(inbox.empty());
-#ifdef _OPENMP
-  omp_unset_lock(&inbox_lock_);
 #endif
 
+  bool skip_front = false;
   if (not rows.empty()) {
     // ensure there is one row for elimination
     if (NULL == u) {
       u = rows.front();
-      rows.pop_front();
+      // tbb::concurrent_vector has no erase operation, 
+      // so let's just rebase the vector
+      skip_front = true;
     }
     assert (NULL != u);
 
+    typename row_block::iterator it;
 #if (RF_PIVOT_STRATEGY == RF_PIVOT_THRESHOLD)
     // find the row with "best" pivot
     val_t best = u->leading_term_;
-    for (typename row_block::iterator it = rows.begin(); it != rows.end(); ++it) {
+    it = rows.begin();
+    if (skip_front)
+      ++it;
+    for (/* it */; it != rows.end(); ++it) {
       if (first_is_better_pivot<val_t> ((*it)->leading_term_, best)) {
         best = (*it)->leading_term_;
       };
-    }; // end for (it = rows.begin(); ...)
+    }; // end for (it = rows.cbegin(); ...)
 
     // now choose the "more sparse" row among those whose leading term
     // is within a certain factor of the absolute best pivot
@@ -964,7 +1022,10 @@ step()
     val_t new_pivot = u->leading_term_;
     double new_pivot_row_weight = u->weight();
     boost::optional<typename row_block::iterator> new_pivot_row_loc;
-    for (typename row_block::iterator it = rows.begin(); it != rows.end(); ++it) {
+    it = rows.begin();
+    if (skip_front)
+      ++it;
+    for (/* it */; it != rows.end(); ++it) {
       if (not good_enough_pivot(best, parent_.pivoting_threshold, (*it)->leading_term_))
         continue;
       // pivot for sparsity and break ties by usual algorithm
@@ -982,7 +1043,10 @@ step()
 #endif // if RF_PIVOT_STRATEGY == RF_PIVOT_THRESHOLD
 
     // perform elimination -- return NULL in case resulting row is full of zeroes
-    for (typename row_block::iterator it = rows.begin(); it != rows.end(); ++it) {
+    it = rows.begin();
+    if (skip_front)
+      ++it;
+    for (/* it */; it != rows.end(); ++it) {
 #if (RF_PIVOT_STRATEGY == RF_PIVOT_WEIGHT)
       // pivot for sparsity and break ties by usual algorithm
       if (((*it)->weight() < u->weight())
@@ -1051,8 +1115,8 @@ step()
       //outbox.erase(mpi::test_some(outbox.begin(), outbox.end()), outbox.end());
       typename outbox_t::iterator current(outbox.begin());
       typename outbox_t::iterator completed(outbox.end());
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-      omp_set_lock(&(parent_.mpi_send_lock_));
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+      parent_.mpi_send_mutex_.lock();
 # endif
       while (current != completed) {
         if (!! current->first.test()) {
@@ -1063,8 +1127,8 @@ step()
         else
           ++current;
       }; // while current != completed
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-      omp_unset_lock(&(parent_.mpi_send_lock_));
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+      parent_.mpi_send_mutex_.unlock();
 # endif
       // now the range [completed, end) contains the completed requests
       for (current = completed; current != outbox.end(); ++current) {
@@ -1086,12 +1150,12 @@ step()
            it != outbox.end();
            ++it)
         reqs.push_back(it->first);
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-      omp_set_lock(&(parent_.mpi_send_lock_));
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+      parent_.mpi_send_mutex_.lock();
 # endif
       mpi::wait_all(reqs.begin(), reqs.end());
-# if defined(_OPENMP) and defined(WITH_MPI_SERIALIZED)
-      omp_unset_lock(&(parent_.mpi_send_lock_));
+# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+      mpi_send_mutex_.unlock();
 # endif
       // finally, free message payloads and erase all requests
       for (typename outbox_t::iterator it = outbox.begin();
@@ -1109,9 +1173,6 @@ step()
     phase = done;
   };
 
-#ifdef _OPENMP
-  omp_unset_lock(&processing_lock_);
-#endif
   // exit with 0 only if we never processed any row
   return result_;
 }

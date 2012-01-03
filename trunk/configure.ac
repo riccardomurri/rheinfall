@@ -32,18 +32,6 @@ AC_LANG([C])
 gl_INIT
 
 
-# check for OpenMP
-AC_LANG_PUSH([C])
-AC_OPENMP
-AC_LANG_POP([C])
-AM_CONDITIONAL([HAVE_OPENMP_CC], [test "_$OPENMP_CFLAGS" != '_'])
-
-AC_LANG_PUSH([C++])
-AC_OPENMP
-AC_LANG_POP([C++])
-AM_CONDITIONAL([HAVE_OPENMP_CXX], [test "_$OPENMP_CXXFLAGS" != '_'])
-
-
 # check for MPI
 AC_ARG_WITH([mpi],
     [AS_HELP_STRING([--with-mpi=no|yes|serialized|multiple],
@@ -147,6 +135,99 @@ AC_ARG_WITH([gmp],
       fi
     ])
 AM_CONDITIONAL([HAVE_GMPXX], [test "_$have_gmpxx" = '_yes'])
+
+
+# Check for Intel TBB
+AC_ARG_WITH([tbb],
+    [AS_HELP_STRING([--with-tbb=yes|no|@<:@path@:>@],
+            [Build example programs requiring the Intel TBB library. 
+                If argument is 'yes' or empty, the library must be 
+                reachable with the standard compiler search path; 
+                otherwise the TBB include files have to be in 
+                <path>/include and the compiled library has to 
+                reside in <path>/lib.  If the argument is 'no', then
+                example programs that make use of TBB will not be built.])],
+    [ # option '--with-tbb' given
+      if test "_$withval" != _no ; then :
+          AC_LANG_PUSH([C++])
+         save_CPPFLAGS="$CPPFLAGS"
+         save_CXXFLAGS="$CXXFLAGS"
+         save_LDFLAGS="$LDFLAGS"
+         save_LIBS="$LIBS"
+         if test "_$withval" != "_yes" ; then :
+             TBB_CPPFLAGS="-I$withval/include"
+         fi
+         CPPFLAGS="$save_CPPFLAGS $TBB_CPPFLAGS"
+         AC_CHECK_HEADER([tbb/tbb.h], 
+           [ # 'tbb/tbb.h' found
+             AC_MSG_CHECKING([for the Intel TBB library])
+             # is there a TBB compiled specifically for this arch/compiler?
+             tbb_root="$withval"
+             if test -r "$tbb_root"/Makefile; then :
+                 tbb_arch=$(cd "$tbb_root"; make info | grep '^arch=' | cut -d= -f2)
+                 tbb_runtime=$(cd "$tbb_root"; make info | grep '^runtime=' | cut -d= -f2)
+                 tbb_libdir_guess="$tbb_root/lib/$tbb_arch/$tbb_runtime"
+             fi
+             # directory naming scheme in Intel's 'tbb*_lin.tgz' distribution is
+             # "lib/$tbb_arch/$tbb_runtime", where $tbb_runtime has the the form
+             # "cc<version>_libc<version>_kernel<version>"
+             tbb_libdir_other=$(find "$withval/lib/$tbb_arch" -type d -name 'cc*')
+             # the '' directory is special-cased below: it looks for
+             # TBB in the default compiler search path
+             for libdir in $tbb_libdir_guess $tbb_libdir_other ''; do
+               TBB_LIBS="-ltbb"
+               if test "_$libdir" != '_' ; then :
+                 TBB_LDFLAGS="-L$libdir"
+               else   
+                 TBB_LDFLAGS=""
+               fi
+               LDFLAGS="$save_LDFLAGS $TBB_LDFLAGS"
+               LIBS="$save_LIBS $TBB_LIBS"
+               AC_LINK_IFELSE(
+                   [AC_LANG_SOURCE([
+#include "tbb/task_scheduler_init.h"
+using namespace tbb;
+int main() {
+  task_scheduler_init init;
+  return 0;
+}
+                                ])],
+                   [tbb_found=yes;],
+                   [tbb_found=no;])
+               if test "_$tbb_found" = '_yes' ; then :
+                 break
+               fi
+             done;
+             if test "_$tbb_found" = '_yes' ; then :
+               AC_MSG_RESULT([TBB library found in "$libdir"])
+               have_tbb=yes
+               AC_SUBST([HAVE_TBB],     [1])
+               AC_SUBST([TBB_CPPFLAGS], ["$TBB_CPPFLAGS"])
+               AC_SUBST([TBB_CXXFLAGS], ["-DRF_USE_TBB"])dnl XXX: Rheinfall-specific
+               AC_SUBST([TBB_LDFLAGS],  ["$TBB_LDFLAGS"])
+               AC_SUBST([TBB_LIBS],     ["$TBB_LIBS"])
+             else
+               AC_MSG_RESULT([no TBB library found])
+               have_tbb=no
+               AC_SUBST([TBB_CXXFLAGS], [])
+               AC_SUBST([TBB_LDFLAGS],  [])
+               AC_SUBST([TBB_LIBS],     [])
+               AC_MSG_WARN([Cannot link with the TBB library: not compiling example TBB programs.])
+             fi
+           ], 
+           [ # no include files, disable TBB altogether
+             AC_MSG_RESULT([no]) 
+             have_tbb=no;        
+             AC_MSG_WARN([Cannot include TBB library headers: not compiling example TBB programs.])
+           ])
+         AC_LANG_POP([C++])
+         CPPFLAGS="$save_CPPFLAGS"
+         CXXFLAGS="$save_CXXFLAGS"
+         LDFLAGS="$save_LDFLAGS"
+         LIBS="$save_LIBS"
+      fi # $withval != 'no
+    ])
+AM_CONDITIONAL([HAVE_TBB], [test "_$have_tbb" = '_yes'])
 
 
 # Check for Grid Engine (Sun/Oracle)

@@ -37,11 +37,6 @@
 #include "denserow.hpp"
 #include "types.hpp"
 
-#ifdef _OPENMP
-# include <omp.h>
-# include <boost/optional.hpp>
-#endif
-
 #include <bits/allocator.h>
 #include <iostream>
 #include <list>
@@ -212,10 +207,6 @@ public:
 
       /** List of incoming rows from other processors. */
       row_block inbox_u, inbox_l;
-#ifdef _OPENMP
-      /** Lock for accessing the @c inbox */
-      omp_lock_t inbox_lock_;
-#endif
 
 #ifdef WITH_MPI
       /** Type used for storing the list of rows sent to other
@@ -226,12 +217,6 @@ public:
       /** List of rows sent to other processors and the associated MPI request. 
           We need to keep track of these in order to free the resources when we're done. */
       outbox_t outbox;
-#endif
-
-#ifdef _OPENMP
-    private:
-      /** Lock for running the @c step() function. */
-      omp_lock_t processing_lock_;
 #endif
 
 #ifdef RF_ENABLE_STATS
@@ -671,9 +656,6 @@ public:
       };
       if (n0 >= vpus.size())
         break; // exit `while(n0 < vpus.size())` loop
-#ifdef _OPENMP
-# pragma omp parallel for schedule(static,w_)
-#endif // _OPENMP
       for (coord_t n = n0; n < vpus.size(); ++n)
         vpus[n]->step();
 #ifdef WITH_MPI
@@ -981,12 +963,7 @@ send_end(Processor const& origin, const coord_t column) const
 #ifdef WITH_MPI
       , outbox()
 #endif
-    { 
-#ifdef _OPENMP
-      omp_init_lock(&inbox_lock_);
-      omp_init_lock(&processing_lock_);
-#endif
-    };
+    { };
 
 
 template <typename val_t, typename coord_t, 
@@ -994,10 +971,6 @@ template <typename val_t, typename coord_t,
 LU<val_t,coord_t,allocator>::Processor::
 ~Processor()
 {
-#ifdef _OPENMP
-      omp_destroy_lock(&inbox_lock_);
-      omp_destroy_lock(&processing_lock_);
-#endif
       assert(u_rows.empty());
       assert(l_rows.empty());
       assert(inbox_u.empty());
@@ -1028,14 +1001,8 @@ recv_row(Row<val_t,coord_t,allocator>* new_u_row)
       new_l_row->stats_ptr->ops_count = this->stats_ptr->ops_count;
     }
 #endif
-#ifdef _OPENMP
-    omp_set_lock(&inbox_lock_);
-#endif
     inbox_u.push_back(new_u_row);
     inbox_l.push_back(new_l_row);
-#ifdef _OPENMP
-    omp_unset_lock(&inbox_lock_);
-#endif
   };
 
 
@@ -1059,14 +1026,8 @@ recv_pair(Row<val_t,coord_t,allocator>* new_u_row,
       new_l_row->stats_ptr->ops_count = this->stats_ptr->ops_count;
     }
 #endif
-#ifdef _OPENMP
-    omp_set_lock(&inbox_lock_);
-#endif
     inbox_u.push_back(new_u_row);
     inbox_l.push_back(new_l_row);
-#ifdef _OPENMP
-    omp_unset_lock(&inbox_lock_);
-#endif
   };
 
 
@@ -1076,24 +1037,14 @@ void
 LU<val_t,coord_t,allocator>::Processor::
 step() 
 {
-#ifdef _OPENMP
-  omp_set_lock(&processing_lock_);
-#endif
-
   if (is_done())
     return;
 
   // receive new rows
-#ifdef _OPENMP
-  omp_set_lock(&inbox_lock_);
-#endif
   std::swap(inbox_u, u_rows);
   assert(inbox_u.empty());
   std::swap(inbox_l, l_rows);
   assert(inbox_l.empty());
-#ifdef _OPENMP
-  omp_unset_lock(&inbox_lock_);
-#endif
 
   if (not u_rows.empty()) {
     // ensure there is one row for elimination
@@ -1260,9 +1211,6 @@ step()
     phase = done;
   };
 
-#ifdef _OPENMP
-  omp_unset_lock(&processing_lock_);
-#endif
   return;
 }
 

@@ -13,12 +13,12 @@
 #GMP=5.0.1
 #GIVARO=3.3.2
 #ATLAS=3.8.3
-BOOST=1.47.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.47.0/boost_1_47_0.tar.gz
-TCMALLOC=1.8.3 # http://google-perftools.googlecode.com/files/google-perftools-1.8.3.tar.gz
-#TBB=20100915oss # http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_lin.tgz
+#BOOST=1.47.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.47.0/boost_1_47_0.tar.gz
+#TCMALLOC=1.8.3 # http://google-perftools.googlecode.com/files/google-perftools-1.8.3.tar.gz
+TBB=40_278oss # http://threadingbuildingblocks.org/uploads/78/179/4.0%20update%202/tbb40_278oss_lin.tgz
 
 # set this to install BeBOP's Sparse Matrix Converter library and command-line utility
-SMC=yes # See: http://bebop.cs.berkeley.edu/smc/
+#SMC=yes # See: http://bebop.cs.berkeley.edu/smc/
 
 # if your cluster is homogeneous (i.e., nodes all have the same
 # architecture and memory size), undefining this might give some speedup
@@ -336,7 +336,12 @@ if [ -n "$TBB" ]; then
     cd ${sw}/src/
     set -x 
     case "$TBB" in
-        20100915oss) # TBB download URL changes with release ...
+        # TBB download URL changes with release ...
+        40_278oss)
+            wget -N "http://threadingbuildingblocks.org/uploads/78/179/4.0%20update%202/tbb40_278oss_lin.tgz"
+            wget -N "http://threadingbuildingblocks.org/uploads/78/179/4.0%20update%202/tbb40_278oss_src.tgz"
+            ;;
+        30_20100915oss) 
             wget -N "http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_lin.tgz"
             wget -N "http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_src.tgz"
             ;;
@@ -345,9 +350,26 @@ if [ -n "$TBB" ]; then
             ;;
     esac
     mkdir -p ${sw}/opt
-    for tgz in tbb*.tgz; do
+    for tgz in "tbb${TBB}"*.tgz; do
         tar -xzf "$tgz" -C "${sw}/opt"
     done
+    ln -sf "tbb${TBB}" "${sw}/opt/tbb"
+    # compile
+    tbb_root="${sw}/opt/tbb"
+    cd "${tbb_root}"
+    make clean default
+    # there's no "install" make target, so we just copy files
+    tbb_arch=$(make info | grep '^arch=' | cut -d= -f2)
+    tbb_runtime=$(make info | grep '^runtime=' | cut -d= -f2)
+    tbb_build_prefix=$(make info | grep '^tbb_build_prefix=' | cut -d= -f2)
+    if [ -d "build/${tbb_build_prefix}_release" ]; then
+        mkdir -p  "lib/${tbb_arch}/${tbb_runtime}/"
+        cp "build/${tbb_build_prefix}_release"/lib* "lib/${tbb_arch}/${tbb_runtime}/"
+    fi
+    if [ -d "build/${tbb_build_prefix}_debug" ]; then
+        mkdir -p "lib/${tbb_arch}/${tbb_runtime}/"
+        cp "build/${tbb_build_prefix}_debug"/lib* "lib/${tbb_arch}/${tbb_runtime}/"
+    fi
     set +x
 fi
 

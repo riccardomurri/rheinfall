@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -75,20 +75,13 @@ vpu_step(vpu_t* self, switchboard_t* sb)
   if (VPU_DONE == self->phase)
     return (NULL != self->u.data);
 
-  /* swap inboxes to avoid race conditions */
-#ifdef _OPENMP
-  omp_set_lock(& self->inbox_lock);
-#endif
-  // swap `workset` and `inbox`, so to perform elimination
-  // on the rows that have arrived since last call
+  /* swap `workset` and `inbox`, so to perform elimination
+     on the rows that have arrived since last call */
   {
     rows_list_t* swp = self->inbox;
     self->inbox = self->workset;
     self->workset = swp;
   }
-#ifdef _OPENMP
-  omp_unset_lock(& self->inbox_lock);
-#endif
 
   const size_t size = rows_list_size(self->workset);
   if (size > 0) {
@@ -176,13 +169,7 @@ vpu_step(vpu_t* self, switchboard_t* sb)
 void 
 vpu_recv_row(struct vpu_s* self, void* row, row_kind_t kind)
 {
-#ifdef _OPENMP
-  omp_set_lock(&(self->inbox_lock));
-#endif
   row_t* new_row = rows_list_extend1(&(self->inbox));
   new_row->data = row;
   new_row->kind = kind;
-#ifdef _OPENMP
-  omp_unset_lock(&(self->inbox_lock));
-#endif
 }
