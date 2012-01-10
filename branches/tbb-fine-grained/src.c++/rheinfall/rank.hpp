@@ -41,6 +41,7 @@
 #include <boost/optional.hpp>
 
 #ifdef RF_USE_TBB
+# include <tbb/atomic.h>
 # include <tbb/concurrent_vector.h>
 # include <tbb/mutex.h>
 # include <tbb/parallel_do.h>
@@ -166,6 +167,13 @@ public:
 #endif // RF_ENABLE_STATS
 
   protected:
+    // forward declarations
+    class Processor;
+#ifdef RF_USE_TBB
+    class ProcessorStepTask;
+    class ProcessorStepApply;
+#endif
+
     /** A single processing element. */
     class Processor {
       
@@ -209,8 +217,8 @@ public:
       row_block inbox;
 
 #ifdef RF_USE_TBB
-      /** Locked when a task to process the rows in @c inbox has been already spawned. */
-      tbb::mutex processing_;
+      /** Non-null when a task to process the rows in @c inbox has been already spawned. */
+      tbb::atomic<ProcessorStepTask*> pending_;
 #endif
 
 #ifdef WITH_MPI
@@ -250,6 +258,14 @@ public:
     }; // class Processor
 
 
+    /** Number of matrix columns. */
+    const coord_t ncols_;         
+    /** Type for grouping all local processors. */
+    typedef std::vector< Processor*, allocator<Processor*> > vpu_array_t;
+    /** Local processors. */
+    vpu_array_t vpus;
+
+
 #ifdef RF_USE_TBB
     /** Wrap a @c Processor::step() invocation so that it can be
         executed as a TBB task. */
@@ -264,9 +280,9 @@ public:
         : p_(other->p_) { }; 
       
       /** Invoke @c Processor::step() and then release the @c
-          processing_ lock on the @c Processor instance @c p_. */
+          pending_ lock on the @c Processor instance @c p_. */
       tbb::task* execute() 
-      { p_->step(); lock_.release(); return NULL; };
+      { p_->step(); p_->pending_ = NULL; return NULL; };
 
     private:
       Processor* const p_;
@@ -285,15 +301,42 @@ public:
         void operator() (Processor* p) const
         { p->step(); };
     }; // class ProcessorStepApply
+
+    
+    class EliminationTask : public tbb::task {
+    public:
+      EliminationTask(Processor* processor,
+                      Row<val_t,coord_t,allocator>* pivot_row, 
+                      Row<val_t,coord_t,allocator>* elim_row)
+        : processor_(processor)
+        , u_(pivot_row)
+        , r_(elim_row)
+      { };
+      
+      tbb::task* execute()
+      { 
+        val_t a, b;
+        get_row_multipliers<val_t>(u_->leading_term_, 
+                                   r_->leading_term_, 
+                                   a, b);
+        Row<val_t,coord_t,allocator>* new_row = 
+          u_->linear_combination(r_, a, b, true, 
+                                 processor_->parent_.dense_threshold);
+        // ship reduced rows to other processors
+        if (NULL != new_row) {
+          assert(new_row->starting_column_ > processor_->column_);
+          processor_->parent_.send_row(*processor_, new_row);
+        };
+        return NULL;
+      };
+
+    private:
+      Processor* processor_;
+      Row<val_t,coord_t,allocator> *u_, *r_;
+    }; // class EliminationTask
+  
 #endif // RF_USE_TBB
 
-
-    /** Number of matrix columns. */
-    const coord_t ncols_;         
-    /** Type for grouping all local processors. */
-    typedef std::vector< Processor*, allocator<Processor*> > vpu_array_t;
-    /** Local processors. */
-    vpu_array_t vpus;
 
 #ifdef WITH_MPI
     mpi::communicator comm_; /**< MPI communicator. */
@@ -680,24 +723,24 @@ public:
     std::vector<coord_t, allocator<coord_t> > r(vpus.size(), 0);
 
 #ifdef RF_USE_TBB
-    //tbb::parallel_do(vpus.begin(), vpus.end(), ProcessorStepApply());
-#endif
-  
+    tbb::parallel_do(vpus.begin(), vpus.end(), ProcessorStepApply());
+    // wait for elimination tasks to finish
+    tbb::task::self().wait_for_all();
+    // collect results
+    for (coord_t n = 0; n < vpus.size(); ++n) {
+      r[n] = vpus[n]->step();
+      delete vpus[n];
+    };
+#else
+    // sequential execution
     coord_t n0 = 0;
     while(n0 < vpus.size()) {
       for (coord_t n = n0; n < vpus.size(); ++n) {
-#ifdef RF_USE_TBB
-        // wait for the lock to be released by other processing tasks
-        tbb::mutex::scoped_lock processing_lock(vpus[n]->processing_);
-#endif
         r[n] = vpus[n]->step();
-#ifdef RF_USE_TBB
-        processing_lock.release();
-#endif
       };
-#ifdef WITH_MPI
+# ifdef WITH_MPI
       do_mpi_receive();
-#endif
+# endif
       // n0 incremented each time a processor goes into `done` state 
       while (n0 < vpus.size() and vpus[n0]->is_done()) {
         delete vpus[n0];
@@ -705,6 +748,7 @@ public:
         ++n0;
       };
     } while(n0 < vpus.size());
+#endif // RF_USE_TBB
 
     // the partial rank is computed as the sum of all ranks computed
     // by local processors
@@ -928,13 +972,17 @@ do_mpi_receive()
       , rows()
       , inbox()
 #ifdef RF_USE_TBB
-      , processing_()
+      , pending_()
 #endif
 #ifdef WITH_MPI
       , outbox()
 #endif
       , result_(0)
-    { };
+    { 
+#ifdef RF_USE_TBB
+      pending_ = NULL;
+#endif
+    };
 
 
 template <typename val_t, typename coord_t, 
@@ -967,7 +1015,7 @@ recv_row(Row<val_t,coord_t,allocator>* new_row)
     ProcessorStepTask* t = new(tbb::task::allocate_root()) ProcessorStepTask(this);
     // if the lock is held, then a task is already scheduled for
     // stepping the same @c Processor instance.
-    if (t->lock_.try_acquire(this->processing_))
+    if (NULL == (this->pending_).compare_and_swap(t, NULL))
       tbb::task::spawn(*t);
     else
       tbb::task::destroy(*t);
@@ -1088,6 +1136,7 @@ step()
 #else
 # error "RF_PIVOT_STRATEGY should be one of: RF_PIVOT_NONE, RF_PIVOT_SPARSITY, RF_PIVOT_THRESHOLD, RF_PIVOT_WEIGHT"
 #endif // if RF_PIVOT_STRATEGY == ...
+#ifndef RF_USE_TBB
       val_t a, b;
       get_row_multipliers<val_t>((u)->leading_term_, (*it)->leading_term_, 
                                  a, b);
@@ -1098,6 +1147,10 @@ step()
         assert(new_row->starting_column_ > this->column_);
         parent_.send_row(*this, new_row);
       };
+#else
+      EliminationTask *et = new(tbb::task::allocate_root()) EliminationTask(this, u, *it);
+      tbb::task::spawn(*et);
+#endif
     }; // end for (it = rows.begin(); ...)
     rows.clear();
     result_ = (NULL == u? 0 : 1);
