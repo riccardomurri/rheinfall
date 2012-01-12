@@ -28,7 +28,7 @@
 
 #include <config.h>
 
-#if 1
+#if 0
 // profile memory allocation times
 // adapted from: http://chkno.net/memory-profiler-c++.html
 //
@@ -705,7 +705,7 @@ main(int argc, char** argv)
       };
 #endif
 
-#if 1
+#if 0
       std::cout << " malloc_time:" << float(total_malloc_time) / CLOCKS_PER_SEC;
       std::cout << " free_time:" << float(total_free_time) / CLOCKS_PER_SEC;
 #endif
