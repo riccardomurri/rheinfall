@@ -108,7 +108,7 @@ typedef modular::Modular<mod_int_t> val_t;
 #elif defined(WITH_MODULAR_INT64_VALUES)
 
 # include <types/modular.hpp>
-typedef int64_ mod_int_t;
+typedef int64_t mod_int_t;
 typedef modular::Modular<mod_int_t> val_t;
 
 #elif defined(WITH_INT_VALUES)
@@ -348,6 +348,7 @@ sigint(int signum)
 }
 
 
+#ifdef NDEBUG
 static ucontext_t main_loop_ctx;
 static bool got_sigfpe = false;
 
@@ -379,7 +380,6 @@ sigfpe(int signum, siginfo_t* siginfo, void* ucp)
 }
 
 
-#ifdef NDEBUG
 extern "C"
 void
 sigsegv(int signum, siginfo_t* siginfo, void* ucp)
@@ -646,6 +646,7 @@ main(int argc, char** argv)
         std::cout << " nonzero:" << nnz;
       };
 
+#ifdef NDEBUG
       // handle SIGFPE: math errors will get back into the main loop and
       // we can proceed with next file
       sa.sa_sigaction = sigfpe;
@@ -662,6 +663,7 @@ main(int argc, char** argv)
         got_sigfpe = false;
         continue;
       };
+#endif // NDEBUG
 
       // base for computing wall-clock time
       struct timeval wc_t0;
