@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011, 2012 riccardo.murri@gmail.com.  All rights reserved.
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -379,6 +379,7 @@ sigfpe(int signum, siginfo_t* siginfo, void* ucp)
 }
 
 
+#ifdef NDEBUG
 extern "C"
 void
 sigsegv(int signum, siginfo_t* siginfo, void* ucp)
@@ -393,6 +394,7 @@ sigsegv(int signum, siginfo_t* siginfo, void* ucp)
   print_backtrace();
   exit(signum);
 }
+#endif
 
 
 #ifdef WITH_GE
@@ -572,13 +574,15 @@ main(int argc, char** argv)
   sigaddset(&sa.sa_mask, SIGINT);
   sigaction (SIGINT, &sa, NULL);
 
+# ifdef NDEBUG
   // dump backtrace on SIGSEGV
   sa.sa_sigaction = sigsegv;
   sa.sa_flags = SA_SIGINFO|SA_ONSTACK;
   sigemptyset(&sa.sa_mask);
   sigaddset(&sa.sa_mask, SIGSEGV);
   sigaction (SIGSEGV, &sa, NULL);
-#endif // WITH_MPI
+# endif // NDEBUG
+#endif // !WITH_MPI
 
 #ifdef WITH_GE
   // SIGUSR2 is used by GE to notify of a SIGKILL coming shortly,
