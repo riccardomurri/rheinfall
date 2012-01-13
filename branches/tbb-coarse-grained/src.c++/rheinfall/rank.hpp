@@ -42,13 +42,9 @@
 
 #ifdef RF_USE_TBB
 # include <tbb/atomic.h>
-# include <tbb/compat/condition_variable>
-# include <tbb/concurrent_vector.h>
 # include <tbb/mutex.h>
 # include <tbb/parallel_do.h>
-# include <tbb/queuing_rw_mutex.h>
 # include <tbb/spin_mutex.h>
-# include <tbb/task.h>
 # include <tbb/task_group.h>
 #endif
 
@@ -210,15 +206,10 @@ public:
       enum { running, ending, done } phase;
       
       /** A block of rows. */
-#if 1 // was: defined(RF_USE_TBB)
       typedef std::list< 
         Row<val_t,coord_t,allocator>*, 
         allocator<Row<val_t,coord_t,allocator>*> > row_block;
-#else
-      typedef tbb::concurrent_vector< 
-        Row<val_t,coord_t,allocator>*, 
-        allocator<Row<val_t,coord_t,allocator>*> > row_block;
-#endif
+
       /** List of incoming rows from other processors. */
       row_block inbox;
 #ifdef RF_USE_TBB
@@ -227,9 +218,6 @@ public:
 
       /** Non-null when a task to process the rows in @c inbox has been already spawned. */
       tbb::atomic<bool> pending_;
-
-      typedef tbb::queuing_rw_mutex pivot_mutex_t;
-      pivot_mutex_t pivot_mtx_;
 #endif
 
 #ifdef WITH_MPI
@@ -284,7 +272,16 @@ public:
     public:
         /** Invoke @c Processor::step() */
         void operator() (Processor* p) const
-        { p->step(); };
+        { 
+          if (false == p->pending_.compare_and_swap(true, false)) {
+            p->step(); 
+            // reschedule if still rows to eliminate
+            if (p->inbox.empty())
+              p->pending_ = false;
+            else
+              p->parent_.tasks_.run(*new ProcessorStepTask(*p));
+          };
+        };
     }; // class ProcessorStepApply
 
     
@@ -299,55 +296,18 @@ public:
       
       /** Invoke @c Processor::step(). */
       void operator() () const
-      { processor_.step(); };
+      { 
+        processor_.step(); 
+        // reschedule if still rows to eliminate
+        if (processor_.inbox.empty())
+          processor_.pending_ = false;
+        else
+          processor_.parent_.tasks_.run(*this);
+      };
 
     protected:
       Processor &processor_;
     }; // class ProcessorStepTask
-
-
-    class EliminationTask {
-    public:
-      EliminationTask(Processor &processor,
-                      /** Pointer to the row to be eliminated.  Ownership of the pointer is transferred to this @c EliminationTask. */
-                      Row<val_t,coord_t,allocator> *elim_row)
-        : processor_(processor)
-        , r_(elim_row)
-      { 
-        assert(r_->first_nonzero_column() == processor_.column_);
-        assert(r_->leading_term_ != 0);
-      };
-      
-      void operator() ()
-      { 
-        // alias the parent processor's pivot row, whatever it is
-        Row<val_t,coord_t,allocator>* &u_(processor_.u);
-        typename Processor::pivot_mutex_t::scoped_lock 
-          u_lk(processor_.pivot_mtx_, false);
-
-        // perform elimination
-        val_t a, b;
-        get_row_multipliers<val_t>(u_->leading_term_, 
-                                   r_->leading_term_, 
-                                   a, b);
-        Row<val_t,coord_t,allocator>* new_row = 
-          u_->linear_combination(r_, a, b, true, 
-                                 processor_.parent_.dense_threshold);
-        // ship reduced rows to other processors
-        if (NULL != new_row) {
-          assert(new_row->starting_column_ > processor_.column_);
-          processor_.parent_.send_row(processor_, new_row);
-        };
-
-        // all done
-        return;
-      };
-
-    protected:
-      Processor &processor_;
-      Row<val_t,coord_t,allocator> *r_;
-    }; // class EliminationTask
-  
 #endif // RF_USE_TBB
 
 
@@ -992,7 +952,6 @@ do_mpi_receive()
       , inbox()
 #ifdef RF_USE_TBB
       , pending_()
-      , pivot_mtx_()
 #endif
 #ifdef WITH_MPI
       , outbox()
@@ -1065,25 +1024,13 @@ step()
   assert(inbox.empty());
 #ifdef RF_USE_TBB
   inbox_mtx_.unlock();
-  // release lock: new step() tasks can now be scheduled
-  pending_ = false; 
 #endif
 
-#ifdef RF_USE_TBB
-  // lock `u` from concurrent modification
-  pivot_mutex_t::scoped_lock pivot_lk(pivot_mtx_, false);
-#endif
   bool skip_front = false;
   if (not rows.empty()) {
     // ensure there is one row for elimination
     if (NULL == u) {
-#ifdef RF_USE_TBB
-      pivot_lk.upgrade_to_writer();
-#endif
       u = rows.front();
-#ifdef RF_USE_TBB
-      pivot_lk.downgrade_to_reader();
-#endif
       // tbb::concurrent_vector has no erase operation, 
       // so let's just rebase the vector
       skip_front = true;
@@ -1125,13 +1072,7 @@ step()
       };
     }; // end for (it = rows.begin(); ...)
     if (!!new_pivot_row_loc) {
-# ifdef RF_USE_TBB
-      pivot_lk.upgrade_to_writer();
-# endif
       std::swap(u, *(new_pivot_row_loc.get()));
-# ifdef RF_USE_TBB
-      pivot_lk.downgrade_to_reader();
-# endif
     };
 #endif // if RF_PIVOT_STRATEGY == RF_PIVOT_THRESHOLD
 
@@ -1146,13 +1087,7 @@ step()
           or ((*it)->weight() == u->weight()
               and first_is_better_pivot<val_t>((*it)->leading_term_, u->leading_term_)))
         {
-# ifdef RF_USE_TBB
-          pivot_lk.upgrade_to_writer();
-# endif
           std::swap(u, *it);
-# ifdef RF_USE_TBB
-          pivot_lk.downgrade_to_reader();
-# endif
         };
 #elif (RF_PIVOT_STRATEGY == RF_PIVOT_SPARSITY)
       // swap `u` and the new row if the new row is shorter, or has "better" leading term
@@ -1163,24 +1098,12 @@ step()
           // if `*it` (new row) is shorter, it becomes the new pivot row
           if (s->size() < u->size())
             {
-# ifdef RF_USE_TBB
-              pivot_lk.upgrade_to_writer();
-# endif
               std::swap(u, *it);
-# ifdef RF_USE_TBB
-              pivot_lk.downgrade_to_reader();
-# endif
             }
         }
         else if (Row<val_t,coord_t,allocator>::dense == u->kind)
           {
-# ifdef RF_USE_TBB
-            pivot_lk.upgrade_to_writer();
-# endif
             std::swap(u, *it);
-# ifdef RF_USE_TBB
-            pivot_lk.downgrade_to_reader();
-# endif
           }
         else 
           assert(false); // forgot one kind in chained `if`s?
@@ -1192,14 +1115,8 @@ step()
               (static_cast<DenseRow<val_t,coord_t,allocator>*>(*it)->leading_term_,
                static_cast<DenseRow<val_t,coord_t,allocator>*>(u)->leading_term_))
             {
-# ifdef RF_USE_TBB
-              pivot_lk.upgrade_to_writer();
-# endif
               // swap `u` and `row`
               std::swap(u, *it);
-# ifdef RF_USE_TBB
-              pivot_lk.downgrade_to_reader();
-# endif
             }
         };
         // else, if `u` is a sparse row, no need to check further
@@ -1213,7 +1130,7 @@ step()
 #else
 # error "RF_PIVOT_STRATEGY should be one of: RF_PIVOT_NONE, RF_PIVOT_SPARSITY, RF_PIVOT_THRESHOLD, RF_PIVOT_WEIGHT"
 #endif // if RF_PIVOT_STRATEGY == ...
-#ifndef RF_USE_TBB
+      assert(u->starting_column_ == (*it)->starting_column_);
       val_t a, b;
       get_row_multipliers<val_t>((u)->leading_term_, (*it)->leading_term_, 
                                  a, b);
@@ -1224,9 +1141,6 @@ step()
         assert(new_row->starting_column_ > this->column_);
         parent_.send_row(*this, new_row);
       };
-#else
-      parent_.tasks_.run(EliminationTask(*this,*it));
-#endif
     }; // end for (it = rows.begin(); ...)
     rows.clear();
     result_ = (NULL == u? 0 : 1);
