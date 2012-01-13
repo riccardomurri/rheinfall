@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011, 2012 riccardo.murri@gmail.com.  All rights reserved.
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -28,7 +28,7 @@
 
 #include <config.h>
 
-#if 1
+#if 0
 // profile memory allocation times
 // adapted from: http://chkno.net/memory-profiler-c++.html
 //
@@ -108,7 +108,7 @@ typedef modular::Modular<mod_int_t> val_t;
 #elif defined(WITH_MODULAR_INT64_VALUES)
 
 # include <types/modular.hpp>
-typedef int64_ mod_int_t;
+typedef int64_t mod_int_t;
 typedef modular::Modular<mod_int_t> val_t;
 
 #elif defined(WITH_INT_VALUES)
@@ -348,6 +348,7 @@ sigint(int signum)
 }
 
 
+#ifdef NDEBUG
 static ucontext_t main_loop_ctx;
 static bool got_sigfpe = false;
 
@@ -393,6 +394,7 @@ sigsegv(int signum, siginfo_t* siginfo, void* ucp)
   print_backtrace();
   exit(signum);
 }
+#endif
 
 
 #ifdef WITH_GE
@@ -572,13 +574,15 @@ main(int argc, char** argv)
   sigaddset(&sa.sa_mask, SIGINT);
   sigaction (SIGINT, &sa, NULL);
 
+# ifdef NDEBUG
   // dump backtrace on SIGSEGV
   sa.sa_sigaction = sigsegv;
   sa.sa_flags = SA_SIGINFO|SA_ONSTACK;
   sigemptyset(&sa.sa_mask);
   sigaddset(&sa.sa_mask, SIGSEGV);
   sigaction (SIGSEGV, &sa, NULL);
-#endif // WITH_MPI
+# endif // NDEBUG
+#endif // !WITH_MPI
 
 #ifdef WITH_GE
   // SIGUSR2 is used by GE to notify of a SIGKILL coming shortly,
@@ -642,6 +646,7 @@ main(int argc, char** argv)
         std::cout << " nonzero:" << nnz;
       };
 
+#ifdef NDEBUG
       // handle SIGFPE: math errors will get back into the main loop and
       // we can proceed with next file
       sa.sa_sigaction = sigfpe;
@@ -658,6 +663,7 @@ main(int argc, char** argv)
         got_sigfpe = false;
         continue;
       };
+#endif // NDEBUG
 
       // base for computing wall-clock time
       struct timeval wc_t0;
@@ -699,7 +705,7 @@ main(int argc, char** argv)
       };
 #endif
 
-#if 1
+#if 0
       std::cout << " malloc_time:" << float(total_malloc_time) / CLOCKS_PER_SEC;
       std::cout << " free_time:" << float(total_free_time) / CLOCKS_PER_SEC;
 #endif

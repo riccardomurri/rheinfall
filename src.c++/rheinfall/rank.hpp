@@ -41,10 +41,15 @@
 #include <boost/optional.hpp>
 
 #ifdef RF_USE_TBB
+# include <tbb/atomic.h>
+# include <tbb/compat/condition_variable>
 # include <tbb/concurrent_vector.h>
 # include <tbb/mutex.h>
 # include <tbb/parallel_do.h>
+# include <tbb/queuing_rw_mutex.h>
+# include <tbb/spin_mutex.h>
 # include <tbb/task.h>
+# include <tbb/task_group.h>
 #endif
 
 
@@ -166,6 +171,15 @@ public:
 #endif // RF_ENABLE_STATS
 
   protected:
+    // forward declarations
+    class Processor;
+#ifdef RF_USE_TBB
+    class ProcessorStepTask;
+    class ProcessorStepApply;
+
+    tbb::task_group tasks_;
+#endif
+
     /** A single processing element. */
     class Processor {
       
@@ -177,12 +191,14 @@ public:
       ~Processor();
       
     protected:     
+      friend class Rank<val_t,coord_t,allocator>; // XXX: see rank()
+
       /** Parent instance. */
       Rank<val_t,coord_t,allocator>& parent_;
+
       /** Index of matrix column to process. */
       const coord_t column_;
-      friend class Rank<val_t,coord_t,allocator>; // XXX: see rank()
-      
+
       /** Row used for elimination */
       Row<val_t,coord_t,allocator>* u;
       
@@ -194,7 +210,7 @@ public:
       enum { running, ending, done } phase;
       
       /** A block of rows. */
-#ifndef RF_USE_TBB
+#if 1 // was: defined(RF_USE_TBB)
       typedef std::list< 
         Row<val_t,coord_t,allocator>*, 
         allocator<Row<val_t,coord_t,allocator>*> > row_block;
@@ -203,14 +219,17 @@ public:
         Row<val_t,coord_t,allocator>*, 
         allocator<Row<val_t,coord_t,allocator>*> > row_block;
 #endif
-      /** The block of rows that will be eliminated next time @c step() is called. */
-      row_block rows;
       /** List of incoming rows from other processors. */
       row_block inbox;
-
 #ifdef RF_USE_TBB
-      /** Locked when a task to process the rows in @c inbox has been already spawned. */
-      tbb::mutex processing_;
+      /** Locked when draining the inbox at the start of a @c step() invocation. */
+      tbb::spin_mutex inbox_mtx_;
+
+      /** Non-null when a task to process the rows in @c inbox has been already spawned. */
+      tbb::atomic<bool> pending_;
+
+      typedef tbb::queuing_rw_mutex pivot_mutex_t;
+      pivot_mutex_t pivot_mtx_;
 #endif
 
 #ifdef WITH_MPI
@@ -250,33 +269,15 @@ public:
     }; // class Processor
 
 
+    /** Number of matrix columns. */
+    const coord_t ncols_;         
+    /** Type for grouping all local processors. */
+    typedef std::vector< Processor*, allocator<Processor*> > vpu_array_t;
+    /** Local processors. */
+    vpu_array_t vpus;
+
+
 #ifdef RF_USE_TBB
-    /** Wrap a @c Processor::step() invocation so that it can be
-        executed as a TBB task. */
-    class ProcessorStepTask : public tbb::task {
-    public:
-      /** Constructor, taking pointer to a @c rheinfall::Processor instance. */
-      ProcessorStepTask(Processor* const processor)
-        : p_(processor) { }; 
-      
-      /** Copy constructor. */
-      ProcessorStepTask(ProcessorStepTask& other)
-        : p_(other->p_) { }; 
-      
-      /** Invoke @c Processor::step() and then release the @c
-          processing_ lock on the @c Processor instance @c p_. */
-      tbb::task* execute() 
-      { p_->step(); lock_.release(); return NULL; };
-
-    private:
-      Processor* const p_;
-      
-      tbb::mutex::scoped_lock lock_;
-
-      friend class Processor;
-    }; // class ProcessorStepTask
-
-
     /** Wrap a @c Processor::step() invocation so that it can be
         executed in TBB @c parallel_for. */
     class ProcessorStepApply {
@@ -285,15 +286,70 @@ public:
         void operator() (Processor* p) const
         { p->step(); };
     }; // class ProcessorStepApply
+
+    
+    /** Wrap a @c Processor::step() invocation so that it can be
+        executed as a functor in a TBB task group. */
+    class ProcessorStepTask {
+    public:
+      /** Constructor, taking pointer to a @c rheinfall::Processor instance. */
+      ProcessorStepTask(Processor &processor)
+        : processor_(processor)
+      { }; 
+      
+      /** Invoke @c Processor::step(). */
+      void operator() () const
+      { processor_.step(); };
+
+    protected:
+      Processor &processor_;
+    }; // class ProcessorStepTask
+
+
+    class EliminationTask {
+    public:
+      EliminationTask(Processor &processor,
+                      /** Pointer to the row to be eliminated.  Ownership of the pointer is transferred to this @c EliminationTask. */
+                      Row<val_t,coord_t,allocator> *elim_row)
+        : processor_(processor)
+        , r_(elim_row)
+      { 
+        assert(r_->first_nonzero_column() == processor_.column_);
+        assert(r_->leading_term_ != 0);
+      };
+      
+      void operator() ()
+      { 
+        // alias the parent processor's pivot row, whatever it is
+        Row<val_t,coord_t,allocator>* &u_(processor_.u);
+        typename Processor::pivot_mutex_t::scoped_lock 
+          u_lk(processor_.pivot_mtx_, false);
+
+        // perform elimination
+        val_t a, b;
+        get_row_multipliers<val_t>(u_->leading_term_, 
+                                   r_->leading_term_, 
+                                   a, b);
+        Row<val_t,coord_t,allocator>* new_row = 
+          u_->linear_combination(r_, a, b, true, 
+                                 processor_.parent_.dense_threshold);
+        // ship reduced rows to other processors
+        if (NULL != new_row) {
+          assert(new_row->starting_column_ > processor_.column_);
+          processor_.parent_.send_row(processor_, new_row);
+        };
+
+        // all done
+        return;
+      };
+
+    protected:
+      Processor &processor_;
+      Row<val_t,coord_t,allocator> *r_;
+    }; // class EliminationTask
+  
 #endif // RF_USE_TBB
 
-
-    /** Number of matrix columns. */
-    const coord_t ncols_;         
-    /** Type for grouping all local processors. */
-    typedef std::vector< Processor*, allocator<Processor*> > vpu_array_t;
-    /** Local processors. */
-    vpu_array_t vpus;
 
 #ifdef WITH_MPI
     mpi::communicator comm_; /**< MPI communicator. */
@@ -388,6 +444,9 @@ public:
 #ifdef RF_ENABLE_STATS
     , stats()
 #endif
+#ifdef RF_USE_TBB
+    , tasks_()
+#endif
   {  
     // setup the array of processors
 #ifdef WITH_MPI
@@ -428,9 +487,13 @@ public:
 # ifdef RF_ENABLE_STATS
   , stats()
 # endif
-# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+# if defined(RF_USE_TBB) 
+  , self_task_(tbb::task::self())
+  , tasks_()
+#  if defined(WITH_MPI_SERIALIZED)
   , mpi_send_mutex_()
-# endif // RF_USE_TBB && WITH_MPI_SERIALIZED
+#  endif // WITH_MPI_SERIALIZED
+# endif // RF_USE_TBB
 {  
   // setup the array of processors
   vpus.reserve(1 + ncols_ / nprocs_);
@@ -671,33 +734,33 @@ public:
   Rank<val_t,coord_t,allocator>::
   rank() 
   {
+    // where to collect (partial) ranks
+    std::vector<coord_t, allocator<coord_t> > r(vpus.size(), 0);
+
+#ifdef RF_USE_TBB
+    // kickstart elimination tasks
+    tbb::parallel_do(vpus.begin(), vpus.end(), ProcessorStepApply());
+    // wait for elimination tasks to finish
+    tasks_.wait();
+    // collect results
+    for (coord_t n = 0; n < vpus.size(); ++n) {
+      r[n] = vpus[n]->result_;
+      delete vpus[n];
+    };
+#else
     // kickstart termination signal
     if (is_local(0)) {
       vpu_for_column(0)->end_phase();
     };
 
-    // where to collect (partial) ranks
-    std::vector<coord_t, allocator<coord_t> > r(vpus.size(), 0);
-
-#ifdef RF_USE_TBB
-    //tbb::parallel_do(vpus.begin(), vpus.end(), ProcessorStepApply());
-#endif
-  
     coord_t n0 = 0;
     while(n0 < vpus.size()) {
       for (coord_t n = n0; n < vpus.size(); ++n) {
-#ifdef RF_USE_TBB
-        // wait for the lock to be released by other processing tasks
-        tbb::mutex::scoped_lock processing_lock(vpus[n]->processing_);
-#endif
         r[n] = vpus[n]->step();
-#ifdef RF_USE_TBB
-        processing_lock.release();
-#endif
       };
-#ifdef WITH_MPI
+# ifdef WITH_MPI
       do_mpi_receive();
-#endif
+# endif
       // n0 incremented each time a processor goes into `done` state 
       while (n0 < vpus.size() and vpus[n0]->is_done()) {
         delete vpus[n0];
@@ -705,6 +768,7 @@ public:
         ++n0;
       };
     } while(n0 < vpus.size());
+#endif // RF_USE_TBB
 
     // the partial rank is computed as the sum of all ranks computed
     // by local processors
@@ -925,16 +989,20 @@ do_mpi_receive()
       , column_(column)
       , u(NULL)
       , phase(running)
-      , rows()
       , inbox()
 #ifdef RF_USE_TBB
-      , processing_()
+      , pending_()
+      , pivot_mtx_()
 #endif
 #ifdef WITH_MPI
       , outbox()
 #endif
       , result_(0)
-    { };
+    { 
+#ifdef RF_USE_TBB
+      pending_ = false;
+#endif
+    };
 
 
 template <typename val_t, typename coord_t, 
@@ -944,7 +1012,6 @@ Rank<val_t,coord_t,allocator>::Processor::
 {
       if (NULL != u)
         delete u;
-      assert(rows.empty());
       assert(inbox.empty());
 }
 
@@ -962,16 +1029,18 @@ recv_row(Row<val_t,coord_t,allocator>* new_row)
 #ifdef RF_ENABLE_STATS
     if (NULL != this->stats_ptr)
       new_row->stats_ptr = this->stats_ptr;
+#endif
+#ifdef RF_USE_TBB
+    inbox_mtx_.lock();
+#endif
     inbox.push_back(new_row);
-# ifdef RF_USE_TBB
-    ProcessorStepTask* t = new(tbb::task::allocate_root()) ProcessorStepTask(this);
+#ifdef RF_USE_TBB
+    inbox_mtx_.unlock();
     // if the lock is held, then a task is already scheduled for
     // stepping the same @c Processor instance.
-    if (t->lock_.try_acquire(this->processing_))
-      tbb::task::spawn(*t);
-    else
-      tbb::task::destroy(*t);
-# endif
+    if (false == (this->pending_).compare_and_swap(true, false)) {
+      parent_.tasks_.run(ProcessorStepTask(*this));
+    };
 #endif
   };
 
@@ -985,18 +1054,36 @@ step()
   if (is_done())
     return result_;
 
-  // receive new rows
+  // block of rows where elimination will be performed
+  row_block rows;
+  assert(rows.empty());
+
+#ifdef RF_USE_TBB
+  inbox_mtx_.lock();
+#endif
   std::swap(inbox, rows);
-#ifndef RF_USE_TBB
-  // this is only true when executing sequentially
   assert(inbox.empty());
+#ifdef RF_USE_TBB
+  inbox_mtx_.unlock();
+  // release lock: new step() tasks can now be scheduled
+  pending_ = false; 
 #endif
 
+#ifdef RF_USE_TBB
+  // lock `u` from concurrent modification
+  pivot_mutex_t::scoped_lock pivot_lk(pivot_mtx_, false);
+#endif
   bool skip_front = false;
   if (not rows.empty()) {
     // ensure there is one row for elimination
     if (NULL == u) {
+#ifdef RF_USE_TBB
+      pivot_lk.upgrade_to_writer();
+#endif
       u = rows.front();
+#ifdef RF_USE_TBB
+      pivot_lk.downgrade_to_reader();
+#endif
       // tbb::concurrent_vector has no erase operation, 
       // so let's just rebase the vector
       skip_front = true;
@@ -1038,7 +1125,13 @@ step()
       };
     }; // end for (it = rows.begin(); ...)
     if (!!new_pivot_row_loc) {
+# ifdef RF_USE_TBB
+      pivot_lk.upgrade_to_writer();
+# endif
       std::swap(u, *(new_pivot_row_loc.get()));
+# ifdef RF_USE_TBB
+      pivot_lk.downgrade_to_reader();
+# endif
     };
 #endif // if RF_PIVOT_STRATEGY == RF_PIVOT_THRESHOLD
 
@@ -1052,7 +1145,15 @@ step()
       if (((*it)->weight() < u->weight())
           or ((*it)->weight() == u->weight()
               and first_is_better_pivot<val_t>((*it)->leading_term_, u->leading_term_)))
-        std::swap(u, *it);
+        {
+# ifdef RF_USE_TBB
+          pivot_lk.upgrade_to_writer();
+# endif
+          std::swap(u, *it);
+# ifdef RF_USE_TBB
+          pivot_lk.downgrade_to_reader();
+# endif
+        };
 #elif (RF_PIVOT_STRATEGY == RF_PIVOT_SPARSITY)
       // swap `u` and the new row if the new row is shorter, or has "better" leading term
       if (Row<val_t,coord_t,allocator>::sparse == (*it)->kind) {
@@ -1061,10 +1162,26 @@ step()
         if (Row<val_t,coord_t,allocator>::sparse == u->kind) {
           // if `*it` (new row) is shorter, it becomes the new pivot row
           if (s->size() < u->size())
-            std::swap(u, *it);
+            {
+# ifdef RF_USE_TBB
+              pivot_lk.upgrade_to_writer();
+# endif
+              std::swap(u, *it);
+# ifdef RF_USE_TBB
+              pivot_lk.downgrade_to_reader();
+# endif
+            }
         }
         else if (Row<val_t,coord_t,allocator>::dense == u->kind)
-          std::swap(u, *it);
+          {
+# ifdef RF_USE_TBB
+            pivot_lk.upgrade_to_writer();
+# endif
+            std::swap(u, *it);
+# ifdef RF_USE_TBB
+            pivot_lk.downgrade_to_reader();
+# endif
+          }
         else 
           assert(false); // forgot one kind in chained `if`s?
       }
@@ -1074,8 +1191,16 @@ step()
           if (first_is_better_pivot<val_t>
               (static_cast<DenseRow<val_t,coord_t,allocator>*>(*it)->leading_term_,
                static_cast<DenseRow<val_t,coord_t,allocator>*>(u)->leading_term_))
-            // swap `u` and `row`
-            std::swap(u, *it);
+            {
+# ifdef RF_USE_TBB
+              pivot_lk.upgrade_to_writer();
+# endif
+              // swap `u` and `row`
+              std::swap(u, *it);
+# ifdef RF_USE_TBB
+              pivot_lk.downgrade_to_reader();
+# endif
+            }
         };
         // else, if `u` is a sparse row, no need to check further
       }
@@ -1088,6 +1213,7 @@ step()
 #else
 # error "RF_PIVOT_STRATEGY should be one of: RF_PIVOT_NONE, RF_PIVOT_SPARSITY, RF_PIVOT_THRESHOLD, RF_PIVOT_WEIGHT"
 #endif // if RF_PIVOT_STRATEGY == ...
+#ifndef RF_USE_TBB
       val_t a, b;
       get_row_multipliers<val_t>((u)->leading_term_, (*it)->leading_term_, 
                                  a, b);
@@ -1098,6 +1224,9 @@ step()
         assert(new_row->starting_column_ > this->column_);
         parent_.send_row(*this, new_row);
       };
+#else
+      parent_.tasks_.run(EliminationTask(*this,*it));
+#endif
     }; // end for (it = rows.begin(); ...)
     rows.clear();
     result_ = (NULL == u? 0 : 1);
@@ -1140,8 +1269,9 @@ step()
     };
 #endif
   }
+#ifndef RF_USE_TBB
   else { // `phase == ending`: end message already received
-#ifdef WITH_MPI        
+# ifdef WITH_MPI        
     if (outbox.size() > 0) {
       // wait untill all sent messages have arrived
       std::vector< mpi::request, allocator<mpi::request> > reqs;
@@ -1150,13 +1280,13 @@ step()
            it != outbox.end();
            ++it)
         reqs.push_back(it->first);
-# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+#  if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
       parent_.mpi_send_mutex_.lock();
-# endif
+#  endif
       mpi::wait_all(reqs.begin(), reqs.end());
-# if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
+#  if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
       mpi_send_mutex_.unlock();
-# endif
+#  endif
       // finally, free message payloads and erase all requests
       for (typename outbox_t::iterator it = outbox.begin();
            it != outbox.end();
@@ -1164,7 +1294,7 @@ step()
         delete it->second;
       outbox.clear();
     };
-#endif
+# endif // WITH_MPI
 
     // pass end message along
     parent_.send_end(*this, column_ + 1);
@@ -1172,6 +1302,7 @@ step()
     // all done
     phase = done;
   };
+#endif // !RF_USE_TBB
 
   // exit with 0 only if we never processed any row
   return result_;
