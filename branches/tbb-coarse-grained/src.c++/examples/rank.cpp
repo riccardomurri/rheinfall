@@ -239,6 +239,10 @@ typedef boost::xint::integer val_t;
 # include <omp.h>
 #endif
 
+#ifdef RF_USE_TBB
+# include <tbb/task_scheduler_init.h>
+#endif
+
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -288,6 +292,9 @@ usage(std::ostream& out, const int argc, char const* const* argv)
 #ifdef WITH_MODULAR_VALUES
       << "  -p NUM  Perform computations modulo NUM (default: 2'147'483'647)." << std::endl
 #endif
+#ifdef RF_USE_TBB
+      << "  -T NUM  Distribute work over NUM threads (default: let TBB choose)." << std::endl
+#endif 
 #if defined(WITH_MPI) or defined(_OPENMP)
       << "  -w NUM  Divide matrix in bands of NUM columns each and distribute" << std::endl
       << "          bands to MPI ranks / OpenMP tasks in a round-robin fashion." << std::endl
@@ -475,6 +482,9 @@ main(int argc, char** argv)
     {"pivot-threshold", 1, 0, 'p'},
 #endif
     {"tranpose",        0, 0, 't'},
+#ifdef RF_USE_TBB
+    {"threads",         1, 0, 'T'},
+#endif
     {"verbose",         0, 0, 'v'},
     {"width",           1, 0, 'w'},
     {0, 0, 0, 0}
@@ -489,9 +499,14 @@ main(int argc, char** argv)
   modular::Modular<mod_int_t>::global_set_modulus(2147483647);
 #endif
 
+#ifdef RF_USE_TBB
+  // by default, let TBB figure out the no. of threads
+  int num_threads = tbb::task_scheduler_init::automatic;
+#endif
+
   int c;
   while (true) {
-    c = getopt_long(argc, argv, "d:hm:p:tvw:",
+    c = getopt_long(argc, argv, "d:hm:p:tT:vw:",
                     long_options, NULL);
     if (-1 == c)
       break;
@@ -540,6 +555,21 @@ main(int argc, char** argv)
     else if ('t' == c) {
       // transpose matrix when reading it
       transpose = true;
+    }
+    else if ('T' == c) {
+#ifdef RF_USE_TBB
+      std::istringstream arg(optarg);
+      arg >> num_threads;
+      if (num_threads <= 0) {
+        std::cerr << "Argument to option -T/--threads must be a positive number."
+                  << " Aborting." << std::endl;
+        return 1;
+      };
+# else
+      std::cerr << "Warning: Ignoring option -T/--threads,"
+                << " which only makes sense in TBB binaries."
+                << std::endl;
+#endif
     }
     else if ('v' == c) {
       // enable verbose reporting
@@ -632,6 +662,12 @@ main(int argc, char** argv)
 #ifdef WITH_DOUBLE_VALUES
       rheinfall::is_zero_traits<val_t>::tolerance = 
         rows * cols * std::numeric_limits<val_t>::epsilon();
+#endif
+
+#ifdef RF_USE_TBB
+      // set number of threads; must be done *before* rheinfall::Rank
+      // is first created, or it will be ineffective!
+      tbb::task_scheduler_init sched(num_threads);
 #endif
 
 #ifdef WITH_MPI
