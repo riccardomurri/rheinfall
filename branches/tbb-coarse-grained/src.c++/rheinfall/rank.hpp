@@ -217,7 +217,7 @@ public:
       tbb::spin_mutex inbox_mtx_;
 
       /** Non-null when a task to process the rows in @c inbox has been already spawned. */
-      tbb::atomic<bool> pending_;
+      tbb::atomic<ProcessorStepTask*> pending_;
 #endif
 
 #ifdef WITH_MPI
@@ -273,15 +273,12 @@ public:
         /** Invoke @c Processor::step() */
         void operator() (Processor* p) const
         { 
-          if (false == p->pending_.compare_and_swap(true, false)) {
-            p->step(); 
-            // reschedule if still rows to eliminate
-            if (p->inbox.empty())
-              p->pending_ = false;
-            else
-              p->parent_.tasks_.run(*new ProcessorStepTask(*p));
+          ProcessorStepTask* t = new ProcessorStepTask(*p);
+          if (NULL == p->pending_.compare_and_swap(t, NULL)) {
+            p->parent_.tasks_.run(*t);
+          }
+          delete t;
           };
-        };
     }; // class ProcessorStepApply
 
     
@@ -299,10 +296,14 @@ public:
       { 
         processor_.step(); 
         // reschedule if still rows to eliminate
-        if (processor_.inbox.empty())
-          processor_.pending_ = false;
+        processor_.inbox_mtx_.lock();
+        const bool empty = processor_.inbox.empty();
+        if (empty) {
+          processor_.pending_ = NULL;
+        }
         else
           processor_.parent_.tasks_.run(*this);
+        processor_.inbox_mtx_.unlock();
       };
 
     protected:
@@ -417,7 +418,7 @@ public:
     vpus.reserve(nmemb);
     for (int c = 0; c < ncols_; ++c)
       if (is_local(c))
-        vpus.push_back(new Rank<val_t,coord_t,allocator>::Processor(*this, c));
+        vpus.push_back(new typename Rank<val_t,coord_t,allocator>::Processor(*this, c));
     // internal check that the size of the data structure is actually correct
     assert(vpus.size() <= nmemb);
 #ifdef RF_ENABLE_STATS
@@ -448,7 +449,6 @@ public:
   , stats()
 # endif
 # if defined(RF_USE_TBB) 
-  , self_task_(tbb::task::self())
   , tasks_()
 #  if defined(WITH_MPI_SERIALIZED)
   , mpi_send_mutex_()
@@ -959,7 +959,7 @@ do_mpi_receive()
       , result_(0)
     { 
 #ifdef RF_USE_TBB
-      pending_ = false;
+      pending_ = NULL;
 #endif
     };
 
@@ -997,9 +997,11 @@ recv_row(Row<val_t,coord_t,allocator>* new_row)
     inbox_mtx_.unlock();
     // if the lock is held, then a task is already scheduled for
     // stepping the same @c Processor instance.
-    if (false == (this->pending_).compare_and_swap(true, false)) {
-      parent_.tasks_.run(ProcessorStepTask(*this));
-    };
+    ProcessorStepTask* t = new ProcessorStepTask(*this);
+    if (NULL == (this->pending_).compare_and_swap(t, NULL)) {
+      parent_.tasks_.run(*t);
+    }
+    delete t;
 #endif
   };
 
