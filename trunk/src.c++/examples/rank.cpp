@@ -28,7 +28,7 @@
 
 #include <config.h>
 
-#if 1
+#ifdef RF_USE_MALLOC_ALLOCATOR
 // profile memory allocation times
 // adapted from: http://chkno.net/memory-profiler-c++.html
 //
@@ -251,7 +251,8 @@ typedef boost::xint::integer val_t;
 #include <stdexcept>
 #include <utility>
 
-#if 1
+// FIXME: this should go into configure.ac
+#if RF_USE_MALLOC_ALLOCATOR
 # define HAVE_EXT_MALLOC_ALLOCATOR_H 1
 # define USE_MALLOC_ALLOCATOR 1
 #endif 
@@ -705,7 +706,7 @@ main(int argc, char** argv)
       };
 #endif
 
-#if 1
+#if RF_USE_MALLOC_ALLOCATOR
       std::cout << " malloc_time:" << float(total_malloc_time) / CLOCKS_PER_SEC;
       std::cout << " free_time:" << float(total_free_time) / CLOCKS_PER_SEC;
 #endif
