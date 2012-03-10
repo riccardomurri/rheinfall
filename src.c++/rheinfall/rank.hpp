@@ -962,8 +962,9 @@ recv_row(Row<val_t,coord_t,allocator>* new_row)
 #ifdef RF_ENABLE_STATS
     if (NULL != this->stats_ptr)
       new_row->stats_ptr = this->stats_ptr;
+#endif
     inbox.push_back(new_row);
-# ifdef RF_USE_TBB
+#ifdef RF_USE_TBB
     ProcessorStepTask* t = new(tbb::task::allocate_root()) ProcessorStepTask(this);
     // if the lock is held, then a task is already scheduled for
     // stepping the same @c Processor instance.
@@ -971,7 +972,6 @@ recv_row(Row<val_t,coord_t,allocator>* new_row)
       tbb::task::spawn(*t);
     else
       tbb::task::destroy(*t);
-# endif
 #endif
   };
 
