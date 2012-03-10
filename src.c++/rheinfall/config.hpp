@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010, 2011 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010, 2011, 2012 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,7 +52,7 @@
 
 
 // uncomment/define to enable computing the arithmetic operations count
-#define RF_ENABLE_STATS
+//#define RF_ENABLE_STATS
 
 
 // use WITH_MPI_SERIALIZED / WITH_MPI_MULTIPLE to select which
