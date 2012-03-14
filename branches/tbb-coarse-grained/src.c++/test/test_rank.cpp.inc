@@ -33,18 +33,10 @@ matrix_from_file(const std::string& filename)
     throw std::runtime_error(msg.str());
   };
 
-  // possibly transpose matrix so that rows = min(rows, cols)
-  // i.e., minimize the number of eliminations to perform
-  bool transpose = false;
-  if (rows > cols) {
-    std::swap(rows, cols);
-    transpose = true;
-  };
-  
   rheinfall::Rank<val_t,coord_t>* m 
-    = new rheinfall::Rank<val_t,coord_t>(cols, 1);
+    = new rheinfall::Rank<val_t,coord_t>(cols, 2);
 
-  m->read_triples(input, rows, cols, true, transpose);
+  m->read_triples(input, rows, cols, true, false);
   input.close();
   
   return m;
