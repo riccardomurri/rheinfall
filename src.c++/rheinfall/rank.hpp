@@ -662,13 +662,13 @@ public:
       if (transpose)
         std::swap(i, j);
       // check validity of the data we read
-      if (not(0 <= i and i < nrows)) {
+      if (i < 0 or i >= nrows) {
         std::ostringstream msg; 
         msg << "Invalid row index '" << (i+1) << "',"
             << " should be >0 and <" << nrows;
         throw std::runtime_error(msg.str());
       };
-      if (not (0 <= j and j < ncols)) {
+        if (j < 0 or j >= ncols) {
         std::ostringstream msg; 
         msg << "Invalid column index '" << (j+1) << "'"
             << " should be >0 and <" << ncols;
@@ -686,39 +686,40 @@ public:
 #endif
     for (typename _simplerows::iterator it = m.begin(); 
          it != m.end(); 
-         ++it) {
-      if (it->second.begin() != it->second.end()) { // non-null matrix row
-        SparseRow<val_t,coord_t,allocator>* row = 
-          SparseRow<val_t,coord_t,allocator>::new_from_range(it->second.begin(), 
-                                                             it->second.end(), 
-                                                             ncols-1);
-        if (NULL == row)
-          continue; // with next `it`
-        // set initial row number
-        row->h0 = it->first;
-        // commit row
-        const coord_t starting_column = row->first_nonzero_column();
-        if (is_local(starting_column))
-          vpu_for_column(starting_column)->recv_row(row);
-        else {
+         ++it) 
+      {
+        if (it->second.begin() != it->second.end()) { // non-null matrix row
+          SparseRow<val_t,coord_t,allocator>* row = 
+            SparseRow<val_t,coord_t,allocator>::new_from_range(it->second.begin(), 
+                                                               it->second.end(), 
+                                                               ncols-1);
+          if (NULL == row)
+            continue; // with next `it`
+          // set initial row number
+          row->h0 = it->first;
+          // commit row
+          const coord_t starting_column = row->first_nonzero_column();
+          if (is_local(starting_column))
+            vpu_for_column(starting_column)->recv_row(row);
+          else {
 #ifdef WITH_MPI
-          if (not local_only) {
-            mpi::request req;
+            if (not local_only) {
+              mpi::request req;
 # if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
-            mpi_send_mutex_.lock();
+              mpi_send_mutex_.lock();
 # endif 
-            req = comm_.isend(owner(starting_column), TAG_ROW_SPARSE, row);
+              req = comm_.isend(owner(starting_column), TAG_ROW_SPARSE, row);
 # if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
-            mpi_send_mutex_.unlock();
+              mpi_send_mutex_.unlock();
 # endif
-            outbox.push_back(req);
-          }; // if not local_only
+              outbox.push_back(req);
+            }; // if not local_only
 #endif // WITH_MPI
-          // discard non-local and null rows
-          delete row;
-        }; // ! is_local(starting_column)
-      }; // it->second.begin() != it->second.end() 
-    }; // for (it = m.begin(); ...)
+            // discard non-local and null rows
+            delete row;
+          }; // ! is_local(starting_column)
+        }; // it->second.begin() != it->second.end() 
+      }; // for (it = m.begin(); ...)
     
 #ifdef WITH_MPI
     // wait for all sent rows to arrive
