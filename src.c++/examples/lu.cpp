@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010, 2011 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010, 2011, 2012 riccardo.murri@gmail.com.  All rights reserved.
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -539,6 +539,10 @@ main(int argc, char** argv)
       if (0 == myid) {
         std::cout << " nonzero:" << nnz;
       };
+
+      // leave some traces that this program has started, even if it
+      // might crash later on
+      std::cout << std::flush;
 
       // handle SIGFPE: math errors will get back into the main loop and
       // we can proceed with next file
