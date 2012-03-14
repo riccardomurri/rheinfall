@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010, 2011 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010-2012 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -323,6 +323,7 @@ namespace rheinfall {
       this->leading_term_ = storage.front().second;
       assert(not is_zero(this->leading_term_));
       storage.erase(storage.begin());
+      this->weight_ -= (1.0 / this->starting_column_);
       assert(this->__ok());
       return this;
     }
@@ -352,6 +353,9 @@ namespace rheinfall {
                      const val_t& a, const val_t& b, const bool adjust) 
     const restrict_this
   {
+    // NOTE: the `adjust` argument is ignored: there's no need to
+    // adjust a sparse row, as we can place the leading entry in the
+    // correct position as we construct it.
     assert(this->__ok());
     assert(other->__ok());
     assert(this->starting_column_ == other->starting_column_);
@@ -437,16 +441,9 @@ namespace rheinfall {
         // storage is organised within `SparseRow`; it duplicates code
         // from SparseRow::operator[] for efficiency
         if (NULL == result) {
-          // allocate new SparseRow
-          if (adjust) {
-            result = new SparseRow(coord, this->ending_column_, entry);
-            assert(result->storage.size() == 0);
-          }
-          else {
-            result = new SparseRow(0, this->ending_column_, 0);
-            result->set(coord, entry);
-            assert(result->storage.size() == 1);
-          };
+          // allocate new SparseRow 
+          result = new SparseRow(coord, this->ending_column_, entry);
+          assert(result->storage.size() == 0);
 #ifdef RF_ENABLE_STATS
           if (this->stats_ptr != NULL) {
             this->stats_ptr->sparserow_count += 1;
