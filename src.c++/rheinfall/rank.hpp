@@ -513,6 +513,8 @@ public:
       // SMS indices are 1-based
       --i;
       --j;
+      if (transpose)
+        std::swap(i, j);
       // check validity of the data we read; since '0 0 0' is the
       // end-of-stream marker, we have to case for it separately
       if (not (-1 == i and -1 == j and 0 == value)) { 
@@ -532,8 +534,6 @@ public:
         if (0 == value) 
           continue; 
       };
-      if (transpose)
-        std::swap(i, j);
       // if row index changes, then a new row is starting, so commit the old one.
       if (i != last_row_index) {
         // set initial row number
@@ -618,6 +618,9 @@ public:
       // SMS indices are 1-based
       --i;
       --j;
+      // transpose if needed
+      if (transpose)
+        std::swap(i, j);
       // check validity of the data we read
       if (not(0 <= i and i < nrows)) {
         std::ostringstream msg; 
@@ -634,9 +637,6 @@ public:
       // ignore zero entries in matrix -- they shouldn't be here in the first place
       if (0 == value) 
         continue; 
-      // transpose if needed
-      if (transpose)
-        std::swap(i, j);
       m[i][j] = value;
       ++nnz;
     }; // while(not eof)
