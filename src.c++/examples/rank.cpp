@@ -682,6 +682,10 @@ main(int argc, char** argv)
         std::cout << " nonzero:" << nnz;
       };
 
+      // leave some traces that this program has started, even if it
+      // might crash later on
+      std::cout << std::flush;
+
 #ifdef NDEBUG
       // handle SIGFPE: math errors will get back into the main loop and
       // we can proceed with next file
