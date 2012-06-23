@@ -53,12 +53,12 @@ extern void* operator new(size_t size) throw(std::bad_alloc)
   clock_t const t0 = clock();
   void* const buf = malloc(size);
   total_malloc_time += (clock() - t0);
-  if (!buf) 
+  if (!buf)
     throw std::bad_alloc();
   return buf;
 }
 
-extern void* operator new[] (size_t size, const std::nothrow_t& nothrow_constant) throw() 
+extern void* operator new[] (size_t size, const std::nothrow_t& nothrow_constant) throw()
 {
   clock_t const t0 = clock();
   void* const buf = malloc(size);
@@ -66,12 +66,12 @@ extern void* operator new[] (size_t size, const std::nothrow_t& nothrow_constant
   return buf;
 }
 
-extern void* operator new[] (size_t size) throw(std::bad_alloc) 
+extern void* operator new[] (size_t size) throw(std::bad_alloc)
 {
   clock_t const t0 = clock();
   void* const buf = malloc(size);
   total_malloc_time += (clock() - t0);
-  if (!buf) 
+  if (!buf)
     throw std::bad_alloc();
   return buf;
 }
@@ -89,7 +89,8 @@ extern void operator delete [] (void* data)
   free(data);
   total_free_time += (clock() - t0);
 }
-#endif
+#endif // memory allocation
+
 
 // matrix dimensions should fit into an `long` integer type
 typedef long coord_t;
@@ -161,7 +162,7 @@ typedef int64_t val_t;
 typedef long double val_t;
 # else
 typedef double val_t;
-# endif 
+# endif
 
 #elif defined(WITH_MPQ_VALUES)
 
@@ -172,6 +173,9 @@ typedef double val_t;
 # endif
 # include <gmpxx.h>
 # include <types/gmpxx.hpp>
+# ifdef WITH_MPI
+#  include <gmpxx_boost_serialization.hpp>
+# endif
 typedef mpq_class val_t;
 
 #elif defined(WITH_MPZ_VALUES)
@@ -183,6 +187,9 @@ typedef mpq_class val_t;
 # endif
 # include <gmpxx.h>
 # include <types/gmpxx.hpp>
+# ifdef WITH_MPI
+#  include <gmpxx_boost_serialization.hpp>
+# endif
 typedef mpz_class val_t;
 
 #elif defined(WITH_XINT_VALUES)
@@ -194,7 +201,7 @@ typedef boost::xint::integer val_t;
 
 # error Please define one of: WITH_INT_VALUES, WITH_MODULAR_VALUES, WITH_DOUBLE_VALUES, WITH_MPZ_VALUES, WITH_MPQ_VALUES or WITH_XINT_VALUES
 
-#endif // WITH_..._VALUES 
+#endif // WITH_..._VALUES
 
 
 // use WITH_MPI_SERIALIZED / WITH_MPI_MULTIPLE to select which
@@ -255,7 +262,7 @@ typedef boost::xint::integer val_t;
 #if RF_USE_MALLOC_ALLOCATOR
 # define HAVE_EXT_MALLOC_ALLOCATOR_H 1
 # define USE_MALLOC_ALLOCATOR 1
-#endif 
+#endif
 
 #if defined(HAVE_EXT_MALLOC_ALLOCATOR_H) && defined(USE_MALLOC_ALLOCATOR)
 # include <ext/malloc_allocator.h>
@@ -263,7 +270,7 @@ typedef boost::xint::integer val_t;
 #else
 # ifdef USE_MALLOC_ALLOCATOR
 #  warning Requested use of malloc allocator, but header file was not found by configure -- falling back to std::allocator
-# endif 
+# endif
 # include <memory>
 # define allocator std::allocator
 #endif
@@ -341,7 +348,7 @@ print_backtrace()
 
 
 extern "C"
-void 
+void
 sigint(int signum)
 {
   std::cerr << "*** Terminated upon user request (SIGINT) ***" << std::endl;
@@ -354,7 +361,7 @@ static ucontext_t main_loop_ctx;
 static bool got_sigfpe = false;
 
 extern "C"
-void 
+void
 sigfpe(int signum, siginfo_t* siginfo, void* ucp)
 {
   std::cerr << "*** Arithmetic error (SIGFPE): ";
@@ -388,7 +395,7 @@ sigsegv(int signum, siginfo_t* siginfo, void* ucp)
   std::cerr << "*** SIGSEGV: "
             << (siginfo->si_code == SEGV_MAPERR?
                 "address not mapped"
-                : (siginfo->si_code == SEGV_ACCERR? 
+                : (siginfo->si_code == SEGV_ACCERR?
                    "invalid permissions for mapped object"
                    : "unknown fault"))
             << " ***" << std::endl;
@@ -422,7 +429,7 @@ main(int argc, char** argv)
 
   // set up alternate stack, to gracefully handle out-of-memory errors
   stack_t ss, oss;
-  ss.ss_sp = malloc(SIGSTKSZ); 
+  ss.ss_sp = malloc(SIGSTKSZ);
   if (ss.ss_sp == NULL) {
     /* Handle error */
     std::cerr << "Cannot allocate memory for alternate stack."
@@ -444,7 +451,7 @@ main(int argc, char** argv)
   const int required = (1 == omp_get_num_threads() ? MPI_THREAD_SINGLE : MPI_THREAD_SERIALIZED);
 #  else  // WITH_MPI_MULTIPLE
   const int required = (1 == omp_get_num_threads() ? MPI_THREAD_SINGLE : MPI_THREAD_MULTIPLE);
-#  endif 
+#  endif
   int provided;
   MPI_Init_thread(&argc, &argv, required, &provided);
   if (required > provided) {
@@ -507,7 +514,7 @@ main(int argc, char** argv)
         return 1;
       };
     }
-    else if ('h' == c) { 
+    else if ('h' == c) {
       // print help text and exit successfully
       usage(std::cout, argc, argv);
       return 0;
@@ -600,7 +607,7 @@ main(int argc, char** argv)
     {
       std::ifstream input(argv[i]);
       if (input.fail()) {
-        std::cerr << "Cannot open file '" <<argv[i]<< "' for reading - skipping." 
+        std::cerr << "Cannot open file '" <<argv[i]<< "' for reading - skipping."
                   << std::endl;
         continue;
       };
@@ -631,7 +638,7 @@ main(int argc, char** argv)
         std::swap(rows, cols);
 
 #ifdef WITH_DOUBLE_VALUES
-      rheinfall::is_zero_traits<val_t>::tolerance = 
+      rheinfall::is_zero_traits<val_t>::tolerance =
         rows * cols * std::numeric_limits<val_t>::epsilon();
 #endif
 
