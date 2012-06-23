@@ -10,12 +10,12 @@
 #PYTHON=2.5.4
 #SWIG=1.3.35
 #LINBOX=1.1.7rc0
-#GMP=5.0.1
+#GMP=5.0.5
 #GIVARO=3.3.2
 #ATLAS=3.8.3
 #BOOST=1.47.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.47.0/boost_1_47_0.tar.gz
 #TCMALLOC=1.8.3 # http://google-perftools.googlecode.com/files/google-perftools-1.8.3.tar.gz
-TBB=40_278oss # http://threadingbuildingblocks.org/uploads/78/179/4.0%20update%202/tbb40_278oss_lin.tgz
+#TBB=40_278oss # http://threadingbuildingblocks.org/uploads/78/179/4.0%20update%202/tbb40_278oss_lin.tgz
 
 # set this to install BeBOP's Sparse Matrix Converter library and command-line utility
 #SMC=yes # See: http://bebop.cs.berkeley.edu/smc/
@@ -73,7 +73,7 @@ _ () {
 }
 
 
-## parse command-line 
+## parse command-line
 
 case "$1" in
     -h|--help)
@@ -108,7 +108,7 @@ if [ -n "$1" ]; then
 else
     sw='sw'
 fi
-if ! is_absolute_path "$sw"; then 
+if ! is_absolute_path "$sw"; then
     sw="$(pwd)/${sw}"
 fi
 mkdir -p "${sw}"
@@ -197,7 +197,7 @@ if [ -n "$CYTHON" ]; then
     cd Cython-${CYTHON}
     python setup.py build
     python setup.py install --home=${sw}
-    
+
     PYTHONPATH=$PYTHONPATH:`pwd`; export PYTHONPATH
     PATH=$PATH:`pwd`/bin; export PATH
     set +x
@@ -289,7 +289,7 @@ if [ -n "$BOOST" ]; then
     boost_file=$(echo boost_$BOOST | tr . _)
     wget "http://surfnet.dl.sourceforge.net/project/boost/boost/${BOOST}/${boost_file}.tar.gz" \
         -O "${boost_file}.tar.gz"
-    set -x 
+    set -x
     tar -xzf  "${boost_file}.tar.gz"
     cd ${boost_file}
     patch -p1 -i ${etc_dir}/boost_1_45_0.ssend.patch
@@ -301,7 +301,7 @@ if [ -n "$BOOST" ]; then
     ./bootstrap.sh --prefix=${sw} --with-libraries=mpi,serialization,test \
         variant=release threading=multi
     cat >> project-config.jam <<EOF
-# Boost will not build Boost.MPI unless it is explicitly 
+# Boost will not build Boost.MPI unless it is explicitly
 # told to by the following line:
 using mpi : mpicxx ;
 EOF
@@ -334,14 +334,14 @@ fi
 if [ -n "$TBB" ]; then
     _ Installing Intel TBB $TBB ...
     cd ${sw}/src/
-    set -x 
+    set -x
     case "$TBB" in
         # TBB download URL changes with release ...
         40_278oss)
             wget -N "http://threadingbuildingblocks.org/uploads/78/179/4.0%20update%202/tbb40_278oss_lin.tgz"
             wget -N "http://threadingbuildingblocks.org/uploads/78/179/4.0%20update%202/tbb40_278oss_src.tgz"
             ;;
-        30_20100915oss) 
+        30_20100915oss)
             wget -N "http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_lin.tgz"
             wget -N "http://www.threadingbuildingblocks.org/uploads/77/161/3.0%20update%203/tbb30_20100915oss_src.tgz"
             ;;
@@ -378,7 +378,7 @@ fi
 if [ -n "$SMC" ] && [ ! "$SMC" = no ]; then
     _ Installing BeBOP Sparse Matrix Converter ...
     cd ${sw}/src/
-    set -x 
+    set -x
     wget http://bebop.cs.berkeley.edu/smc/tarballs/bebop_make.tar.gz
     wget http://bebop.cs.berkeley.edu/smc/tarballs/bebop_util.tar.gz
     wget http://bebop.cs.berkeley.edu/smc/tarballs/sparse_matrix_converter.tar.gz
