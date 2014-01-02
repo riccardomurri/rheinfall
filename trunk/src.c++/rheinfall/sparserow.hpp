@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010-2012 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010-2013 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -74,15 +74,15 @@ namespace rheinfall {
     /** Construct a row with the given starting and ending column. The
         entry at @a starting_column is set to @a leading_term, any
         other entry is null. */
-    SparseRow(const coord_t starting_column, 
-              const coord_t ending_column, 
+    SparseRow(const coord_t starting_column,
+              const coord_t ending_column,
               const val_t leading_term);
 
     /** Make a @a SparseRow instance from coordinate/value pairs
         gotten from interval [p0, p1). */
     template <typename ForwardIter>
     static
-    SparseRow<val_t,coord_t,allocator>* new_from_range(ForwardIter p0, ForwardIter p1, 
+    SparseRow<val_t,coord_t,allocator>* new_from_range(ForwardIter p0, ForwardIter p1,
                                                        const coord_t ending_column);
 
 #ifdef WITH_MPI
@@ -91,7 +91,7 @@ namespace rheinfall {
         communicator/source/tag, that is passed unchanged to @c
         boost::mpi::communicator::recv(). */
     static
-    SparseRow<val_t,coord_t,allocator>* new_from_mpi_message(mpi::communicator& comm, 
+    SparseRow<val_t,coord_t,allocator>* new_from_mpi_message(mpi::communicator& comm,
                                                              const int source, const int tag);
 #endif
 
@@ -128,7 +128,7 @@ namespace rheinfall {
         dense_threshold, convert it to dense format storage before
         performing elimination. */
     SparseRow<val_t,coord_t,allocator>* linear_combination(SparseRow<val_t,coord_t,allocator>* other,
-                                                           const val_t& a, const val_t& b, 
+                                                           const val_t& a, const val_t& b,
                                                            const bool adjust) const;
 
     /** Return a pointer to a linear combination of this row with row
@@ -140,14 +140,14 @@ namespace rheinfall {
         If this row is sparse and its fill-in percentage exceeds @a
         dense_threshold, convert it to dense format storage before
         performing elimination. */
-    DenseRow<val_t,coord_t,allocator>* linear_combination(DenseRow<val_t,coord_t,allocator>* other, 
+    DenseRow<val_t,coord_t,allocator>* linear_combination(DenseRow<val_t,coord_t,allocator>* other,
                                                           const val_t& a, const val_t& b,
                                                           const bool adjust) const;
 
   protected:
 
     /** Nickname for base class; used to shorten templatized expressions. */
-    typedef Row<val_t,coord_t,allocator> Row_; 
+    typedef Row<val_t,coord_t,allocator> Row_;
 
     /** Type used for storing the (coordinate, value) pairs that make up a sparse row. */
     typedef std::vector< std::pair<coord_t,val_t>,
@@ -197,34 +197,34 @@ namespace rheinfall {
 
 namespace rheinfall {
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline
   SparseRow<val_t,coord_t,allocator>::
-  SparseRow(const coord_t starting_column, 
-            const coord_t ending_column, 
-            const val_t leading_term) 
+  SparseRow(const coord_t starting_column,
+            const coord_t ending_column,
+            const val_t leading_term)
     : Row_::Row(Row_::sparse, starting_column, ending_column, leading_term)
     , storage()
     , weight_(0)
-  { 
+  {
     // init-only ctor
   };
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline
-  SparseRow<val_t,coord_t,allocator>::SparseRow() 
+  SparseRow<val_t,coord_t,allocator>::SparseRow()
     : Row_::Row(Row_::sparse, -1, -1, 0)
-    , storage() 
+    , storage()
     , weight_(0)
-  { 
+  {
     // init-only ctor
   };
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   template <typename ForwardIter>
   inline
@@ -233,11 +233,11 @@ namespace rheinfall {
   new_from_range(ForwardIter p0,
                  ForwardIter p1,
                  const coord_t ending_column)
-  { 
+  {
     SparseRow<val_t,coord_t,allocator>* row = new SparseRow();
     row->ending_column_ = ending_column;
     coord_t starting_column = ending_column;
-    val_t leading_term = 0;
+    val_t leading_term(0);
     for (; p0 != p1; ++p0) {
       const coord_t coord = p0->first;
       const val_t value = p0->second;
@@ -259,7 +259,7 @@ namespace rheinfall {
     if (row->starting_column_ == row->ending_column_) {
       delete row;
       return NULL;
-    } 
+    }
     else {
       assert(row->__ok());
       return row;
@@ -268,12 +268,12 @@ namespace rheinfall {
 
 
 #ifdef WITH_MPI
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline
   SparseRow<val_t,coord_t,allocator>*
   SparseRow<val_t,coord_t,allocator>::
-  new_from_mpi_message(mpi::communicator& comm, 
+  new_from_mpi_message(mpi::communicator& comm,
                        const int source, const int tag)
   {
     SparseRow<val_t,coord_t,allocator>* row = new  SparseRow<val_t,coord_t,allocator>();
@@ -284,7 +284,7 @@ namespace rheinfall {
 
 
 #ifndef NDEBUG
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline bool
   SparseRow<val_t,coord_t,allocator>::
@@ -296,8 +296,8 @@ namespace rheinfall {
     // entries in `this->storage` are *always* ordered by increasing column index
     coord_t s1 = this->starting_column_;
     double computed_weight = 0;
-    for (typename storage_t::const_iterator it = storage.begin(); 
-         it < storage.end(); 
+    for (typename storage_t::const_iterator it = storage.begin();
+         it < storage.end();
          ++it) {
       assert(s1 < it->first);
       assert(it->first <= this->ending_column_);
@@ -311,7 +311,7 @@ namespace rheinfall {
 #endif
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline SparseRow<val_t,coord_t,allocator>*
   SparseRow<val_t,coord_t,allocator>::
@@ -336,21 +336,21 @@ namespace rheinfall {
   };
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   float
-  SparseRow<val_t,coord_t,allocator>::fill_in() const 
-  { 
-    return 100.0 * size() / (this->ending_column_ - this->starting_column_); 
+  SparseRow<val_t,coord_t,allocator>::fill_in() const
+  {
+    return 100.0 * size() / (this->ending_column_ - this->starting_column_);
   };
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
-  SparseRow<val_t,coord_t,allocator>* 
+  SparseRow<val_t,coord_t,allocator>*
   SparseRow<val_t,coord_t,allocator>::
   linear_combination(SparseRow<val_t,coord_t,allocator>* restrict other,
-                     const val_t& a, const val_t& b, const bool adjust) 
+                     const val_t& a, const val_t& b, const bool adjust)
     const restrict_this
   {
     // NOTE: the `adjust` argument is ignored: there's no need to
@@ -362,7 +362,7 @@ namespace rheinfall {
 
     SparseRow<val_t,coord_t,allocator>* restrict result = NULL; // XXX: use boost::optional<...> instead?
 
-    typename storage_t::const_iterator this_i = this->storage.begin(); 
+    typename storage_t::const_iterator this_i = this->storage.begin();
     typename storage_t::const_iterator other_i = other->storage.begin();
     // loop while one of the two indexes is still valid
     while(this_i != this->storage.end() or other_i != other->storage.end()) {
@@ -373,7 +373,7 @@ namespace rheinfall {
         // this_i reached end of vector, use out-of-range value
         : this->ending_column_ + 1;
 
-      const coord_t other_col = 
+      const coord_t other_col =
         (other_i != other->storage.end())?
         // use coord from row element
         other_i->first
@@ -432,16 +432,16 @@ namespace rheinfall {
           this->stats_ptr->ops_count += 1;
 #endif
       }
-      else 
+      else
         // should not happen!
         throw std::logic_error("Unhandled case in SparseRow::linear_combination(SparseRow*)");
-    
+
       if (nonzero_found) {
         // XXX: the following code makes assumptions about how the
         // storage is organised within `SparseRow`; it duplicates code
         // from SparseRow::operator[] for efficiency
         if (NULL == result) {
-          // allocate new SparseRow 
+          // allocate new SparseRow
           result = new SparseRow(coord, this->ending_column_, entry);
           assert(result->storage.size() == 0);
 #ifdef RF_ENABLE_STATS
@@ -460,8 +460,8 @@ namespace rheinfall {
             this->stats_ptr->sparserow_elts += 1;
           };
 #endif
-        }; 
-      }; 
+        };
+      };
     }; // while(this_i < storage.end() ...)
 #ifndef NDEBUG
     if (NULL != result) {
@@ -479,12 +479,12 @@ namespace rheinfall {
   }; // SparseRow<val_t,coord_t,allocator>* linear_combination(SparseRow<val_t,coord_t,allocator>* r)
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
-  DenseRow<val_t,coord_t,allocator>* 
+  DenseRow<val_t,coord_t,allocator>*
   SparseRow<val_t,coord_t,allocator>::
   linear_combination(DenseRow<val_t,coord_t,allocator>* restrict other,
-                     const val_t& a, const val_t& b, const bool adjust) 
+                     const val_t& a, const val_t& b, const bool adjust)
     const restrict_this
   {
     assert(this->starting_column_ == other->starting_column_);
@@ -513,20 +513,20 @@ namespace rheinfall {
     other->leading_term_ = 0; // by construction
 
     DenseRow<val_t,coord_t,allocator>* result = (adjust? other->adjust() : other);
-    assert(NULL == result 
+    assert(NULL == result
            or (adjust and result->starting_column_ > this->starting_column_));
     return result; // content update done, adjust size and starting column
   }; // DenseRow<val_t,coord_t,allocator>* linear_combination(DenseRow<val_t,coord_t,allocator>* other)
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline val_t
   SparseRow<val_t,coord_t,allocator>::
   get(const coord_t col) const
   {
     assert(col >= this->starting_column_ and col <= this->ending_column_);
-    if (col == this->starting_column_) 
+    if (col == this->starting_column_)
       return this->leading_term_;
     if (storage.size() == 0)
       return 0;
@@ -538,24 +538,24 @@ namespace rheinfall {
       // end of list reached, `col` is larger than any index in this row
       return 0;
     }
-    else if (col == storage[jj].first) 
+    else if (col == storage[jj].first)
       return storage[jj].second;
     else { // storage[jj].first > j > storage[jj+1].first
       return 0;
     };
-  }; // SparseRow::get(...) const 
+  }; // SparseRow::get(...) const
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline void
   SparseRow<val_t,coord_t,allocator>::
-  print_on(std::ostream& out) const 
+  print_on(std::ostream& out) const
   {
     out << "{ "
         << this->starting_column_ <<":"<< this->leading_term_;
-    for (typename storage_t::const_iterator it = storage.begin(); 
-         it != storage.end(); 
+    for (typename storage_t::const_iterator it = storage.begin();
+         it != storage.end();
          ++it) {
       out <<" "<< it->first <<":"<< it->second;
     }
@@ -564,19 +564,19 @@ namespace rheinfall {
 
 
 #ifdef WITH_MPI
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   template<class Archive>
-  inline void 
+  inline void
   SparseRow<val_t,coord_t,allocator>::
-  serialize(Archive& ar, const unsigned int version) 
+  serialize(Archive& ar, const unsigned int version)
   {
     assert(version == 0);
     // When the class Archive corresponds to an output archive, the
     // & operator is defined similar to <<.  Likewise, when the class Archive
     // is a type of input archive the & operator is defined similar to >>.
-    ar 
-      & boost::serialization::base_object< Row<val_t,coord_t,allocator> >(*this) 
+    ar
+      & boost::serialization::base_object< Row<val_t,coord_t,allocator> >(*this)
       & storage
       & weight_;
     assert(this->__ok());
@@ -584,11 +584,11 @@ namespace rheinfall {
 #endif // WITH_MPI
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline void
   SparseRow<val_t,coord_t,allocator>::
-  set(const coord_t col, const val_t value) 
+  set(const coord_t col, const val_t value)
   {
     assert(col >= this->starting_column_ and col <= this->ending_column_);
     if (col == this->starting_column_) {
@@ -610,10 +610,10 @@ namespace rheinfall {
       };
 #endif
     }
-    else if (col == storage[jj].first) 
+    else if (col == storage[jj].first)
       storage[jj].second = value;
     else { // storage[jj].first > col, insert new pair before `jj`
-      storage.insert(storage.begin()+jj, 
+      storage.insert(storage.begin()+jj,
                      std::make_pair<size_t,val_t>(col,value));
       weight_ += (1.0 / col);
 #ifdef RF_ENABLE_STATS
@@ -626,20 +626,20 @@ namespace rheinfall {
   }; // SparseRow::set(...)
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
-  inline size_t 
-  SparseRow<val_t,coord_t,allocator>::size() const 
-  { 
-    return storage.size(); 
+  inline size_t
+  SparseRow<val_t,coord_t,allocator>::size() const
+  {
+    return storage.size();
   };
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline double
-  SparseRow<val_t,coord_t,allocator>::weight() const 
-  { 
+  SparseRow<val_t,coord_t,allocator>::weight() const
+  {
     return weight_;
   };
 

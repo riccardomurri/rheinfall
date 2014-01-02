@@ -96,7 +96,23 @@ extern void operator delete [] (void* data)
 typedef long coord_t;
 
 // Select what type will be used for the matrix coefficients.
-#if defined(WITH_MODULAR_VALUES)
+#if defined(WITH_GFQ_VALUES)
+# ifdef RF_ENABLE_STATS
+#  define __GIVARO_COUNT__
+# endif
+
+# include <types/givaro.hpp>
+# include <givaro/givgfq.h>
+# include <givaro/StaticElement.h>
+
+typedef long mod_int_t;
+typedef Givaro::GFqDom<mod_int_t> field_t;
+typedef Givaro::StaticElement<field_t> val_t;
+
+// need to define the `static Domain _domain` member of `Givaro::StaticElement`
+template<> field_t val_t::_domain(2);
+
+#elif defined(WITH_MODULAR_VALUES)
 
 # include <types/modular.hpp>
 # if defined(HAVE_LONG_LONG_INT)
@@ -288,8 +304,10 @@ usage(std::ostream& out, const int argc, char const* const* argv)
   out << "Usage: " << argv[0] << " [options] matrix_file.sms" << std::endl
       << std::endl
       << "Options:" << std::endl
-#ifdef WITH_MODULAR_VALUES
-      << "  -p NUM  Perform computations modulo NUM (default: 2'147'483'647)." << std::endl
+#if defined(WITH_MODULAR_VALUES)
+      << "  -m NUM  Perform computations modulo NUM (default: 2'147'483'647)." << std::endl
+#elif defined(WITH_GFQ_VALUES)
+      << "  -m NUM  Perform computations modulo NUM (default: 32'749)." << std::endl
 #endif
 #if defined(WITH_MPI) or defined(_OPENMP)
       << "  -w NUM  Divide matrix in bands of NUM columns each and distribute" << std::endl
@@ -472,11 +490,10 @@ main(int argc, char** argv)
   static struct option long_options[] = {
     {"dense-threshold", 1, 0, 'd'},
     {"help",            0, 0, 'h'},
-#ifdef WITH_MODULAR_VALUES
+#if defined(WITH_MODULAR_VALUES) || defined(WITH_GFQ_VALUES)
     {"modulus",         1, 0, 'm'},
-#else
-    {"pivot-threshold", 1, 0, 'p'},
 #endif
+    {"pivot-threshold", 1, 0, 'p'},
     {"tranpose",        0, 0, 't'},
     {"verbose",         0, 0, 'v'},
     {"width",           1, 0, 'w'},
@@ -487,10 +504,12 @@ main(int argc, char** argv)
   float dense_threshold = 40.0;
   val_t pivot_threshold = 2;
   bool transpose = false;
-
-#ifdef WITH_MODULAR_VALUES
-  modular::Modular<mod_int_t>::global_set_modulus(2147483647);
+#if defined(WITH_MODULAR_VALUES)
+  mod_int_t modulus = 2147483647;
+#elif defined(WITH_GFQ_VALUES)
+  mod_int_t modulus = 32749;
 #endif
+
 
   int c;
   while (true) {
@@ -514,32 +533,34 @@ main(int argc, char** argv)
       usage(std::cout, argc, argv);
       return 0;
     }
-#ifdef WITH_MODULAR_VALUES
+#if defined(WITH_MODULAR_VALUES) || defined(WITH_GFQ_VALUES)
     else if ('m' == c) {
       // modulus to use in modular arithmetic
-      mod_int_t p;
       std::istringstream arg(optarg);
-      arg >> p;
-      modular::Modular<mod_int_t>::global_set_modulus(p);
+      arg >> modulus;
+      if (modulus < 2) {
+        std::cerr << "Argument to option -m/--modulus must be a positive prime number."
+                  << " Aborting." << std::endl;
+        return 1;
+      };
     }
-#else
+#endif
     else if ('p' == c) {
       // threshold for pivoting
-# if (RF_PIVOT_STRATEGY == RF_PIVOT_THRESHOLD)
+#if (RF_PIVOT_STRATEGY == RF_PIVOT_THRESHOLD)
       std::istringstream arg(optarg);
       arg >> pivot_threshold;
-      if (pivot_threshold <= 0) {
+      if (pivot_threshold < 1) {
         std::cerr << "Argument to option -p/--pivot-threshold must be a positive number."
                   << " Aborting." << std::endl;
         return 1;
       };
-# else
+#else
       std::cerr << "Warning: Ignoring option -p/--pivot-threshold,"
                 << " which only makes sense in threshold pivoting mode."
                 << std::endl;
-# endif
-    }
 #endif
+    }
     else if ('t' == c) {
       // transpose matrix when reading it
       transpose = true;
@@ -596,6 +617,13 @@ main(int argc, char** argv)
   sigaddset(&sa.sa_mask, SIGUSR2);
   sigaction (SIGUSR2, &sa, NULL);
 #endif // WITH_GE
+
+#if defined(WITH_MODULAR_VALUES)
+  modular::Modular<mod_int_t>::global_set_modulus(modulus);
+#elif defined(WITH_GFQ_VALUES)
+  field_t field(modulus);
+  val_t::setDomain(field);
+#endif
 
   // start processing
   for (int i = optind; i < argc; ++i)
@@ -672,6 +700,10 @@ main(int argc, char** argv)
       };
 #endif // NDEBUG
 
+#if defined(RF_ENABLE_STATS) && defined (WITH_GFQ_VALUES)
+      field.clear();
+#endif
+
       // base for computing wall-clock time
       struct timeval wc_t0;
       gettimeofday(&wc_t0, NULL);
@@ -719,6 +751,11 @@ main(int argc, char** argv)
 
       if (0 == myid)
         std::cout << std::endl;
+
+#if defined(RF_ENABLE_STATS) && defined (WITH_GFQ_VALUES)
+      field.info();
+#endif
+
     };
 
 #ifdef WITH_MPI
