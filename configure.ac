@@ -3,7 +3,7 @@
 ##
 
 AC_PREREQ([2.65])
-AC_INIT([rheinfall],[0.15.10],[riccardo.murri@gmail.com])
+AC_INIT([rheinfall],[2014.01.02],[riccardo.murri@gmail.com])
 AC_CONFIG_SRCDIR([src.c++/rheinfall/rank.hpp])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
