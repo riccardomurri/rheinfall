@@ -1,14 +1,13 @@
 ## Process this file with automake to produce Makefile.in
 
 # this is an include-only library
-nobase_include_HEADERS = rheinfall/rank.hpp rheinfall/row.hpp rheinfall/sparserow.hpp rheinfall/denserow.hpp rheinfall/types.hpp rheinfall/types/gmpxx.hpp rheinfall/types/modular.hpp rheinfall/types/xint.hpp
+nobase_include_HEADERS = rheinfall/rank.hpp rheinfall/row.hpp rheinfall/sparserow.hpp rheinfall/denserow.hpp rheinfall/types.hpp rheinfall/types/gmpxx.hpp rheinfall/types/modular.hpp
 
 # build example programs
 bin_PROGRAMS = rank-int rank-mod lu
-EXTRA_PROGRAMS = rank-xint
-if HAVE_BOOST_XINT
-  bin_PROGRAMS += rank-xint
-endif
+
+EXTRA_PROGRAMS += rank-gfq
+bin_PROGRAMS += rank-gfq
 
 EXTRA_PROGRAMS += rank-int32 rank-int64
 if HAVE_INT32_T
@@ -209,13 +208,6 @@ rank_mpz_mpi_tbb_CPPFLAGS= $(rank_mpz_mpi_CPPFLAGS) $(RF_MPI_CPPFLAGS) $(TBB_CPP
 rank_mpz_mpi_tbb_CXXFLAGS= $(rank_mpz_mpi_CXXFLAGS) $(TBB_CXXFLAGS)
 rank_mpz_mpi_tbb_LDFLAGS= $(rank_mpz_mpi_LDFLAGS) $(TBB_LDFLAGS)
 rank_mpz_mpi_tbb_LDADD = $(rank_mpz_mpi_LDADD) $(TBB_LIBS)
-
-# example program using Boost.XInt infinite-precision integer values
-rank_xint_SOURCES = examples/rank.cpp
-rank_xint_CPPFLAGS= $(AM_CPPFLAGS)  -DWITH_XINT_VALUES
-rank_xint_CXXFLAGS= $(AM_CXXFLAGS)
-rank_xint_LDFLAGS= $(AM_LDFLAGS) $(BOOST_XINT_LDFLAGS)
-rank_xint_LDADD = $(AM_LIBS) $(BOOST_XINT_LIBS)
 
 
 # lu - example program using `double`/`long double` values (whichever is wider)
