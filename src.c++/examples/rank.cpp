@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010, 2011, 2012 riccardo.murri@gmail.com.  All rights reserved.
+ * Copyright (c) 2010-2014 riccardo.murri@gmail.com.  All rights reserved.
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -192,14 +192,9 @@ typedef mpq_class val_t;
 # endif
 typedef mpz_class val_t;
 
-#elif defined(WITH_XINT_VALUES)
-
-# include <boost/xint/integer.hpp>
-# include <types/xint.hpp>
-typedef boost::xint::integer val_t;
 #else
 
-# error Please define one of: WITH_INT_VALUES, WITH_MODULAR_VALUES, WITH_DOUBLE_VALUES, WITH_MPZ_VALUES, WITH_MPQ_VALUES or WITH_XINT_VALUES
+# error Please define one of: WITH_INT_VALUES, WITH_MODULAR_VALUES, WITH_DOUBLE_VALUES, WITH_MPZ_VALUES, or WITH_MPQ_VALUES
 
 #endif // WITH_..._VALUES
 
