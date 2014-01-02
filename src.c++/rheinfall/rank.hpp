@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010, 2011, 2012 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010, 2011, 2012, 2013 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ namespace rheinfall {
 
   /** Implements the `Rheinfall` algorithm for the computation of matrix
       rank. */
-  template <typename val_t, typename coord_t = int, 
+  template <typename val_t, typename coord_t = int,
             template<typename T> class allocator = std::allocator >
   class Rank {
 
@@ -68,14 +68,14 @@ public:
 
     /** Constructor. If compiled with MPI, will use the default
         communicator @c MPI_COMM_WORLD */
-    Rank(const coord_t ncols, 
+    Rank(const coord_t ncols,
          const val_t pivoting_threshold,
          const coord_t width = 1,
          const float dense_threshold = 40.0);
-    
+
 #ifdef WITH_MPI
     /** Constructor, taking explicit MPI communicator. */
-    Rank(mpi::communicator& comm, 
+    Rank(mpi::communicator& comm,
          const coord_t ncols,
          const val_t pivoting_threshold,
          const coord_t width = 1,
@@ -85,7 +85,7 @@ public:
     /** Destructor. When using OpenMP and MPI serialization, destroys
         the @c mpi_send_mutex_; otherwise, does nothing. */
     ~Rank();
-  
+
 
     /** Read a matrix stream into the processors.  Return number of
         nonzero entries read.
@@ -108,43 +108,43 @@ public:
         if @a nrows is not zero, no header line is read and @a nrows,
         @a ncols must contain the exact number of rows and columns in
         the matrix.
-        
+
         Reading from the stream is terminated by EOF or after the SMS
         footer line (consisting of three 0's in a row) is read.  In
         any case, the @a input stream is not closed.
-        
+
         If @c local_only is @c true (default), only rows assigned to
         the local MPI rank are retained and other are discarded.  If
         @c local_only is @c false, rows are sent to the destination
         MPI rank as soon as they are read; in this case, only one rank
         should do the I/O.
-        
+
         If @c transpose is @c true, then row and column values read from
         the stream are exchanged, i.e., the transpose of the matrix is
-        read into memory. 
+        read into memory.
     */
-    coord_t read_triples(std::istream& input, coord_t& nrows, coord_t& ncols, 
+    coord_t read_triples(std::istream& input, coord_t& nrows, coord_t& ncols,
                          const bool local_only=true, const bool transpose=false);
-    
+
     /** Read a matrix stream in SMS format into the processors.
         Return number of nonzero entries read.
-        
+
         The @c input stream should be in SMS format, see
         http://www-ljk.imag.fr/membres/Jean-Guillaume.Dumas/simc.html
         for details.  In particular, this implies that entries
         belonging to one row are not interleaved with entries from
         other rows; i.e., the algorithm can consider reading row @a i
-        done as soon as it finds a row index @a j!=i. 
+        done as soon as it finds a row index @a j!=i.
 
         For the rest (including meaning of the arguments), this
         function behaves exacly as @c read_triples (which see).
     */
-    coord_t read_sms(std::istream& input, coord_t& nrows, coord_t& ncols, 
+    coord_t read_sms(std::istream& input, coord_t& nrows, coord_t& ncols,
                      const bool local_only=true, const bool transpose=false);
 
     /** Return rank of matrix after in-place destructive computation. */
     coord_t rank();
-    
+
     /** A row will switch its storage to dense format when the percent
         of nonzero entries w.r.t. total length exceeds this
         value. Default is to switch to dense storage at 40% fill-in. */
@@ -160,7 +160,7 @@ public:
     /** Copy the global collected statistics into @a global_stats. */
     void get_global_stats(Stats& global_stats) const;
 
-    /** Copy the statistics of the local processing units into @a local_stats. 
+    /** Copy the statistics of the local processing units into @a local_stats.
         This is the same as taking a copy of the @c stats member attribute directly. */
     void get_local_stats(Stats& local_stats) const;
 #endif // RF_ENABLE_STATS
@@ -168,39 +168,39 @@ public:
   protected:
     /** A single processing element. */
     class Processor {
-      
+
     public:
       /** Constructor, taking parent instance and index of the columns
           to process. */
       Processor(Rank& parent, const coord_t column);
       /** Destructor. Releases OpenMP lock and frees up remaining memory. */
       ~Processor();
-      
-    protected:     
+
+    protected:
       /** Parent instance. */
       Rank<val_t,coord_t,allocator>& parent_;
       /** Index of matrix column to process. */
       const coord_t column_;
       friend class Rank<val_t,coord_t,allocator>; // XXX: see rank()
-      
+
       /** Row used for elimination */
       Row<val_t,coord_t,allocator>* u;
-      
+
       /** Processor state: it is @c running when Gaussian elimination
           operations are being carried out regularly; it turns @c ending
           when a @c TAG_END message is received; it is @c done when the
           final contribution to the rank has been computed and the @c
           step() method should be called no more. */
       enum { running, ending, done } phase;
-      
+
       /** A block of rows. */
 #ifndef RF_USE_TBB
-      typedef std::list< 
-        Row<val_t,coord_t,allocator>*, 
+      typedef std::list<
+        Row<val_t,coord_t,allocator>*,
         allocator<Row<val_t,coord_t,allocator>*> > row_block;
 #else
-      typedef tbb::concurrent_vector< 
-        Row<val_t,coord_t,allocator>*, 
+      typedef tbb::concurrent_vector<
+        Row<val_t,coord_t,allocator>*,
         allocator<Row<val_t,coord_t,allocator>*> > row_block;
 #endif
       /** The block of rows that will be eliminated next time @c step() is called. */
@@ -218,7 +218,7 @@ public:
           processors and the associated MPI request. */
       typedef std::list< std::pair< mpi::request, Row<val_t,coord_t,allocator>* >,
                          allocator< std::pair< mpi::request, Row<val_t,coord_t,allocator>* > > > outbox_t;
-      /** List of rows sent to other processors and the associated MPI request. 
+      /** List of rows sent to other processors and the associated MPI request.
           We need to keep track of these in order to free the resources when we're done. */
       outbox_t outbox;
 #endif
@@ -229,22 +229,22 @@ public:
 #ifdef RF_ENABLE_STATS
       Stats *stats_ptr;
 #endif
-      
-    public: 
+
+    public:
 
       /** Append the given row to @c inbox */
       void recv_row(Row<val_t,coord_t,allocator>* new_row);
-      
+
       /** Make a pass over the block of rows and return either 0 or 1
           (depending whether elimination took place or not). */
       coord_t step();
-      
+
       /** Switch processor to @c ending state: after one final round of
           elimination, a @c TAG_END message will be sent to the next
           column VPU and no further VPU activity will follow: each
           invocation to @c step() will return always the same result. */
       void end_phase();
-      
+
       /** Return @a true if the processor is in @c done state. */
       bool is_done() const;
     }; // class Processor
@@ -257,20 +257,20 @@ public:
     public:
       /** Constructor, taking pointer to a @c rheinfall::Processor instance. */
       ProcessorStepTask(Processor* const processor)
-        : p_(processor) { }; 
-      
+        : p_(processor) { };
+
       /** Copy constructor. */
       ProcessorStepTask(ProcessorStepTask& other)
-        : p_(other->p_) { }; 
-      
+        : p_(other->p_) { };
+
       /** Invoke @c Processor::step() and then release the @c
           processing_ lock on the @c Processor instance @c p_. */
-      tbb::task* execute() 
+      tbb::task* execute()
       { p_->step(); lock_.release(); return NULL; };
 
     private:
       Processor* const p_;
-      
+
       tbb::mutex::scoped_lock lock_;
 
       friend class Processor;
@@ -289,7 +289,7 @@ public:
 
 
     /** Number of matrix columns. */
-    const coord_t ncols_;         
+    const coord_t ncols_;
     /** Type for grouping all local processors. */
     typedef std::vector< Processor*, allocator<Processor*> > vpu_array_t;
     /** Local processors. */
@@ -313,7 +313,7 @@ public:
     const coord_t w_;
 
     /** Return @c true if the VPU processing column @a c is in the local @c vpus array. */
-    bool       is_local(const coord_t c) const; 
+    bool       is_local(const coord_t c) const;
     /** Return index of the @c Processor instance processing column @a c
         within local @a vpus array. */
     coord_t    vpu_index_for_column(const coord_t c) const;
@@ -322,15 +322,15 @@ public:
 #ifdef WITH_MPI
     /** Return MPI rank where VPU assigned to column @a c resides. */
     int        owner(const coord_t c) const;
-#endif 
+#endif
 
-    // 
+    //
     // communication primitives
     //
 
     /** MPI tags used to discriminate various types of messages. */
     enum { TAG_END=0, TAG_ROW_SPARSE=1, TAG_ROW_DENSE=2 };
-    
+
     /** Send the termination signal to the processor owning the block
         starting at @c col. */
     void send_end(const Processor& origin, const coord_t column) const;
@@ -341,7 +341,7 @@ public:
 
 #ifdef WITH_MPI
     /** Receive messages that have arrived during a computation cycle. */
-    void do_mpi_receive(); 
+    void do_mpi_receive();
 
 # if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
     /** Lock used to to serialize all outgoing MPI calls
@@ -356,7 +356,7 @@ public:
     /// only used inside `read` to keep rows in memory until the whole file has been loaded
     typedef std::map< coord_t, SparseRow<val_t,coord_t,allocator>*,
                       std::less<coord_t>,
-                      allocator< std::pair< coord_t, 
+                      allocator< std::pair< coord_t,
                                             SparseRow<val_t,coord_t,allocator>* > > > _rowmap_t;
 
 };
@@ -368,10 +368,10 @@ public:
 
 // ------- inline methods -------
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   Rank<val_t,coord_t,allocator>::
-  Rank(const coord_t ncols, 
+  Rank(const coord_t ncols,
        const val_t pivoting_threshold,
        const coord_t width,
        const float dense_threshold)
@@ -388,11 +388,11 @@ public:
 #ifdef RF_ENABLE_STATS
     , stats()
 #endif
-  {  
+  {
     // setup the array of processors
 #ifdef WITH_MPI
     const int nmemb = width * (1 + ((ncols / width) / nprocs_));
-#else 
+#else
     const int nmemb = ncols;
 #endif
     vpus.reserve(nmemb);
@@ -409,11 +409,11 @@ public:
 
 
 #ifdef WITH_MPI
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   Rank<val_t,coord_t,allocator>::
-  Rank(mpi::communicator& comm, 
-       const coord_t ncols, 
+  Rank(mpi::communicator& comm,
+       const coord_t ncols,
        const val_t pivoting_threshold,
        const coord_t width,
        const float dense_threshold)
@@ -431,7 +431,7 @@ public:
 # if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
   , mpi_send_mutex_()
 # endif // RF_USE_TBB && WITH_MPI_SERIALIZED
-{  
+{
   // setup the array of processors
   vpus.reserve(1 + ncols_ / nprocs_);
     for (int c = 0; c < ncols_; ++c)
@@ -445,30 +445,30 @@ public:
 #endif // WITH_MPI
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   Rank<val_t,coord_t,allocator>::~Rank()
   {
     // nothing to do
   };
 
-  
-  template <typename val_t, typename coord_t, 
+
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   coord_t
   Rank<val_t,coord_t,allocator>::
-  read_sms(std::istream& input,  
-           coord_t& nrows, coord_t& ncols, 
+  read_sms(std::istream& input,
+           coord_t& nrows, coord_t& ncols,
            const bool local_only,
-           const bool transpose) 
+           const bool transpose)
   {
     // count non-zero items read
     coord_t nnz = 0;
-    
+
     // only read rows whose leading column falls in our domain
-    SparseRow<val_t,coord_t,allocator>* row = 
+    SparseRow<val_t,coord_t,allocator>* row =
       new SparseRow<val_t,coord_t,allocator>(ncols_ - 1);
-    
+
     if (0 == nrows) {
       // read header
       char M;
@@ -478,7 +478,7 @@ public:
       if (transpose)
         std::swap(nrows, ncols);
     };
-    
+
 #ifdef WITH_MPI
     std::list< mpi::request, allocator<mpi::request> > outbox;
 #endif
@@ -494,22 +494,22 @@ public:
         std::swap(i, j);
       // check validity of the data we read; since '0 0 0' is the
       // end-of-stream marker, we have to case for it separately
-      if (not (-1 == i and -1 == j and 0 == value)) { 
+      if (not (-1 == i and -1 == j and is_zero(value))) {
         if (not(0 <= i and i < nrows)) {
-          std::ostringstream msg; 
+          std::ostringstream msg;
           msg << "Invalid row index '" << (i+1) << "',"
               << " should be >0 and <" << nrows;
           throw std::runtime_error(msg.str());
         };
         if (not (0 <= j and j < ncols)) {
-          std::ostringstream msg; 
+          std::ostringstream msg;
           msg << "Invalid column index '" << (j+1) << "'"
               << " should be >0 and <" << ncols;
           throw std::runtime_error(msg.str());
         };
         // ignore zero entries in matrix -- they shouldn't be here in the first place
-        if (0 == value) 
-          continue; 
+        if (is_zero(value))
+          continue;
       };
       // if row index changes, then a new row is starting, so commit the old one.
       if (i != last_row_index) {
@@ -527,7 +527,7 @@ public:
               mpi::request req;
 # if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
               mpi_send_mutex_.lock();
-# endif 
+# endif
               req = comm_.isend(owner(starting_column), TAG_ROW_SPARSE, row);
 # if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
               mpi_send_mutex_.unlock();
@@ -542,12 +542,12 @@ public:
         row = new SparseRow<val_t,coord_t,allocator>(ncols_ - 1);
         last_row_index = i;
       };
-      if (-1 == i and -1 == j and 0 == value)
+      if (-1 == i and -1 == j and is_zero(value))
         break; // end of matrix stream
       row->set(j, value);
       ++nnz;
     }; // while (! eof)
-    
+
 #ifdef WITH_MPI
     // wait for all sent rows to arrive
     mpi::wait_all(outbox.begin(), outbox.end());
@@ -557,11 +557,11 @@ public:
   };
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   coord_t
   Rank<val_t,coord_t,allocator>::
-  read_triples(std::istream& input,  coord_t& nrows, coord_t& ncols, 
+  read_triples(std::istream& input,  coord_t& nrows, coord_t& ncols,
                const bool local_only, const bool transpose)
   {
     if (0 == nrows) {
@@ -573,16 +573,16 @@ public:
       if (transpose)
         std::swap(nrows, ncols);
     };
-    
+
     // count non-zero items read
     coord_t nnz = 0;
-    
+
     // need to keep rows in memory until we reach end of file
     typedef std::pair< const coord_t,val_t > _coord_and_val;
-    typedef std::map< coord_t, val_t, std::less<coord_t>, 
+    typedef std::map< coord_t, val_t, std::less<coord_t>,
                       allocator<_coord_and_val> > _simplerow;
     typedef std::pair< const coord_t,_simplerow > _coord_and_simplerow;
-    typedef std::map< coord_t, _simplerow, std::less<coord_t>, 
+    typedef std::map< coord_t, _simplerow, std::less<coord_t>,
                       allocator<_coord_and_simplerow> > _simplerows;
     _simplerows m;
 
@@ -590,7 +590,7 @@ public:
     val_t value;
     while (not input.eof()) {
       input >> i >> j >> value;
-      if (0 == i and 0 == j and value == 0)
+      if (0 == i and 0 == j and is_zero(value))
         break; // end of matrix stream
       // SMS indices are 1-based
       --i;
@@ -600,20 +600,20 @@ public:
         std::swap(i, j);
       // check validity of the data we read
       if (i < 0 or i >= nrows) {
-        std::ostringstream msg; 
+        std::ostringstream msg;
         msg << "Invalid row index '" << (i+1) << "',"
             << " should be >0 and <" << nrows;
         throw std::runtime_error(msg.str());
       };
         if (j < 0 or j >= ncols) {
-        std::ostringstream msg; 
+        std::ostringstream msg;
         msg << "Invalid column index '" << (j+1) << "'"
             << " should be >0 and <" << ncols;
         throw std::runtime_error(msg.str());
       };
       // ignore zero entries in matrix -- they shouldn't be here in the first place
-      if (0 == value) 
-        continue; 
+      if (is_zero(value))
+       continue;
       m[i][j] = value;
       ++nnz;
     }; // while(not eof)
@@ -621,14 +621,15 @@ public:
 #ifdef WITH_MPI
     std::list< mpi::request, allocator<mpi::request> > outbox;
 #endif
-    for (typename _simplerows::iterator it = m.begin(); 
-         it != m.end(); 
-         ++it) 
+    for (typename _simplerows::iterator it = m.begin();
+         it != m.end();
+         ++it)
       {
         if (it->second.begin() != it->second.end()) { // non-null matrix row
-          SparseRow<val_t,coord_t,allocator>* row = 
-            SparseRow<val_t,coord_t,allocator>::new_from_range(it->second.begin(), 
-                                                               it->second.end(), 
+          //SparseRow<val_t,coord_t,allocator>* row = new SparseRow<val_t,coord_t,allocator>(1, 42000, Givaro::StaticElement< Givaro::GFqDom<long int> >::getDomain().one);
+          SparseRow<val_t,coord_t,allocator>* row =
+            SparseRow<val_t,coord_t,allocator>::new_from_range(it->second.begin(),
+                                                               it->second.end(),
                                                                ncols-1);
           if (NULL == row)
             continue; // with next `it`
@@ -644,7 +645,7 @@ public:
               mpi::request req;
 # if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
               mpi_send_mutex_.lock();
-# endif 
+# endif
               req = comm_.isend(owner(starting_column), TAG_ROW_SPARSE, row);
 # if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
               mpi_send_mutex_.unlock();
@@ -655,9 +656,9 @@ public:
             // discard non-local and null rows
             delete row;
           }; // ! is_local(starting_column)
-        }; // it->second.begin() != it->second.end() 
+        }; // it->second.begin() != it->second.end()
       }; // for (it = m.begin(); ...)
-    
+
 #ifdef WITH_MPI
     // wait for all sent rows to arrive
     mpi::wait_all(outbox.begin(), outbox.end());
@@ -666,11 +667,11 @@ public:
   };
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
-  coord_t 
+  coord_t
   Rank<val_t,coord_t,allocator>::
-  rank() 
+  rank()
   {
     // kickstart termination signal
     if (is_local(0)) {
@@ -683,7 +684,7 @@ public:
 #ifdef RF_USE_TBB
     //tbb::parallel_do(vpus.begin(), vpus.end(), ProcessorStepApply());
 #endif
-  
+
     coord_t n0 = 0;
     while(n0 < vpus.size()) {
       for (coord_t n = n0; n < vpus.size(); ++n) {
@@ -699,7 +700,7 @@ public:
 #ifdef WITH_MPI
       do_mpi_receive();
 #endif
-      // n0 incremented each time a processor goes into `done` state 
+      // n0 incremented each time a processor goes into `done` state
       while (n0 < vpus.size() and vpus[n0]->is_done()) {
         delete vpus[n0];
         vpus[n0] = NULL; // faster SIGSEGV
@@ -727,12 +728,12 @@ public:
 
 
 #ifdef RF_ENABLE_STATS
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline void
   Rank<val_t,coord_t,allocator>::
-  get_global_stats(Stats& global_stats) const 
-  { 
+  get_global_stats(Stats& global_stats) const
+  {
 # ifdef WITH_MPI
     // sum stats count from all processes
     mpi::all_reduce(comm_, stats.ops_count, global_stats.ops_count, std::plus<int>());
@@ -746,68 +747,68 @@ public:
   };
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline void
   Rank<val_t,coord_t,allocator>::
   get_local_stats(Stats& local_stats) const
-  { 
+  {
     local_stats = stats;
   };
 #endif // RF_ENABLE_STATS
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
-  inline bool 
+  inline bool
   Rank<val_t,coord_t,allocator>::
-  is_local(const coord_t c) const 
-  { 
+  is_local(const coord_t c) const
+  {
 #ifdef WITH_MPI
-    return (owner(c) == me_); 
+    return (owner(c) == me_);
 #else
     return true;
 #endif
   };
-  
 
-  template <typename val_t, typename coord_t, 
+
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
-  inline coord_t 
+  inline coord_t
   Rank<val_t,coord_t,allocator>::
   vpu_index_for_column(const coord_t c) const
-  { 
+  {
     assert(c >= 0 and c < ncols_);
     return (w_ * ((c/w_) / nprocs_) + (c % w_));
   };
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline typename Rank<val_t,coord_t,allocator>::Processor*
   Rank<val_t,coord_t,allocator>::
   vpu_for_column(const coord_t c) const
-  { 
-    return vpus[vpu_index_for_column(c)]; 
+  {
+    return vpus[vpu_index_for_column(c)];
   };
 
 
 #ifdef WITH_MPI
   template <typename val_t, typename coord_t, template<typename T> class allocator>
-  inline int 
+  inline int
   Rank<val_t,coord_t,allocator>::owner(const coord_t c) const
-  { 
+  {
     assert(c >= 0 and c < ncols_);
-    return ((c/w_) % nprocs_); 
+    return ((c/w_) % nprocs_);
   };
 #endif
 
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   inline void
   Rank<val_t,coord_t,allocator>::
-  send_row(Processor& source, Row<val_t,coord_t,allocator>* row) 
+  send_row(Processor& source, Row<val_t,coord_t,allocator>* row)
 {
   coord_t column = row->first_nonzero_column();
   assert(column >= 0 and column < ncols_);
@@ -822,13 +823,13 @@ public:
 # if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
     mpi_send_mutex_.lock();
 # endif
-    if (row->kind == Row<val_t,coord_t,allocator>::sparse) 
-      req = comm_.issend(owner(column), TAG_ROW_SPARSE, 
+    if (row->kind == Row<val_t,coord_t,allocator>::sparse)
+      req = comm_.issend(owner(column), TAG_ROW_SPARSE,
                         *(static_cast<SparseRow<val_t,coord_t,allocator>*>(row)));
     else if (row->kind == Row<val_t,coord_t,allocator>::dense)
-      req = comm_.issend(owner(column), TAG_ROW_DENSE, 
+      req = comm_.issend(owner(column), TAG_ROW_DENSE,
                         *(static_cast<DenseRow<val_t,coord_t,allocator>*>(row)));
-    else 
+    else
       // should not happen!
       throw std::logic_error("Unhandled row kind in Rank::send_row()");
 # if defined(RF_USE_TBB) and defined(WITH_MPI_SERIALIZED)
@@ -840,9 +841,9 @@ public:
 };
 
 
-template <typename val_t, typename coord_t, 
+template <typename val_t, typename coord_t,
           template<typename T> class allocator>
-inline void 
+inline void
 Rank<val_t,coord_t,allocator>::
 send_end(Processor const& origin, const coord_t column) const
 {
@@ -869,16 +870,16 @@ send_end(Processor const& origin, const coord_t column) const
 
 
 #ifdef WITH_MPI
-template <typename val_t, typename coord_t, 
+template <typename val_t, typename coord_t,
           template<typename T> class allocator>
-inline void 
+inline void
 Rank<val_t,coord_t,allocator>::
 do_mpi_receive()
 {
-  while (boost::optional<mpi::status> status = comm_.iprobe()) { 
+  while (boost::optional<mpi::status> status = comm_.iprobe()) {
     switch(status->tag()) {
     case TAG_ROW_SPARSE: {
-      SparseRow<val_t,coord_t,allocator>* new_row = 
+      SparseRow<val_t,coord_t,allocator>* new_row =
         SparseRow<val_t,coord_t,allocator>::new_from_mpi_message(comm_, status->source(), status->tag());
       assert(is_local(new_row->first_nonzero_column()));
       Processor* vpu = vpu_for_column(new_row->first_nonzero_column());
@@ -887,7 +888,7 @@ do_mpi_receive()
       break;
     };
     case TAG_ROW_DENSE: {
-      DenseRow<val_t,coord_t,allocator>* new_row = 
+      DenseRow<val_t,coord_t,allocator>* new_row =
         DenseRow<val_t,coord_t,allocator>::new_from_mpi_message(comm_, status->source(), status->tag());
       assert(is_local(new_row->first_nonzero_column()));
       Processor* vpu = vpu_for_column(new_row->first_nonzero_column());
@@ -917,10 +918,10 @@ do_mpi_receive()
 
 // ------- Processor -------
 
-  template <typename val_t, typename coord_t, 
+  template <typename val_t, typename coord_t,
             template<typename T> class allocator>
   Rank<val_t,coord_t,allocator>::Processor::
-  Processor(Rank<val_t,coord_t,allocator>& parent, 
+  Processor(Rank<val_t,coord_t,allocator>& parent,
             const coord_t column)
       : parent_(parent)
       , column_(column)
@@ -938,7 +939,7 @@ do_mpi_receive()
     { };
 
 
-template <typename val_t, typename coord_t, 
+template <typename val_t, typename coord_t,
           template<typename T> class allocator>
 Rank<val_t,coord_t,allocator>::Processor::
 ~Processor()
@@ -950,14 +951,14 @@ Rank<val_t,coord_t,allocator>::Processor::
 }
 
 
-template <typename val_t, typename coord_t, 
+template <typename val_t, typename coord_t,
           template<typename T> class allocator>
-inline void 
+inline void
 Rank<val_t,coord_t,allocator>::Processor::
-recv_row(Row<val_t,coord_t,allocator>* new_row) 
+recv_row(Row<val_t,coord_t,allocator>* new_row)
   {
     assert(running == phase);
-    assert((Row<val_t,coord_t,allocator>::sparse == new_row->kind 
+    assert((Row<val_t,coord_t,allocator>::sparse == new_row->kind
             or Row<val_t,coord_t,allocator>::dense == new_row->kind));
     assert(column_ == new_row->starting_column_);
 #ifdef RF_ENABLE_STATS
@@ -977,11 +978,11 @@ recv_row(Row<val_t,coord_t,allocator>* new_row)
   };
 
 
-template <typename val_t, typename coord_t, 
+template <typename val_t, typename coord_t,
           template<typename T> class allocator>
 coord_t
 Rank<val_t,coord_t,allocator>::Processor::
-step() 
+step()
 {
   if (is_done())
     return result_;
@@ -998,7 +999,7 @@ step()
     // ensure there is one row for elimination
     if (NULL == u) {
       u = rows.front();
-      // tbb::concurrent_vector has no erase operation, 
+      // tbb::concurrent_vector has no erase operation,
       // so let's just rebase the vector
       skip_front = true;
     }
@@ -1031,7 +1032,7 @@ step()
         continue;
       // pivot for sparsity and break ties by usual algorithm
       if (((*it)->weight() < new_pivot_row_weight)
-          or ((*it)->weight() == new_pivot_row_weight 
+          or ((*it)->weight() == new_pivot_row_weight
               and first_is_better_pivot<val_t>((*it)->leading_term_, new_pivot))) {
         new_pivot = (*it)->leading_term_;
         new_pivot_row_weight = (*it)->weight();
@@ -1057,7 +1058,7 @@ step()
 #elif (RF_PIVOT_STRATEGY == RF_PIVOT_SPARSITY)
       // swap `u` and the new row if the new row is shorter, or has "better" leading term
       if (Row<val_t,coord_t,allocator>::sparse == (*it)->kind) {
-        SparseRow<val_t,coord_t,allocator>* s = 
+        SparseRow<val_t,coord_t,allocator>* s =
           static_cast<SparseRow<val_t,coord_t,allocator>*>(*it);
         if (Row<val_t,coord_t,allocator>::sparse == u->kind) {
           // if `*it` (new row) is shorter, it becomes the new pivot row
@@ -1066,7 +1067,7 @@ step()
         }
         else if (Row<val_t,coord_t,allocator>::dense == u->kind)
           std::swap(u, *it);
-        else 
+        else
           assert(false); // forgot one kind in chained `if`s?
       }
       else if (Row<val_t,coord_t,allocator>::dense == (*it)->kind) {
@@ -1090,9 +1091,9 @@ step()
 # error "RF_PIVOT_STRATEGY should be one of: RF_PIVOT_NONE, RF_PIVOT_SPARSITY, RF_PIVOT_THRESHOLD, RF_PIVOT_WEIGHT"
 #endif // if RF_PIVOT_STRATEGY == ...
       val_t a, b;
-      get_row_multipliers<val_t>((u)->leading_term_, (*it)->leading_term_, 
+      get_row_multipliers<val_t>((u)->leading_term_, (*it)->leading_term_,
                                  a, b);
-      Row<val_t,coord_t,allocator>* new_row = 
+      Row<val_t,coord_t,allocator>* new_row =
         u->linear_combination(*it, a, b, true, parent_.dense_threshold);
       // ship reduced rows to other processors
       if (NULL != new_row) {
@@ -1109,7 +1110,7 @@ step()
 #ifdef WITH_MPI
     if (outbox.size() > 0) {
       // check if some test messages have arrived and free
-      // corresponding resources 
+      // corresponding resources
       // XXX: this is basically a rewrite of the Boost.MPI code for
       // mpi::test_some(), but I could find no way of associating a
       // request with the corresponding payload data...
@@ -1142,7 +1143,7 @@ step()
 #endif
   }
   else { // `phase == ending`: end message already received
-#ifdef WITH_MPI        
+#ifdef WITH_MPI
     if (outbox.size() > 0) {
       // wait untill all sent messages have arrived
       std::vector< mpi::request, allocator<mpi::request> > reqs;
@@ -1179,23 +1180,23 @@ step()
 }
 
 
-template <typename val_t, typename coord_t, 
+template <typename val_t, typename coord_t,
           template<typename T> class allocator>
-inline void 
+inline void
 Rank<val_t,coord_t,allocator>::Processor::
-end_phase() 
-{ 
-  phase = ending; 
+end_phase()
+{
+  phase = ending;
 };
 
 
-template <typename val_t, typename coord_t, 
+template <typename val_t, typename coord_t,
           template<typename T> class allocator>
-inline bool 
+inline bool
 Rank<val_t,coord_t,allocator>::Processor::
-is_done() const 
-{ 
-  return (done == phase); 
+is_done() const
+{
+  return (done == phase);
 };
 
 

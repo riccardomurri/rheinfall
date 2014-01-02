@@ -7,7 +7,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010, 2011, 2012 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010, 2011, 2012, 2013 riccardo.murri@gmail.com. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,7 +48,7 @@
 /// 1- RF_PIVOT_SPARSITY
 /// 2- RF_PIVOT_WEIGHT
 /// 3- RF_PIVOT_THRESHOLD
-#define RF_PIVOT_STRATEGY 3
+#define RF_PIVOT_STRATEGY 1
 
 
 // uncomment/define to enable computing the arithmetic operations count

@@ -6,8 +6,10 @@ nobase_include_HEADERS = rheinfall/rank.hpp rheinfall/row.hpp rheinfall/sparsero
 # build example programs
 bin_PROGRAMS = rank-int rank-mod lu
 
-EXTRA_PROGRAMS += rank-gfq
-bin_PROGRAMS += rank-gfq
+EXTRA_PROGRAMS = rank-gfq
+if HAVE_GIVARO
+  bin_PROGRAMS += rank-gfq
+endif
 
 EXTRA_PROGRAMS += rank-int32 rank-int64
 if HAVE_INT32_T
@@ -67,6 +69,12 @@ rank_int_CPPFLAGS= $(AM_CPPFLAGS) -DWITH_INT_VALUES
 rank_int_CXXFLAGS= $(AM_CXXFLAGS)
 rank_int_LDFLAGS= $(AM_LDFLAGS) 
 rank_int_LDADD = $(AM_LIBS) 
+
+rank_gfq_SOURCES = examples/rank.cpp
+rank_gfq_CPPFLAGS= $(AM_CPPFLAGS) $(GIVARO_CPPFLAGS) -DWITH_GFQ_VALUES -I/home/rmurri/my/linbox/linbox-1.3.2/sw/include
+rank_gfq_CXXFLAGS= $(AM_CXXFLAGS) $(GIVARO_CXXFLAGS)
+rank_gfq_LDFLAGS= $(AM_LDFLAGS) $(GIVARO_LDFLAGS)
+rank_gfq_LDADD = $(AM_LIBS) $(GIVARO_LIBS)
 
 rank_int_tbb_SOURCES = $(rank_int_SOURCES)
 rank_int_tbb_CPPFLAGS = $(rank_int_CPPFLAGS) $(TBB_CPPFLAGS)

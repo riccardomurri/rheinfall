@@ -134,6 +134,123 @@ AC_ARG_WITH([gmp],
 AM_CONDITIONAL([HAVE_GMPXX], [test "_$have_gmpxx" = '_yes'])
 
 
+# Check for Givaro, but only if we have GMP
+if test "_$have_gmpxx" != '_yes'; then :
+  AC_MSG_WARN([Skipping checks for GIVARO, since GIVARO depends on GMP])
+else
+  AC_ARG_WITH([givaro],
+    [AS_HELP_STRING([--with-givaro=yes|no|@<:@path@:>@],
+            [Build example programs requiring the Givaro library. 
+                If argument is 'yes' or empty, the library must be 
+                reachable with the standard compiler search path; 
+                otherwise the Givaro include files have to be in 
+                <path>/include and the compiled library has to 
+                reside in <path>/lib.  If the argument is 'no', then
+                example programs that make use of Givaro will not be built.])],
+    [ # option '--with-givaro' given
+      if test "_$withval" != _no ; then :
+         AC_LANG_PUSH([C++])
+         save_CPPFLAGS="$CPPFLAGS"
+         save_CXXFLAGS="$CXXFLAGS"
+         save_LDFLAGS="$LDFLAGS"
+         save_LIBS="$LIBS"
+         if test "_$withval" != "_yes" ; then :
+             GIVARO_CPPFLAGS="-I$withval/include"
+         fi
+         CPPFLAGS="$save_CPPFLAGS $GIVARO_CPPFLAGS"
+         have_givaro=no
+         AC_CHECK_HEADER([givaro/givgfq.h], 
+                         [have_givaro_givgfq=yes], 
+                         [have_givaro_givgfq=no])
+         AC_CHECK_HEADER([givaro/StaticElement.h], 
+                         [have_givaro_StaticElement=yes], 
+                         [have_givaro_StaticElement=no])
+         if test "_$have_givaro_givgfq" = '_yes' && test "_$have_givaro_StaticElement" = '_yes'; then :
+           AC_MSG_CHECKING([for the GIVARO library])
+           GIVARO_LIBS="-lgivaro -lgmpxx -lgmp"
+           LIBS="$save_LIBS $GIVARO_LIBS"
+           # the '' directory is special-cased below: it looks for
+           # GIVARO in the default compiler search path
+           for libdir in "$withval" "$withval/lib" ''; do
+             if test "_$libdir" != '_' ; then :
+               GIVARO_LDFLAGS="-L$libdir"
+             else   
+               GIVARO_LDFLAGS=""
+             fi
+             LDFLAGS="$save_LDFLAGS $GIVARO_LDFLAGS"
+             AC_LINK_IFELSE(
+                 [AC_LANG_SOURCE([
+# include <givaro/givgfq.h>
+# include <givaro/StaticElement.h>
+
+typedef Givaro::GFqDom<long> field_t;
+typedef Givaro::StaticElement<field_t> val_t;
+
+template<> field_t val_t::_domain(2);
+
+int main() {
+  return 0;
+}
+                              ])],
+                 [givaro_found=yes;],
+                 [givaro_found=no;])
+             if test "_$givaro_found" = '_yes' ; then :
+               break
+             fi
+           done;
+           if test "_$givaro_found" = '_yes' ; then :
+             AC_MSG_RESULT([GIVARO library found in "$libdir"])
+             AC_SUBST([HAVE_GIVARO],     [1])
+             AC_SUBST([GIVARO_CPPFLAGS], ["$GIVARO_CPPFLAGS"])
+             AC_SUBST([GIVARO_CXXFLAGS], ["-DRF_USE_GIVARO"])dnl XXX: Rheinfall-specific
+             AC_SUBST([GIVARO_LDFLAGS],  ["$GIVARO_LDFLAGS"])
+             AC_SUBST([GIVARO_LIBS],     ["$GIVARO_LIBS"])
+           else
+             AC_MSG_RESULT([no GIVARO library found])
+             have_givaro=no
+             AC_SUBST([GIVARO_CXXFLAGS], [])
+             AC_SUBST([GIVARO_LDFLAGS],  [])
+             AC_SUBST([GIVARO_LIBS],     [])
+             AC_MSG_WARN([Cannot link with the GIVARO library: not compiling example GIVARO programs.])
+           fi
+           if test "_$givaro_found" = '_yes'; then :
+             AC_MSG_CHECKING([if GIVARO's StaticElement defines isZero()])
+             AC_LINK_IFELSE(
+                 [AC_LANG_SOURCE([
+# include <givaro/givgfq.h>
+# include <givaro/StaticElement.h>
+
+typedef Givaro::GFqDom<long> field_t;
+typedef Givaro::StaticElement<field_t> val_t;
+
+template<> field_t val_t::_domain(2);
+
+int main() {
+    field_t field(32749);
+    val_t::setDomain(field);
+
+    val_t value(0);
+    return value.isZero();
+}
+                              ])],
+                 [have_givaro=yes; AC_MSG_RESULT(yes)],
+                 [have_givaro=no;  AC_MSG_RESULT(no)])
+           fi # givaro_found
+         fi # have givaro/givgfq.h and givaro/StaticElement.h
+         if test "_$have_givaro" = '_no'; then :
+           AC_MSG_WARN([Cannot include GIVARO library headers: not compiling example GIVARO programs.])
+         fi
+         AC_LANG_POP([C++])
+         CPPFLAGS="$save_CPPFLAGS"
+         CXXFLAGS="$save_CXXFLAGS"
+         LDFLAGS="$save_LDFLAGS"
+         LIBS="$save_LIBS"
+      fi # $withval != 'no
+    ])
+fi # have_gmpxx (required dependency for GIVARO)
+AM_CONDITIONAL([HAVE_GIVARO], [test "_$have_givaro" = '_yes'])
+
+
 # Check for Intel TBB
 AC_ARG_WITH([tbb],
     [AS_HELP_STRING([--with-tbb=yes|no|@<:@path@:>@],

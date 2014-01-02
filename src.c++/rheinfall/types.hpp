@@ -8,7 +8,7 @@
  * @version $Revision$
  */
 /*
- * Copyright (c) 2010, 2011 riccardo.murri@gmail.com. All rights reserved.
+ * Copyright (c) 2010-2014 Riccardo Murri <riccardo.murri@gmail.com>.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,6 +44,10 @@ namespace mpl = boost::mpl;
 #include <limits>
 #include <sstream>
 
+#ifdef WITH_GFQ_VALUES
+# include <givaro/givgfq.h>
+# include <givaro/StaticElement.h>
+#endif
 
 namespace rheinfall {
 
@@ -69,7 +73,7 @@ namespace rheinfall {
       on floating-point numbers.) */
   template <typename val_t>
   static inline
-  bool good_enough_pivot(val_t const& best, val_t const& ths, 
+  bool good_enough_pivot(val_t const& best, val_t const& ths,
                          val_t const& candidate)
   {
     return true;
@@ -183,7 +187,7 @@ namespace rheinfall {
 
 
   /** @def RF_TYPE_IS_DIVISION_RING
-   * 
+   *
    * Declare template specializations for instances of a type
    * modeling a division ring (i.e., all four algebraic operations
    * supported, @c operator/ is inverse to @c operator* but @c
@@ -240,7 +244,7 @@ namespace rheinfall {
 
 
   /** @def RF_TYPE_IS_UNORDERED_DIVISION_RING
-   * 
+   *
    * Declare template specializations for instances of a type
    * modeling an unordered division ring: i.e., like @ref
    * RF_TYPE_IS_DIVISION_RING but no relational operators are
@@ -261,7 +265,7 @@ namespace rheinfall {
 
 
   /** @def RF_TYPE_IS_MODULAR_RING
-   * 
+   *
    * Declare template specializations for instances of a type
    * modeling a modular ring, i.e., take advantage of the fact that
    * multiplication is cheaper than division and never overflows.
@@ -287,13 +291,20 @@ namespace rheinfall {
 
 
   /** Compare a value to zero; by default this is an exact comparison. */
-  template <typename T> 
+  template <typename T>
   bool is_zero (const T& value) { return (0 == value); };
+
+#ifdef WITH_GFQ_VALUES
+  template <>
+  bool is_zero (const Givaro::StaticElement< Givaro::GFqDom<long> >& value) {
+    return value.isZero();
+  }
+#endif
 
   /** Traits class for defining the tolerance for zero equality of an
       inexact type. */
   template <typename T>
-  struct is_zero_traits 
+  struct is_zero_traits
   {
     /** Maximum positive value that will be be considered equal to zero. */
     static T tolerance;
@@ -304,7 +315,7 @@ namespace rheinfall {
    *
    *  Specialize the @c is_zero template for inexact arithmetic
    *  types. Consider an inexact value to be zero iff its absolute
-   *  value is within a certain distance from the exact zero. 
+   *  value is within a certain distance from the exact zero.
    */
 #define INEXACT_IS_ZERO(T)                                     \
   template<>                                                   \
