@@ -10,10 +10,10 @@
 #PYTHON=2.5.4
 #SWIG=1.3.35
 #LINBOX=1.1.7rc0
-#GMP=5.0.5
-#GIVARO=3.3.2
+GMP=5.0.5
+GIVARO=3.3.2
 #ATLAS=3.8.3
-#BOOST=1.47.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.47.0/boost_1_47_0.tar.gz
+BOOST=1.47.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.47.0/boost_1_47_0.tar.gz
 #TCMALLOC=1.8.3 # http://google-perftools.googlecode.com/files/google-perftools-1.8.3.tar.gz
 #TBB=40_278oss # http://threadingbuildingblocks.org/uploads/78/179/4.0%20update%202/tbb40_278oss_lin.tgz
 
