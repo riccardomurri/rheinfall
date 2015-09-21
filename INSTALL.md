@@ -25,12 +25,12 @@ the only way to build Rheinfall is to install from the
 
 The following instructions provide the simplest route to compiling all
 the example programs in Rheinfall and trying them out.  See section
-["How to build Rheinfall from sources"](#How_to_build_Rheinfall_from_sources.md)
+["How to build Rheinfall from sources"](#How_to_build_Rheinfall_from_sources)
 for a detailed description of options.
 
 In addition to the standard Linux commands and a C/C++ compiler, you
-will need the commands `make`, `svn`, `autoreconf`, `wget` installed.  (See
-["How to build Rheinfall from sources"](#How_to_build_Rheinfall_from_sources.md)
+will need the commands `make`, `git`, `autoreconf`, `wget` installed.  (See
+["How to build Rheinfall from sources"](#How_to_build_Rheinfall_from_sources)
 for a table with download URLs for this software.)
 
 If you have the dependencies in place, the following commands will
@@ -38,7 +38,7 @@ place the Rheinfall sources in a directory called `rheinfall` and
 compile the example programs:
 ```
   # check out the Rheinfall sources
-  svn co http://rheinfall.googlecode.com/svn/trunk rheinfall
+  git clone https://github.com/riccardomurri/rheinfall.git rheinfall
 
   # install the required libraries into ./sw
   cd rheinfall/
@@ -124,7 +124,7 @@ the following software needs to be installed prior to building Rheinfall:
 
 | **command name** | **home page** | **package name** |
 |:-----------------|:--------------|:-----------------|
-| `svn`            | SubVersion, http://subversion.tigris.org/         | `subversion` ([Debian](http://packages.debian.org/squeeze/subversion), [Ubuntu](http://packages.ubuntu.com/subversion), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=subversion)) |
+| `git`            | Git, http://git-scm.org/                          | `git`, ([Debian](http://packages.debian.org/squeeze/git), [Ubuntu](http://packages.ubuntu.com/git), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=git)) |
 | `make`           | GNU make, http://www.gnu.org/software/make/       | `make` ([Debian](http://packages.debian.org/squeeze/make), [Ubuntu](http://packages.ubuntu.com/make), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=make)) |
 | `wget`           | GNU wget, http://www.gnu.org/software/wget/       | `wget` ([Debian](http://packages.debian.org/squeeze/wget), [Ubuntu](http://packages.ubuntu.com/wget), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=wget)) |
 | `automake`       | GNU automake _(at least version 1.10),_ http://www.gnu.org/software/automake/ | `automake` ([Debian](http://packages.debian.org/squeeze/automake), [Ubuntu](http://packages.ubuntu.com/automake), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=automake)) |
