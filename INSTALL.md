@@ -25,12 +25,12 @@ the only way to build Rheinfall is to install from the
 
 The following instructions provide the simplest route to compiling all
 the example programs in Rheinfall and trying them out.  See section
-["How to build Rheinfall from sources"](#How_to_build_Rheinfall_from_sources)
+["How to build Rheinfall from sources"](#user-content-how-to-build-rheinfall-from-sources)
 for a detailed description of options.
 
 In addition to the standard Linux commands and a C/C++ compiler, you
 will need the commands `make`, `git`, `autoreconf`, `wget` installed.  (See
-["How to build Rheinfall from sources"](#How_to_build_Rheinfall_from_sources)
+["How to build Rheinfall from sources"](#user-content-how-to-build-rheinfall-from-sources)
 for a table with download URLs for this software.)
 
 If you have the dependencies in place, the following commands will
