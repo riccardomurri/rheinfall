@@ -124,16 +124,16 @@ the following software needs to be installed prior to building Rheinfall:
 
 | **command name** | **home page** | **package name** |
 |:-----------------|:--------------|:-----------------|
-| `git`            | Git, http://git-scm.org/                          | `git`, ([Debian](http://packages.debian.org/squeeze/git), [Ubuntu](http://packages.ubuntu.com/git), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=git)) |
-| `make`           | GNU make, http://www.gnu.org/software/make/       | `make` ([Debian](http://packages.debian.org/squeeze/make), [Ubuntu](http://packages.ubuntu.com/make), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=make)) |
-| `wget`           | GNU wget, http://www.gnu.org/software/wget/       | `wget` ([Debian](http://packages.debian.org/squeeze/wget), [Ubuntu](http://packages.ubuntu.com/wget), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=wget)) |
-| `automake`       | GNU automake _(at least version 1.10),_ http://www.gnu.org/software/automake/ | `automake` ([Debian](http://packages.debian.org/squeeze/automake), [Ubuntu](http://packages.ubuntu.com/automake), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=automake)) |
-| `autoreconf`     | GNU autoconf _(at least version 2.65),_ http://www.gnu.org/software/autoconf/ | `automake` ([Debian](http://packages.debian.org/squeeze/automake), [Ubuntu](http://packages.ubuntu.com/automake), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=automake)) |
-| `libtoolize`     | GNU libtool, http://www.gnu.org/software/libtool/ | `libtool` ([Debian](http://packages.debian.org/squeeze/libtool), [Ubuntu](http://packages.ubuntu.com/libtool), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=libtool)) |
+| `git`            | Git, http://git-scm.org/                          | `git`, ([Debian](http://packages.debian.org/jessie/git), [Ubuntu](http://packages.ubuntu.com/git), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=git)) |
+| `make`           | GNU make, http://www.gnu.org/software/make/       | `make` ([Debian](http://packages.debian.org/jessie/make), [Ubuntu](http://packages.ubuntu.com/make), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=make)) |
+| `wget`           | GNU wget, http://www.gnu.org/software/wget/       | `wget` ([Debian](http://packages.debian.org/jessie/wget), [Ubuntu](http://packages.ubuntu.com/wget), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=wget)) |
+| `automake`       | GNU automake _(at least version 1.10),_ http://www.gnu.org/software/automake/ | `automake` ([Debian](http://packages.debian.org/jessie/automake), [Ubuntu](http://packages.ubuntu.com/automake), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=automake)) |
+| `autoreconf`     | GNU autoconf _(at least version 2.65),_ http://www.gnu.org/software/autoconf/ | `automake` ([Debian](http://packages.debian.org/jessie/automake), [Ubuntu](http://packages.ubuntu.com/automake), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=automake)) |
+| `libtoolize`     | GNU libtool, http://www.gnu.org/software/libtool/ | `libtool` ([Debian](http://packages.debian.org/jessie/libtool), [Ubuntu](http://packages.ubuntu.com/libtool), [CentOS/Fedora/RHEL and other RPM-based distributions](http://rpmfind.net/linux/rpm2html/search.php?query=libtool)) |
 |                  | Boost libraries, http://boost.org/       | _compile from sources, almost no distribution has recent enough packages_ |
 
 The [GNU GMP](http://www.gnu.org/software/gmp) and the
-[Boost.MPI](http://www.boost.org/doc/libs/1_46_1/doc/html/mpi.html)
+[Boost.MPI](http://www.boost.org/doc/libs/1_59_0/doc/html/mpi.html)
 libraries are needed to enable, respectively, arbitrary precision
 support and distribued-memory parallel processing support.  The helper script
 [util/prereq.sh](http://rheinfall.googlecode.com/svn/trunk/util/prereq.sh)
