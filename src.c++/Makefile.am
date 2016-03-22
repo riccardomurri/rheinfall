@@ -274,7 +274,7 @@ data_DATA = M0,5-D4.sms M0,5-D5.sms M0,5-D6.sms M0,5-D7.sms M0,5-D8.sms \
 		M0,6-D5.sms M0,6-D6.sms M0,6-D7.sms M0,6-D8.sms M0,6-D11.sms
 $(data_DATA):
 	@WGET@ -nv -nc \
-		http://ljk.imag.fr/membres/Jean-Guillaume.Dumas/Matrices/Mgn/$@.gz
+		http://hpac.imag.fr/Matrices/Mgn/$(shell echo $@ | cut -d- -f1).data/$@.gz
 	@GZIP@ -d $(srcdir)/$@.gz
 
 distclean-local:
