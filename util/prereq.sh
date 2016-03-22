@@ -10,11 +10,11 @@
 #PYTHON=2.5.4
 #SWIG=1.3.35
 #LINBOX=1.1.7rc0
-GMP=5.0.5
-GIVARO=3.3.2
+GMP=6.1.0
+GIVARO=4.0.1 # https://github.com/linbox-team/givaro/archive/v4.0.1.tar.gz
 #ATLAS=3.8.3
-BOOST=1.47.0 # http://surfnet.dl.sourceforge.net/project/boost/boost/1.47.0/boost_1_47_0.tar.gz
-#TCMALLOC=1.8.3 # http://google-perftools.googlecode.com/files/google-perftools-1.8.3.tar.gz
+BOOST=1.60.0 # https://sourceforge.net/projects/boost/files/boost/1.60.0/boost_1_60_0.tar.bz2/download#
+#TCMALLOC=2.5 # https://github.com/gperftools/gperftools
 #TBB=40_278oss # http://threadingbuildingblocks.org/uploads/78/179/4.0%20update%202/tbb40_278oss_lin.tgz
 
 # set this to install BeBOP's Sparse Matrix Converter library and command-line utility
@@ -208,7 +208,7 @@ fi # CYTHON
 if [ -n "$GMP" ]; then
     _ Installing GMP ${GMP}
     cd ${sw}/src
-    wget -N ftp://sunsite.cnlab-switch.ch/mirror/gnu/gmp/gmp-${GMP}.tar.bz2
+    wget -N http://mirror.switch.ch/ftp/mirror/gnu/gmp/gmp-${GMP}.tar.bz2
     set -x
     tar -xjf gmp-${GMP}.tar.bz2
     cd gmp-${GMP}
@@ -223,10 +223,12 @@ fi # GMP
 if [ -n "$GIVARO" ]; then
     _ Installing Givaro ${GIVARO}
     cd ${sw}/src
-    wget -N http://www-lmc.imag.fr/CASYS/LOGICIELS/givaro/Downloads/givaro-${GIVARO}.tar.gz
+    wget -N https://github.com/linbox-team/givaro/archive/v${GIVARO}.tar.gz -O givaro-${GIVARO}.tar.gz
+    #old: wget -N http://www-lmc.imag.fr/CASYS/LOGICIELS/givaro/Downloads/givaro-${GIVARO}.tar.gz
     set -x
     tar -xzf givaro-${GIVARO}.tar.gz
     cd givaro-${GIVARO%%rc[0-9]}
+    ./autogen.sh
     # work around bug in ./configure: the test for GMP cannot find it
     # unless it's in the LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=${sw}/lib:$LD_LIBRARY_PATH
@@ -287,12 +289,13 @@ if [ -n "$BOOST" ]; then
     _ Installing Boost ${BOOST}
     cd ${sw}/src
     boost_file=$(echo boost_$BOOST | tr . _)
-    wget "http://surfnet.dl.sourceforge.net/project/boost/boost/${BOOST}/${boost_file}.tar.gz" \
-        -O "${boost_file}.tar.gz"
+    wget \
+        "https://sourceforge.net/projects/boost/files/boost/${BOOST}/${boost_file}.tar.bz2/download#" \
+        -O "${boost_file}.tar.bz2"
     set -x
-    tar -xzf  "${boost_file}.tar.gz"
+    tar -xaf  "${boost_file}.tar.bz2"
     cd ${boost_file}
-    patch -p1 -i ${etc_dir}/boost_1_45_0.ssend.patch
+    #patch -p1 -i ${etc_dir}/boost_1_45_0.ssend.patch
     # build Boost.MPI for homogeneous clusters (same arch, so avoid pack/unpack)
     if [ "x$BOOST_MPI_HOMOGENEOUS" = "xyes" ]; then
         sed -e 's|^//#define BOOST_MPI_HOMOGENEOUS|#define BOOST_MPI_HOMOGENEOUS|' \
@@ -318,11 +321,14 @@ if [ -n "$TCMALLOC" ]; then
     _ Installing Google PerfTools $TCMALLOC ...
     cd ${sw}/src
     set -x
-    wget -N http://google-perftools.googlecode.com/files/google-perftools-${TCMALLOC}.tar.gz
-    tar -xzf "google-perftools-${TCMALLOC}.tar.gz"
-    cd google-perftools-${TCMALLOC}
+    git clone https://github.com/gperftools/gperftools.git
+    #wget -N http://google-perftools.googlecode.com/files/google-perftools-${TCMALLOC}.tar.gz
+    #tar -xzf "google-perftools-${TCMALLOC}.tar.gz"
+    cd gperftools
+    git checkout gperftools-${TCMALLOC}
+    autoreconf -i
     ./configure --prefix=${sw} \
-        --enable-frame-pointers --disable-debualloc \
+        --enable-frame-pointers --disable-debugalloc \
         "$@";
     $concurrent_make
     make install
