@@ -9,9 +9,10 @@
 #CYTHON=0.11.1
 #PYTHON=2.5.4
 #SWIG=1.3.35
-#LINBOX=1.1.7rc0
+FFLAS_FFPACK=2.2.0 # https://github.com/linbox-team/fflas-ffpack
 GMP=6.1.0
 GIVARO=4.0.1 # https://github.com/linbox-team/givaro/archive/v4.0.1.tar.gz
+LINBOX=1.4.0
 #ATLAS=3.8.3
 BOOST=1.60.0 # https://sourceforge.net/projects/boost/files/boost/1.60.0/boost_1_60_0.tar.bz2/download#
 #TCMALLOC=2.5 # https://github.com/gperftools/gperftools
@@ -136,6 +137,13 @@ case `uname -m` in
         *) die 1 "Unknown architecture `uname -m`: is it 32-bit or 64-bit?" ;;
 esac
 
+if egrep '^flags: .*\<avx\>' /proc/cpuinfo; then
+  maybe_enable_avx='--enable-avx'
+fi
+
+if egrep '^flags: .*\<sse4\>' /proc/cpuinfo; then
+  maybe_enable_sse='--enable-sse'
+fi
 
 # Python
 if [ -n "${PYTHON}" ]; then
@@ -228,15 +236,38 @@ if [ -n "$GIVARO" ]; then
     set -x
     tar -xzf givaro-${GIVARO}.tar.gz
     cd givaro-${GIVARO%%rc[0-9]}
-    ./autogen.sh
     # work around bug in ./configure: the test for GMP cannot find it
     # unless it's in the LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=${sw}/lib:$LD_LIBRARY_PATH
+    ./autogen.sh
     ./configure  --prefix=${sw} --enable-shared ${GMP:+"--with-gmp=${sw}"} "$@"
     $concurrent_make
     make install
     set +x
 fi # GIVARO
+
+
+# FFLAS-FFPACK
+if [ -n "$FFLAS_FFPACK" ]; then
+    _ Installing FFLAS-FFPACK ${FFLAS_FFPACK}
+    cd ${sw}/src
+    if ! [ -d fflas-ffpack-${FFLAS_FFPACK} ]; then
+      git clone https://github.com/linbox-team/fflas-ffpack.git fflas-ffpack-${FFLAS_FFPACK}
+    fi
+    set -x
+    cd fflas-ffpack-${FFLAS_FFPACK}
+    git checkout v${FFLAS_FFPACK}
+    ./autogen.sh --prefix=${sw} \
+	${GIVARO:+"--with-givaro=${sw}"} \
+	--with-blas-libs="-lopenblas" \
+        --enable-openmp \
+	$maybe_enable_sse \
+	$maybe_enable_avx \
+        "$@";
+    $concurrent_make
+    make install
+    set +x
+fi # FFLAS-FFPACK
 
 
 # ATLAS
@@ -269,14 +300,20 @@ fi # ATLAS
 if [ -n "$LINBOX" ]; then
     _ Installing LinBox ${LINBOX}
     cd ${sw}/src
-    wget -N http://linalg.org/linbox-${LINBOX}.tar.gz
+    #wget -N http://linalg.org/linbox-${LINBOX}.tar.gz
+    #tar -xzf linbox-${LINBOX}.tar.gz
+    if ! [ -d linbox-${LINBOX} ]; then
+      git clone https://github.com/linbox-team/linbox.git linbox-${LINBOX}
+    fi
     set -x
-    tar -xzf linbox-${LINBOX}.tar.gz
     cd linbox-${LINBOX}
-    ./configure --prefix=${sw} \
+    git checkout v${LINBOX}
+    ./autogen.sh --prefix=${sw} \
         ${ATLAS:+"--with-blas=${sw}/lib"} \
         ${GMP:+"--with-gmp=${sw}"} \
         ${GIVARO:+"--with-givaro=${sw}"} \
+	${FFLAS_FFPACK:+"--with-fflas-ffpack=${sw}"} \
+        --enable-openmp \
         "$@";
     $concurrent_make
     make install
